@@ -1,0 +1,52 @@
+{
+  "skill": "create-traffic-brunobracaioli-campaign",
+  "client": "brunobracaioli",
+  "client_id": "2a343409-6c10-4061-b398-82b47425f80a",
+  "date": "2026-05-23",
+  "verified": true,
+  "ad_account": "225179730538661",
+  "campaign": {
+    "meta_campaign_id": "120246501941150505",
+    "name": "[TRF][CCA][2026-05-23] Tráfego CBO — US",
+    "objective": "OUTCOME_TRAFFIC",
+    "buying_type": "AUCTION",
+    "budget_mode": "CBO",
+    "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
+    "status": "PAUSED",
+    "daily_budget_cents": 5000
+  },
+  "ad_set": {
+    "meta_ad_set_id": "120246501942790505",
+    "name": "[TRF][CCA] adset — US — Advantage+ — LPV — 2026-05-23",
+    "optimization_goal": "LANDING_PAGE_VIEWS",
+    "billing_event": "IMPRESSIONS",
+    "destination_type": "WEBSITE",
+    "geo": ["US"],
+    "advantage_audience": true,
+    "advantage_placements": true,
+    "daily_budget_cents": null,
+    "status": "PAUSED"
+  },
+  "ads": [
+    {"meta_ad_id": "120246501948120505", "meta_creative_id": "928747396866416", "angle": "autoridade", "headline": "10 anos em prod. 26 aulas.", "image_url": "https://qfqbmzqvjaadscukywnk.supabase.co/storage/v1/object/public/ad-ingest/brunobracaioli/cca-2026-05-23/1496e2ddded9db54e7f2/ad-v1-autoridade.png", "status": "PAUSED", "effective_status": "IN_PROCESS"},
+    {"meta_ad_id": "120246501950600505", "meta_creative_id": "1003961585305223", "angle": "dor", "headline": "Vibe coding não escala.", "image_url": "https://qfqbmzqvjaadscukywnk.supabase.co/storage/v1/object/public/ad-ingest/brunobracaioli/cca-2026-05-23/1496e2ddded9db54e7f2/ad-v2-dor.png", "status": "PAUSED", "effective_status": "IN_PROCESS"},
+    {"meta_ad_id": "120246501951660505", "meta_creative_id": "1536052551559605", "angle": "oferta", "headline": "26 aulas + 2 bônus por R$497", "image_url": "https://qfqbmzqvjaadscukywnk.supabase.co/storage/v1/object/public/ad-ingest/brunobracaioli/cca-2026-05-23/1496e2ddded9db54e7f2/ad-v3-oferta.png", "status": "PAUSED", "effective_status": "IN_PROCESS"}
+  ],
+  "creatives_source": "reused",
+  "public_urls_file": ".claude/materiais-das-empresas/brunobracaioli/generated-ads/cca-2026-05-23/public-urls.txt",
+  "errors": [],
+  "decisions": [
+    "creatives=reused (pasta cca-2026-05-23 já tinha os 3 PNGs + public-urls.txt; idempotência — não regerei imagens nem copy)",
+    "geo=US (BR bloqueado, subcode 3858634)",
+    "cta=LEARN_MORE",
+    "optimization=LANDING_PAGE_VIEWS (presente em valid_optimization_goals; sem fallback necessário)",
+    "imagem em link_data.picture (URL pública ad-ingest); image_url no topo evitado",
+    "copy reutilizada das creatives já persistidas hoje no Supabase"
+  ],
+  "notes": [
+    "Duas campanhas anteriores foram criadas hoje sob naming antigo ([Bruno] CCA — Traffic CBO ...): 120246500174380505 e 120246501255310505 — ambas PAUSED. Esta run criou a campanha com o naming canônico [TRF][CCA].",
+    "SUPABASE_SERVICE_ROLE_KEY ausente no .env.local desta sessão; upload não foi necessário pois as URLs públicas de hoje já existiam e responderam 200 image/png."
+  ],
+  "image_cost_usd_estimate": 0.0,
+  "ads_manager_url": "https://business.facebook.com/adsmanager/manage/campaigns?act=225179730538661"
+}
