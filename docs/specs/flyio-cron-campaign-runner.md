@@ -49,7 +49,7 @@ timeout 1500 claude -p --dangerously-skip-permissions ".claude/skills/${SKILL}" 
 | Destino | Conteúdo |
 |---|---|
 | `/var/log/runs/<utc-ts>-<skill>.log` | Stdout/stderr completo do `claude -p`. Persiste no volume `claude_state`. |
-| `fly logs -a meta-agents-v3` | Mesmo conteúdo via supercronic `-passthrough-logs`. Retenção ~30d. |
+| `fly logs -a meta-agents-v4` | Mesmo conteúdo via supercronic `-passthrough-logs`. Retenção ~30d. |
 | `/app/tentativas-geracao-de-campanhas/<ts>-trafego.json` | Manifest da execução (gerado pela skill). |
 | Meta Ads (account `225179730538661`) | 1 campanha PAUSED `[TRF][CCA][YYYY-MM-DD]` + 1 adset PAUSED + 3 ads PAUSED. |
 | Supabase (via MCP) | Registros que a skill normalmente persiste — runner não escreve direto. |
@@ -120,7 +120,7 @@ A **conta Claude.ai + connectors Claude.ai (Meta MCP, Supabase MCP)** vem do **v
 ### 7.1 Seed inicial (1 vez)
 
 ```bash
-fly ssh console -a meta-agents-v3
+fly ssh console -a meta-agents-v4
 # dentro do container:
 claude       # OAuth flow no browser; tokens gravados em /home/runner/.claude/
 exit
@@ -132,17 +132,17 @@ Em produção, o cron via supercronic já roda como `runner` (devido a `USER run
 
 ```bash
 # CORRETO (preserva env do PID 1):
-fly ssh console -a meta-agents-v3 -C "runuser -u runner -- /app/scripts/run-skill.sh create-traffic-brunobracaioli-campaign"
+fly ssh console -a meta-agents-v4 -C "runuser -u runner -- /app/scripts/run-skill.sh create-traffic-brunobracaioli-campaign"
 
 # ERRADO (env vazio → skill roda em modo degradado):
-fly ssh console -a meta-agents-v3 -C "su - runner -c '/app/scripts/run-skill.sh ...'"
+fly ssh console -a meta-agents-v4 -C "su - runner -c '/app/scripts/run-skill.sh ...'"
 ```
 
 ### 7.3 Inspeção de logs
 
 ```bash
-fly logs -a meta-agents-v3                                 # tempo real
-fly ssh console -a meta-agents-v3 -C "ls /var/log/runs/"   # arquivos persistidos
+fly logs -a meta-agents-v4                                 # tempo real
+fly ssh console -a meta-agents-v4 -C "ls /var/log/runs/"   # arquivos persistidos
 ```
 
 ### 7.4 Mudança de cadência

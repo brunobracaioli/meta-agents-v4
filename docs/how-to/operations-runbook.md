@@ -50,7 +50,7 @@
 **Quando usar**: smoke test após deploy, validar que tudo funciona, ou disparar um run extra fora do cron.
 
 ```bash
-fly ssh console -a meta-agents-v3 -C "runuser -u runner -- /app/scripts/run-skill.sh create-traffic-brunobracaioli-campaign"
+fly ssh console -a meta-agents-v4 -C "runuser -u runner -- /app/scripts/run-skill.sh create-traffic-brunobracaioli-campaign"
 ```
 
 > ⚠️ Sempre `runuser -u runner --`, **nunca** `su - runner -c`. O `su -` apaga env vars do PID 1 e a skill roda em modo degradado (sem OpenAI, sem Supabase). Detalhes no [Tutorial §A.7](../tutorials/deploying-fly-runner-from-scratch.md#a7-su---runner--c-apaga-env-vars-do-pid-1).
@@ -88,7 +88,7 @@ fly deploy --remote-only
 3. Valida sintaxe dentro do container:
 
 ```bash
-fly ssh console -a meta-agents-v3 -C "supercronic -test /app/crontab"
+fly ssh console -a meta-agents-v4 -C "supercronic -test /app/crontab"
 ```
 
 Tem que retornar sem erro.
@@ -114,19 +114,19 @@ m  h  dom mon dow
 Logs ficam em `/var/log/runs/` no volume (sobrevivem a reboot).
 
 ```bash
-fly ssh console -a meta-agents-v3 -C "ls -la /var/log/runs/"
+fly ssh console -a meta-agents-v4 -C "ls -la /var/log/runs/"
 ```
 
 Pra ver um log específico (substitua o nome do arquivo):
 
 ```bash
-fly ssh console -a meta-agents-v3 -C "cat /var/log/runs/20260522T213757Z-create-traffic-brunobracaioli-campaign.log"
+fly ssh console -a meta-agents-v4 -C "cat /var/log/runs/20260522T213757Z-create-traffic-brunobracaioli-campaign.log"
 ```
 
 Logs em **tempo real** (todos os jobs + supercronic):
 
 ```bash
-fly logs -a meta-agents-v3
+fly logs -a meta-agents-v4
 ```
 
 (Ctrl+C pra fechar.)
@@ -138,8 +138,8 @@ fly logs -a meta-agents-v3
 Skills gravam manifest JSON com IDs do Meta, lista de imagens, bloqueios encontrados etc. Local: `/app/tentativas-geracao-de-campanhas/<ts>-trafego.json`.
 
 ```bash
-fly ssh console -a meta-agents-v3 -C "ls /app/tentativas-geracao-de-campanhas/"
-fly ssh console -a meta-agents-v3 -C "cat /app/tentativas-geracao-de-campanhas/20260522-1846-trafego.json | jq ."
+fly ssh console -a meta-agents-v4 -C "ls /app/tentativas-geracao-de-campanhas/"
+fly ssh console -a meta-agents-v4 -C "cat /app/tentativas-geracao-de-campanhas/20260522-1846-trafego.json | jq ."
 ```
 
 Estrutura típica (ver [spec §2.3](../specs/flyio-cron-campaign-runner.md#23-contrato-de-saída)):
@@ -161,7 +161,7 @@ Estrutura típica (ver [spec §2.3](../specs/flyio-cron-campaign-runner.md#23-co
 ## 6. Listar runs do dia
 
 ```bash
-fly ssh console -a meta-agents-v3 -C "ls /var/log/runs/$(date -u +%Y%m%d)*"
+fly ssh console -a meta-agents-v4 -C "ls /var/log/runs/$(date -u +%Y%m%d)*"
 ```
 
 Se vazio: ainda não rodou hoje (ou cron não disparou — ver [§20](#20-cron-não-disparou-no-horário-esperado)).
@@ -193,7 +193,7 @@ Commit + deploy normal.
 ## 8. Atualizar 1 secret específico
 
 ```bash
-fly secrets set CHAVE=novo_valor -a meta-agents-v3
+fly secrets set CHAVE=novo_valor -a meta-agents-v4
 ```
 
 Isso **dispara um deploy automático** (~30s) — a Machine reinicia com o novo secret.
@@ -213,7 +213,7 @@ while IFS='=' read -r k v; do
   [[ -z "$k" || "$k" =~ ^# ]] && continue
   SECRETS_ARGS+=("$k=$v")
 done < .env.local
-fly secrets set "${SECRETS_ARGS[@]}" -a meta-agents-v3
+fly secrets set "${SECRETS_ARGS[@]}" -a meta-agents-v4
 ```
 
 Strip do `\r` é obrigatório se `.env.local` foi editado no Windows.
@@ -238,13 +238,13 @@ fly deploy --remote-only --no-cache
 **Quando usar**: token expirou (raro, geralmente 6+ meses), suspeita de comprometimento, ou mudança da conta Claude.ai que opera o runner.
 
 ```bash
-fly ssh console -a meta-agents-v3
+fly ssh console -a meta-agents-v4
 # dentro do container:
 rm /home/runner/.claude/.credentials.json /home/runner/.claude.json
 exit
 
 # fora, segue passo 4 do tutorial novamente:
-fly ssh console -a meta-agents-v3
+fly ssh console -a meta-agents-v4
 claude          # OAuth interativo
 # após sucesso:
 cp -a /root/.claude/. /home/runner/.claude/
@@ -265,19 +265,19 @@ Próxima run do cron usa novos tokens. Testa com [§1](#1-rodar-uma-skill-manual
 
 ```bash
 # 1. Para a Machine
-fly machine stop $(fly machine list -a meta-agents-v3 --json | jq -r '.[0].id') -a meta-agents-v3
+fly machine stop $(fly machine list -a meta-agents-v4 --json | jq -r '.[0].id') -a meta-agents-v4
 
 # 2. Destrói o volume antigo
-fly volumes destroy $(fly volumes list -a meta-agents-v3 --json | jq -r '.[0].id') --yes -a meta-agents-v3
+fly volumes destroy $(fly volumes list -a meta-agents-v4 --json | jq -r '.[0].id') --yes -a meta-agents-v4
 
 # 3. Cria volume novo (mesmo nome)
-fly volumes create claude_state --size 1 --region gru -a meta-agents-v3
+fly volumes create claude_state --size 1 --region gru -a meta-agents-v4
 
 # 4. Re-deploy (anexa novo volume à Machine)
 fly deploy --remote-only
 
 # 5. Refaz seed OAuth (passo 4 do tutorial)
-fly ssh console -a meta-agents-v3
+fly ssh console -a meta-agents-v4
 claude
 # ... segue o fluxo
 ```
@@ -291,7 +291,7 @@ claude
 1. Lista releases:
 
 ```bash
-fly releases -a meta-agents-v3
+fly releases -a meta-agents-v4
 ```
 
 Identifica a versão funcional (ex: `v23`).
@@ -299,17 +299,17 @@ Identifica a versão funcional (ex: `v23`).
 2. Pega o image tag dessa versão:
 
 ```bash
-fly releases -a meta-agents-v3 --image v23
+fly releases -a meta-agents-v4 --image v23
 ```
 
-Output inclui algo tipo `Image: registry.fly.io/meta-agents-v3:deployment-01KS...`.
+Output inclui algo tipo `Image: registry.fly.io/meta-agents-v4:deployment-01KS...`.
 
 3. Atualiza a Machine pro tag antigo:
 
 ```bash
-fly machine update $(fly machine list -a meta-agents-v3 --json | jq -r '.[0].id') \
-  --image registry.fly.io/meta-agents-v3:deployment-01KS... \
-  -a meta-agents-v3
+fly machine update $(fly machine list -a meta-agents-v4 --json | jq -r '.[0].id') \
+  --image registry.fly.io/meta-agents-v4:deployment-01KS... \
+  -a meta-agents-v4
 ```
 
 Machine reinicia em segundos com imagem antiga. Secrets + volume permanecem.
@@ -387,7 +387,7 @@ RUN_RESULT skill=... exit=124
 **Diagnóstico**:
 
 ```bash
-fly ssh console -a meta-agents-v3 -C "cat /var/log/runs/<ts>-*.log | tail -100"
+fly ssh console -a meta-agents-v4 -C "cat /var/log/runs/<ts>-*.log | tail -100"
 ```
 
 Identifica qual etapa travou (provavelmente uma chamada API longa).
@@ -481,40 +481,40 @@ Próximo run automático usa o novo saldo.
 
 ## 20. Cron não disparou no horário esperado
 
-**Sintoma**: `fly logs -a meta-agents-v3` não mostra `RUN_START` no horário esperado.
+**Sintoma**: `fly logs -a meta-agents-v4` não mostra `RUN_START` no horário esperado.
 
 **Diagnóstico em ordem**:
 
 1. **TZ do container**:
 ```bash
-fly ssh console -a meta-agents-v3 -C "date"
+fly ssh console -a meta-agents-v4 -C "date"
 ```
 Tem que aparecer `BRT` no fuso. Se aparecer `UTC`, o `Dockerfile` perdeu o `ENV TZ=America/Sao_Paulo` — corrige e re-deploy.
 
 2. **Crontab presente**:
 ```bash
-fly ssh console -a meta-agents-v3 -C "cat /app/crontab"
+fly ssh console -a meta-agents-v4 -C "cat /app/crontab"
 ```
 
 3. **Crontab válida**:
 ```bash
-fly ssh console -a meta-agents-v3 -C "supercronic -test /app/crontab"
+fly ssh console -a meta-agents-v4 -C "supercronic -test /app/crontab"
 ```
 
 4. **supercronic vivo**:
 ```bash
-fly ssh console -a meta-agents-v3 -C "ps aux | grep supercronic"
+fly ssh console -a meta-agents-v4 -C "ps aux | grep supercronic"
 ```
 
 5. **Machine viva**:
 ```bash
-fly status -a meta-agents-v3
+fly status -a meta-agents-v4
 ```
 
 Se algum desses falhar, restart:
 
 ```bash
-fly machine restart $(fly machine list -a meta-agents-v3 --json | jq -r '.[0].id') -a meta-agents-v3
+fly machine restart $(fly machine list -a meta-agents-v4 --json | jq -r '.[0].id') -a meta-agents-v4
 ```
 
 ---
@@ -526,7 +526,7 @@ fly machine restart $(fly machine list -a meta-agents-v3 --json | jq -r '.[0].id
 **Diagnóstico**: olha o manifest pra ver qual bloqueio aconteceu:
 
 ```bash
-fly ssh console -a meta-agents-v3 -C "cat /app/tentativas-geracao-de-campanhas/$(ls -t /app/tentativas-geracao-de-campanhas | head -1) | jq ."
+fly ssh console -a meta-agents-v4 -C "cat /app/tentativas-geracao-de-campanhas/$(ls -t /app/tentativas-geracao-de-campanhas | head -1) | jq ."
 ```
 
 Procura `"verified": false` e o array `"errors"` (ou `"blockers"` em versões antigas). Cada entrada tem `code`/`subcode` (ex: `100/3858634` = campos DSA faltando, ver [§18](#18-erro-meta-1003858634-verified-advertiser-missing); ou `openai_billing_hard_limit_reached`, ver [§19](#19-erro-openai-billing_hard_limit_reached)). Ataca o bloqueio correspondente.

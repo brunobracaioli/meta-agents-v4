@@ -11,7 +11,7 @@ if [[ ! -f "${CLAUDE_CRED}" ]]; then
 WARN: Claude Code OAuth credentials are NOT seeded.
 The cron will fail until you run, ONCE, from the host:
 
-  fly ssh console -a meta-agents-v3
+  fly ssh console -a meta-agents-v4
   > claude        # follow the OAuth flow; close after success
   > exit
 

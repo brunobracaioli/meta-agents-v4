@@ -1,4 +1,4 @@
-# supercronic crontab for meta-agents-v3
+# supercronic crontab for meta-agents-v4
 # Container TZ is America/Sao_Paulo (set in Dockerfile + fly.toml).
 # Format: m h dom mon dow command
 #

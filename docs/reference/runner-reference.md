@@ -66,7 +66,7 @@ Todas vão via `fly secrets`. Nunca embarcadas na imagem.
 Total: **23 secrets**. Confirma com:
 
 ```bash
-fly secrets list -a meta-agents-v3 | wc -l   # 23 + linhas de cabeçalho
+fly secrets list -a meta-agents-v4 | wc -l   # 23 + linhas de cabeçalho
 ```
 
 > `TZ=America/Sao_Paulo` e `LOG_LEVEL=info` vêm de `[env]` no `fly.toml` (não-sensíveis, podem ficar em config).
@@ -130,8 +130,8 @@ fly secrets list -a meta-agents-v3 | wc -l   # 23 + linhas de cabeçalho
 
 | URL | Propósito |
 |---|---|
-| `https://fly.io/apps/meta-agents-v3` | Dashboard do app (deploys, logs, métricas) |
-| `https://fly.io/apps/meta-agents-v3/monitoring` | Painel ao vivo de deploy |
+| `https://fly.io/apps/meta-agents-v4` | Dashboard do app (deploys, logs, métricas) |
+| `https://fly.io/apps/meta-agents-v4/monitoring` | Painel ao vivo de deploy |
 | `https://status.flyio.net/` | Status público do Fly (incidentes) |
 | `https://business.facebook.com/adsmanager/manage/campaigns?act=225179730538661` | Ads Manager do cliente brunobracaioli |
 | `https://business.facebook.com/settings` | Business Settings (verificações da BM, razão social usada em `dsa_beneficiary`/`dsa_payor`) |
@@ -170,7 +170,7 @@ Estado em produção no momento do primeiro deploy (2026-05-22):
 
 | Recurso | Identificador / valor |
 |---|---|
-| App | `meta-agents-v3` |
+| App | `meta-agents-v4` |
 | Region | `gru` (São Paulo) |
 | Primary org | `nome-do-cliente` (personal) |
 | Volume name | `claude_state` |

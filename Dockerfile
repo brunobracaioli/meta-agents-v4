@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1.7
 #
-# Fly.io Cron Runner — meta-agents-v3
+# Fly.io Cron Runner — meta-agents-v4
 # Hosts Claude Code CLI + supercronic for daily non-interactive campaign creation.
 # See docs/specs/flyio-cron-campaign-runner.md
 #
-# Build: docker build -t meta-agents-v3:local .
+# Build: docker build -t meta-agents-v4:local .
 # Deploy: fly deploy --remote-only
 
 FROM node:22-bookworm-slim

@@ -5,7 +5,7 @@
 | Status | accepted |
 | Data | 2026-05-19 |
 | Owner | brunobracaioli |
-| Surface | Fly Machine `meta-agents-v3` em `gru` rodando Claude Code CLI + supercronic |
+| Surface | Fly Machine `meta-agents-v4` em `gru` rodando Claude Code CLI + supercronic |
 | Spec | [docs/specs/flyio-cron-campaign-runner.md](../../specs/flyio-cron-campaign-runner.md) |
 | ADR | [docs/adr/0001-fly-machine-supercronic.md](../../adr/0001-fly-machine-supercronic.md) |
 
@@ -77,4 +77,4 @@ STRIDE para a nova superfície de ataque introduzida pelo runner.
 
 - Trocar `--dangerously-skip-permissions` por allowlist explícita via `--allowed-tools` quando o prompt passar a receber input dinâmico.
 - Adicionar `npm audit` e `gitleaks` no CI antes do `fly deploy`.
-- Considerar segregar `meta-agents-v3-staging` para dry-runs antes de cada mudança de skill.
+- Considerar segregar `meta-agents-v4-staging` para dry-runs antes de cada mudança de skill.

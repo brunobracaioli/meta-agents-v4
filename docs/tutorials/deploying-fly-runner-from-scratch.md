@@ -2,7 +2,7 @@
 
 > **Tempo total**: 30–60 min (a maior parte é espera de build e OAuth manual).
 > **Audiência**: operador fazendo o setup pela primeira vez, ou refazendo após perda do estado.
-> **Resultado**: Fly Machine `meta-agents-v3` em `gru` rodando supercronic que dispara `claude -p` diariamente às 10h BRT.
+> **Resultado**: Fly Machine `meta-agents-v4` em `gru` rodando supercronic que dispara `claude -p` diariamente às 10h BRT.
 >
 > Para o **porquê** desta arquitetura, ver [ADR 0001](../adr/0001-fly-machine-supercronic.md).
 > Para **receitas pontuais** depois do setup, ver [How-to runbook](../how-to/operations-runbook.md).
@@ -97,7 +97,7 @@ fly version
 fly auth login
 ```
 
-O `flyctl` tenta abrir o browser. No WSL pode falhar — se aparecer "failed opening browser", ele imprime uma URL. Cola no browser do Windows, completa o login com a conta que tem o app `meta-agents-v3`, fecha o tab. O terminal mostra:
+O `flyctl` tenta abrir o browser. No WSL pode falhar — se aparecer "failed opening browser", ele imprime uma URL. Cola no browser do Windows, completa o login com a conta que tem o app `meta-agents-v4`, fecha o tab. O terminal mostra:
 
 ```
 Waiting for session... Done
@@ -127,13 +127,13 @@ Todos os arquivos devem existir. Se faltar `.env.local`, **pare aqui** e popule.
 ### Confere se o app já existe no Fly
 
 ```bash
-fly apps list | grep meta-agents-v3
+fly apps list | grep meta-agents-v4
 ```
 
-Se aparecer uma linha com `meta-agents-v3`, ok — já existe (foi criado em deploy anterior ou via dashboard). Se não aparecer:
+Se aparecer uma linha com `meta-agents-v4`, ok — já existe (foi criado em deploy anterior ou via dashboard). Se não aparecer:
 
 ```bash
-fly apps create meta-agents-v3 --org personal
+fly apps create meta-agents-v4 --org personal
 ```
 
 ---
@@ -154,7 +154,7 @@ while IFS='=' read -r k v; do
   [[ -z "$k" || "$k" =~ ^# ]] && continue
   SECRETS_ARGS+=("$k=$v")
 done < .env.local
-fly secrets set "${SECRETS_ARGS[@]}" -a meta-agents-v3
+fly secrets set "${SECRETS_ARGS[@]}" -a meta-agents-v4
 ```
 
 > ⚠️ **Gotcha CRLF**: se o `.env.local` foi editado em Notepad/VSCode no Windows, as linhas terminam em `\r\n`. Sem o `k="${k%$'\r'}"` e `v="${v%$'\r'}"`, o `\r` vira parte do nome da chave e o Fly retorna `"\r" is not a valid secret name`. As duas linhas removem o `\r` final.
@@ -177,7 +177,7 @@ Release v<N> created
 ### Validar
 
 ```bash
-fly secrets list -a meta-agents-v3
+fly secrets list -a meta-agents-v4
 ```
 
 Tem que imprimir uma tabela com **23 nomes** e status `Staged` (na primeira vez) ou `Deployed`. **Nunca aparece o valor** — só o nome e o digest (hash). Lista esperada das chaves: ver [Reference §2](../reference/runner-reference.md#2-env-vars).
@@ -191,7 +191,7 @@ Tem que imprimir uma tabela com **23 nomes** e status `Staged` (na primeira vez)
 ### Comando
 
 ```bash
-fly volumes create claude_state --size 1 --region gru -a meta-agents-v3
+fly volumes create claude_state --size 1 --region gru -a meta-agents-v4
 ```
 
 ### Diálogos interativos
@@ -206,7 +206,7 @@ O `flyctl` faz 2 perguntas:
 ```
                   ID: vol_<id>
                 Name: claude_state
-                 App: meta-agents-v3
+                 App: meta-agents-v4
               Region: gru
                 Zone: <zone>
              Size GB: 1
@@ -216,7 +216,7 @@ O `flyctl` faz 2 perguntas:
 ### Validar
 
 ```bash
-fly volumes list -a meta-agents-v3
+fly volumes list -a meta-agents-v4
 ```
 
 Tem que aparecer 1 linha com `claude_state`, `1GB`, `gru`, `ATTACHED VM` vazio (não tem Machine ainda).
@@ -257,8 +257,8 @@ fly deploy --remote-only
  => [ 5/12] RUN useradd -m -u 1001 -s /bin/bash runner ...
  ...
  => exporting to image
- => pushing layers for registry.fly.io/meta-agents-v3:deployment-...
---> Build Summary: image: registry.fly.io/meta-agents-v3:deployment-...
+ => pushing layers for registry.fly.io/meta-agents-v4:deployment-...
+--> Build Summary: image: registry.fly.io/meta-agents-v4:deployment-...
 --> image size: ~170 MB
 
 ==> Creating release
@@ -273,7 +273,7 @@ fly deploy --remote-only
 ### Validar
 
 ```bash
-fly status -a meta-agents-v3
+fly status -a meta-agents-v4
 ```
 
 Tem que mostrar 1 Machine em `state: started`, region `gru`.
@@ -286,7 +286,7 @@ Tem que mostrar 1 Machine em `state: started`, region `gru`.
 | `failed querying for new release: invalid character '<'` | Token Fly expirado | `fly auth logout && fly auth login` |
 | `UID 1000 is not unique` | Dockerfile usando UID que conflita com `node` user da base | **Já corrigido**: usamos UID 1001. Se voltar, troque para 1002 |
 | `source volume "claude_state" not found` | Pulou o Passo 2 | Faça o Passo 2 |
-| `0 healthy, 1 unhealthy` | Machine subiu mas algo na inicialização falhou | `fly logs -a meta-agents-v3` pra ver stack trace |
+| `0 healthy, 1 unhealthy` | Machine subiu mas algo na inicialização falhou | `fly logs -a meta-agents-v4` pra ver stack trace |
 
 ---
 
@@ -297,7 +297,7 @@ Tem que mostrar 1 Machine em `state: started`, region `gru`.
 ### 4.1 Entrar no container
 
 ```bash
-fly ssh console -a meta-agents-v3
+fly ssh console -a meta-agents-v4
 ```
 
 Você cai em um prompt:
@@ -384,7 +384,7 @@ Você volta ao terminal WSL.
 ### Comando
 
 ```bash
-fly ssh console -a meta-agents-v3 -C "runuser -u runner -- /app/scripts/run-skill.sh create-traffic-brunobracaioli-campaign"
+fly ssh console -a meta-agents-v4 -C "runuser -u runner -- /app/scripts/run-skill.sh create-traffic-brunobracaioli-campaign"
 ```
 
 > ⚠️ **Gotcha crítica**: use `runuser -u runner --`, **não** `su - runner -c`. O `su -` (com hífen) cria um shell de login limpo que apaga todas as env vars herdadas do PID 1 — a skill perde acesso a `OPENAI_API_KEY`, `SUPABASE_*`, etc. e roda em modo degradado. Veja o [How-to §rodar-skill-manualmente-em-produção](../how-to/operations-runbook.md).
@@ -448,7 +448,7 @@ Se a skill voltar com `exit=0` mas o Ads Manager mostrar só Campaign (sem AdSet
 ### 6.1 Conferir que a Machine está viva
 
 ```bash
-fly status -a meta-agents-v3
+fly status -a meta-agents-v4
 ```
 
 `state: started`.
@@ -456,7 +456,7 @@ fly status -a meta-agents-v3
 ### 6.2 Acompanhar logs em tempo real
 
 ```bash
-fly logs -a meta-agents-v3
+fly logs -a meta-agents-v4
 ```
 
 Você vai ver linhas tipo:
@@ -471,7 +471,7 @@ Pressiona `Ctrl+C` pra fechar.
 
 ### 6.3 Esperar 10h BRT do dia seguinte
 
-No dia seguinte às 10h BRT, abra `fly logs -a meta-agents-v3` e observe:
+No dia seguinte às 10h BRT, abra `fly logs -a meta-agents-v4` e observe:
 
 ```
 time="..." level=info msg="starting" job.command="/app/scripts/run-skill.sh create-traffic-brunobracaioli-campaign" job.schedule="0 10 * * *"
@@ -489,9 +489,9 @@ Validação final: nova campanha PAUSED visível no Ads Manager.
 
 Você considera o deploy **completo** quando:
 
-- [x] `fly status -a meta-agents-v3` mostra 1 Machine `started` em `gru`.
-- [x] `fly secrets list -a meta-agents-v3` mostra 23 secrets `Deployed`.
-- [x] `fly volumes list -a meta-agents-v3` mostra 1 volume `claude_state` attached à Machine.
+- [x] `fly status -a meta-agents-v4` mostra 1 Machine `started` em `gru`.
+- [x] `fly secrets list -a meta-agents-v4` mostra 23 secrets `Deployed`.
+- [x] `fly volumes list -a meta-agents-v4` mostra 1 volume `claude_state` attached à Machine.
 - [x] `/home/runner/.claude/.credentials.json` existe no container.
 - [x] Smoke test do passo 5 retornou `exit=0`.
 - [x] Pelo menos uma execução automática do cron foi observada via `fly logs`.
