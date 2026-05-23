@@ -1,2 +1,2 @@
 INFO: usando /v1/images/edits com 1 ref(s).
-OK: .claude/materiais-das-empresas/<nome-cliente>/generated-ads/cca-2026-05-22/ad-v2-dor.png (1281034 bytes)
+OK: .claude/materiais-das-empresas/brunobracaioli/generated-ads/cca-2026-05-22/ad-v2-dor.png (1281034 bytes)

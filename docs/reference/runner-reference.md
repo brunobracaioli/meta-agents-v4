@@ -13,7 +13,7 @@
 4. [Paths dentro do container](#4-paths-dentro-do-container)
 5. [Comandos flyctl](#5-comandos-flyctl)
 6. [Endpoints externos](#6-endpoints-externos)
-7. [IDs do cliente <nome-cliente>](#7-ids-do-cliente-<nome-cliente>)
+7. [IDs do cliente brunobracaioli](#7-ids-do-cliente-brunobracaioli)
 8. [Versões pinadas](#8-versões-pinadas)
 9. [Recursos Fly provisionados](#9-recursos-fly-provisionados)
 
@@ -133,14 +133,14 @@ fly secrets list -a meta-agents-v3 | wc -l   # 23 + linhas de cabeçalho
 | `https://fly.io/apps/meta-agents-v3` | Dashboard do app (deploys, logs, métricas) |
 | `https://fly.io/apps/meta-agents-v3/monitoring` | Painel ao vivo de deploy |
 | `https://status.flyio.net/` | Status público do Fly (incidentes) |
-| `https://business.facebook.com/adsmanager/manage/campaigns?act=225179730538661` | Ads Manager do cliente <nome-cliente> |
+| `https://business.facebook.com/adsmanager/manage/campaigns?act=225179730538661` | Ads Manager do cliente brunobracaioli |
 | `https://business.facebook.com/settings` | Business Settings (verificações da BM, razão social usada em `dsa_beneficiary`/`dsa_payor`) |
 | `https://platform.openai.com/account/billing` | Saldo + limites OpenAI |
 | `https://supabase.com/dashboard/project/<ref>` | Supabase dashboard |
 | `https://claude.ai/` | Conta Claude.ai (gerencia connectors MCP) |
 | `https://github.com/aptible/supercronic/releases` | Releases supercronic (SHA1 dos binários) |
 
-## 7. IDs do cliente <nome-cliente>
+## 7. IDs do cliente brunobracaioli
 
 Fonte de verdade: `.claude/skills/lista-de-clientes/SKILL.md`.
 

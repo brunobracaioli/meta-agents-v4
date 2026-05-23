@@ -292,7 +292,7 @@ Tem que mostrar 1 Machine em `state: started`, region `gru`.
 
 ## Passo 4 — Seed do OAuth do Claude.ai
 
-**Por quê**: este é o passo mais subestimado e mais crítico. Sem OAuth seedado, a skill `/create-traffic-<nome-cliente>-campaign` não consegue acessar os connectors Meta Ads MCP e Supabase MCP da Claude.ai — e ela depende deles pra criar a campanha. Não dá pra automatizar (é OAuth interativo). Faz-se uma vez na vida do volume.
+**Por quê**: este é o passo mais subestimado e mais crítico. Sem OAuth seedado, a skill `/create-traffic-brunobracaioli-campaign` não consegue acessar os connectors Meta Ads MCP e Supabase MCP da Claude.ai — e ela depende deles pra criar a campanha. Não dá pra automatizar (é OAuth interativo). Faz-se uma vez na vida do volume.
 
 ### 4.1 Entrar no container
 
@@ -384,7 +384,7 @@ Você volta ao terminal WSL.
 ### Comando
 
 ```bash
-fly ssh console -a meta-agents-v3 -C "runuser -u runner -- /app/scripts/run-skill.sh create-traffic-<nome-cliente>-campaign"
+fly ssh console -a meta-agents-v3 -C "runuser -u runner -- /app/scripts/run-skill.sh create-traffic-brunobracaioli-campaign"
 ```
 
 > ⚠️ **Gotcha crítica**: use `runuser -u runner --`, **não** `su - runner -c`. O `su -` (com hífen) cria um shell de login limpo que apaga todas as env vars herdadas do PID 1 — a skill perde acesso a `OPENAI_API_KEY`, `SUPABASE_*`, etc. e roda em modo degradado. Veja o [How-to §rodar-skill-manualmente-em-produção](../how-to/operations-runbook.md).
@@ -404,7 +404,7 @@ fly ssh console -a meta-agents-v3 -C "runuser -u runner -- /app/scripts/run-skil
 ### Output esperado (resumido)
 
 ```
-RUN_START skill=create-traffic-<nome-cliente>-campaign log=/var/log/runs/<ts>-create-traffic-<nome-cliente>-campaign.log ts=<ts> timeout=1500s
+RUN_START skill=create-traffic-brunobracaioli-campaign log=/var/log/runs/<ts>-create-traffic-brunobracaioli-campaign.log ts=<ts> timeout=1500s
 
 [saída da skill — pode ser longa]
 
@@ -416,7 +416,7 @@ RUN_START skill=create-traffic-<nome-cliente>-campaign log=/var/log/runs/<ts>-cr
 | Ad v2 | <id> | PAUSED |
 | Ad v3 | <id> | PAUSED |
 
-RUN_RESULT skill=create-traffic-<nome-cliente>-campaign exit=0 log=/var/log/runs/<ts>-...log
+RUN_RESULT skill=create-traffic-brunobracaioli-campaign exit=0 log=/var/log/runs/<ts>-...log
 ```
 
 ### Validar no Meta Ads Manager
@@ -474,10 +474,10 @@ Pressiona `Ctrl+C` pra fechar.
 No dia seguinte às 10h BRT, abra `fly logs -a meta-agents-v3` e observe:
 
 ```
-time="..." level=info msg="starting" job.command="/app/scripts/run-skill.sh create-traffic-<nome-cliente>-campaign" job.schedule="0 10 * * *"
-RUN_START skill=create-traffic-<nome-cliente>-campaign log=/var/log/runs/...
+time="..." level=info msg="starting" job.command="/app/scripts/run-skill.sh create-traffic-brunobracaioli-campaign" job.schedule="0 10 * * *"
+RUN_START skill=create-traffic-brunobracaioli-campaign log=/var/log/runs/...
 [ output da skill ]
-RUN_RESULT skill=create-traffic-<nome-cliente>-campaign exit=0 log=...
+RUN_RESULT skill=create-traffic-brunobracaioli-campaign exit=0 log=...
 time="..." level=info msg="job succeeded"
 ```
 

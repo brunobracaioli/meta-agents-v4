@@ -4,7 +4,7 @@
 |---|---|
 | Status | Accepted |
 | Data | 2026-05-19 |
-| Decidido por | <nome-cliente> |
+| Decidido por | brunobracaioli |
 | Spec | [docs/specs/flyio-cron-campaign-runner.md](../specs/flyio-cron-campaign-runner.md) |
 
 ## Context
@@ -12,7 +12,7 @@
 Precisamos executar, 1x/dia, o comando
 
 ```bash
-claude -p --dangerously-skip-permissions ".claude/skills/create-traffic-<nome-cliente>-campaign"
+claude -p --dangerously-skip-permissions ".claude/skills/create-traffic-brunobracaioli-campaign"
 ```
 
 sem operador humano no loop. O comando depende não só de uma `ANTHROPIC_API_KEY`, mas do **estado da conta Claude.ai do operador no Claude Code CLI** — em particular dos **connectors Claude.ai** (Meta Ads MCP, Supabase MCP) que **só ficam autenticados após um `claude login` interativo**. Esse estado vive em `~/.claude/`.

@@ -6,18 +6,18 @@
   "prompt_source": "inline",
   "prompt_path": "/tmp/img-gen-cliente-architect/prompt.txt",
   "refs_requested": [
-    "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/<nome-cliente>/logo/logo.png",
-    "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/<nome-cliente>/logo/foto-do-infoprodutor/nome-do-cliente.jpg",
-    "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/<nome-cliente>/exemplo-de-ads/meta-ads-agents.png"
+    "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/brunobracaioli/logo/logo.png",
+    "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/brunobracaioli/logo/foto-do-infoprodutor/nome-do-cliente.jpg",
+    "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/brunobracaioli/exemplo-de-ads/meta-ads-agents.png"
   ],
   "refs_used": [
-    "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/<nome-cliente>/logo/logo.png",
-    "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/<nome-cliente>/logo/foto-do-infoprodutor/nome-do-cliente.jpg",
+    "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/brunobracaioli/logo/logo.png",
+    "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/brunobracaioli/logo/foto-do-infoprodutor/nome-do-cliente.jpg",
     "/tmp/img-gen-cliente-architect/example-ad-resized.jpg"
   ],
   "refs_skipped": [
     {
-      "path": "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/<nome-cliente>/exemplo-de-ads/meta-ads-agents.png",
+      "path": "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/brunobracaioli/exemplo-de-ads/meta-ads-agents.png",
       "code": "reference_skipped_too_large:1121104",
       "remediation": "resized to /tmp/img-gen-cliente-architect/example-ad-resized.jpg (125288 bytes) and used as composition style reference"
     }

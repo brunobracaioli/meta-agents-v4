@@ -1,0 +1,39 @@
+Anuncio Meta Ads feed quadrado 1080x1080, angulo de DOR, sem pessoas, estilo brutalist tech incident dashboard. Objetivo visual: provocar reconhecimento de falha tecnica — o viewer sente a dor de pipelines quebrados antes de ver a solucao.
+
+REFERENCIA #1 (LOGO) — COMPOSITE LITERALMENTE: marca triangular estilizada em 'A', triangulo grande BRANCO na esquerda com slash triangular LARANJA VIVO na direita, fundo transparente. Posicionar no canto inferior esquerdo, largura aproximada de 9% do frame, acima do rodape de alerta. NAO redesenhar a marca — composite exato.
+
+COMPOSICAO 1080x1080, formato feed quadrado, composicao quadrada para feed, foco visual forte no centro, elementos principais dentro da area segura central, legivel em tela pequena.
+
+CENA PRINCIPAL: tela de terminal em colapso total. Janelas de terminal empilhadas em cascata caótica — tres ou quatro janelas sobrepostas em angulos levemente diferentes, cada uma exibindo erros criticos em texto monoespaco branco e vermelho-alerta sobre fundo preto profundo. Os erros visiveis nas janelas sao exatamente:
+  Janela 1 — linha piscando em vermelho: 'CONTEXT WINDOW EXCEEDED'
+  Janela 2 — linha em amarelo-alerta: 'AGENT TIMEOUT'
+  Janela 3 — linha em vermelho intenso: 'PIPELINE BLOCKED'
+  Janela 4 (ao fundo, parcialmente visivel) — texto branco desbotado: 'RETRY LIMIT REACHED'
+Cursores piscando em algumas linhas. Barras de scroll laterais. Timestamps de log no formato HH:MM:SS antes de cada linha de erro. Stack traces parciais em cinza escuro preenchendo linhas intermediarias — texto ilegivel, apenas textura visual.
+
+BANNER DE CLASSIFICACAO MILITAR no topo da composicao: faixa horizontal preta de alta densidade, texto em monoespaco bold maiusculo vermelho-alerta: 'INCIDENT REPORT // SYSTEM FAILURE'. Bordas da faixa com linhas de scan finas em vermelho.
+
+HEADLINE PRINCIPAL sobreposta ao centro-superior do frame, tipografia ops condensada ultra-bold caixa alta, cor branco puro, sombra/glow em vermelho atras: 'VIBE CODING NAO ESCALA.'
+Abaixo da headline, subtexto menor em monoespaco: 'Seus agentes caem. Seu contexto some. Seu pipeline trava.'
+
+PALETA: fundo dominante preto profundo '#0A0A0A' a '#111111'. Acentos de erro em vermelho-alerta '#FF2020' a '#CC0000'. Texto principal branco '#FFFFFF'. Detalhe de aviso em amarelo '#FFCC00'. Sem laranja exceto no logo composite.
+
+TEXTURA DE FUNDO: grade de hex ou scanlines finas em '#1A1A1A', opacidade 8%, nunca competindo com o foreground.
+
+LUMINOSIDADE: sem luz ambiente quente. Apenas o glow frio de telas de monitor. Reflexo de tela nas bordas das janelas. Particulas de glitch sutil — artefatos de compressao JPEG leve nos cantos.
+
+LOGO COMPOSITE no canto inferior esquerdo: marca triangular 'A' — triangulo branco + slash laranja '#FF6B1A' — largura 9% do frame, acima de 16px da borda inferior. Manter cores originais exatas: branco e laranja.
+
+LISTA ESTRITA DE TEXTOS VISIVEIS E LEGIVEIS — somente estas strings aparecem na imagem:
+  'INCIDENT REPORT // SYSTEM FAILURE' (faixa topo)
+  'VIBE CODING NAO ESCALA.' (headline principal)
+  'Seus agentes caem. Seu contexto some. Seu pipeline trava.' (subtexto)
+  'CONTEXT WINDOW EXCEEDED' (erro janela 1)
+  'AGENT TIMEOUT' (erro janela 2)
+  'PIPELINE BLOCKED' (erro janela 3)
+  'RETRY LIMIT REACHED' (erro janela 4, parcialmente visivel)
+Todo o restante do texto das janelas de terminal e stack traces deve ser ilegivel — apenas textura e densidade visual.
+
+Mood: sobrecarga tecnica, estado de falha critica, urgencia de sistema em colapso. Atmosfera de NOC (Network Operations Center) no pior momento possivel. Sem humor, sem cor quente, sem elementos decorativos.
+
+Output: composicao digital premium, ad-grade, 1080x1080, sem marcas dagua, sem bordas extras, sem frames decorativos. Legivel em tela de celular em 1 segundo.

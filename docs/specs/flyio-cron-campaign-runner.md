@@ -3,19 +3,19 @@
 | Campo | Valor |
 |---|---|
 | Status | accepted |
-| Owner | <nome-cliente> |
+| Owner | brunobracaioli |
 | Última atualização | 2026-05-19 |
 | Plano de fundo | `~/.claude/plans/claude-estamos-na-fase-idempotent-pumpkin.md` |
 | ADR relacionado | [docs/adr/0001-fly-machine-supercronic.md](../adr/0001-fly-machine-supercronic.md) |
 | Threat model | [docs/security/threats/flyio-runner.md](../security/threats/flyio-runner.md) |
-| Skill alvo | `.claude/skills/create-traffic-<nome-cliente>-campaign/SKILL.md` |
+| Skill alvo | `.claude/skills/create-traffic-brunobracaioli-campaign/SKILL.md` |
 
 ## 1. Objetivo
 
 Disparar **1x/dia, 10:00 BRT**, de forma totalmente não-interativa, o comando:
 
 ```bash
-claude -p --dangerously-skip-permissions ".claude/skills/create-traffic-<nome-cliente>-campaign"
+claude -p --dangerously-skip-permissions ".claude/skills/create-traffic-brunobracaioli-campaign"
 ```
 
 dentro de uma **Fly Machine** em `gru`, criando 1 campanha de tráfego PAUSED + 1 adset PAUSED + 3 ads PAUSED no ad account `225179730538661` (cliente nome do cliente), com cap absoluto de R$ 50/dia.
@@ -29,7 +29,7 @@ A skill já é **headless-safe** (validada localmente em 2026-05-19 18:05 — ca
 Disparado pelo `supercronic` interno via entrada do `crontab` (TZ = `America/Sao_Paulo`):
 
 ```
-0 10 * * * /app/scripts/run-skill.sh create-traffic-<nome-cliente>-campaign
+0 10 * * * /app/scripts/run-skill.sh create-traffic-brunobracaioli-campaign
 ```
 
 **Input do wrapper**: `$1 = client_skill_slug` (string, kebab-case, obrigatório).
@@ -83,7 +83,7 @@ A **conta Claude.ai + connectors Claude.ai (Meta MCP, Supabase MCP)** vem do **v
 
 ## 4. Fluxo (passo a passo)
 
-1. `supercronic` lê `crontab`. Às 10:00 BRT chama `/app/scripts/run-skill.sh create-traffic-<nome-cliente>-campaign`.
+1. `supercronic` lê `crontab`. Às 10:00 BRT chama `/app/scripts/run-skill.sh create-traffic-brunobracaioli-campaign`.
 2. Wrapper valida (a) skill existe; (b) OAuth seedado. Falha rápido se algum falhar.
 3. Cria `/var/log/runs/<ts>-<skill>.log` e faz `cd /app`.
 4. Executa `claude -p --dangerously-skip-permissions ".claude/skills/<skill>"`, com `timeout 1500`, output `tee`'d.
@@ -110,7 +110,7 @@ A **conta Claude.ai + connectors Claude.ai (Meta MCP, Supabase MCP)** vem do **v
 - [ ] `fly ssh console -C "claude --version"` retorna versão pinada no Dockerfile.
 - [ ] `fly ssh console -C "supercronic -test /app/crontab"` exit 0.
 - [ ] Após seed manual, `/home/runner/.claude/.credentials.json` existe e é JSON válido.
-- [ ] `fly ssh console -C "/app/scripts/run-skill.sh create-traffic-<nome-cliente>-campaign"` cria 1 campanha PAUSED + 1 adset PAUSED + 3 ads PAUSED, exit 0.
+- [ ] `fly ssh console -C "/app/scripts/run-skill.sh create-traffic-brunobracaioli-campaign"` cria 1 campanha PAUSED + 1 adset PAUSED + 3 ads PAUSED, exit 0.
 - [ ] Manifest aparece em `/app/tentativas-geracao-de-campanhas/`.
 - [ ] Próximo 10:00 BRT: disparo automático visível em `fly logs` com `RUN_START` e `RUN_RESULT exit=0`.
 - [ ] Threat model preenchido em `docs/security/threats/flyio-runner.md`.
@@ -132,7 +132,7 @@ Em produção, o cron via supercronic já roda como `runner` (devido a `USER run
 
 ```bash
 # CORRETO (preserva env do PID 1):
-fly ssh console -a meta-agents-v3 -C "runuser -u runner -- /app/scripts/run-skill.sh create-traffic-<nome-cliente>-campaign"
+fly ssh console -a meta-agents-v3 -C "runuser -u runner -- /app/scripts/run-skill.sh create-traffic-brunobracaioli-campaign"
 
 # ERRADO (env vazio → skill roda em modo degradado):
 fly ssh console -a meta-agents-v3 -C "su - runner -c '/app/scripts/run-skill.sh ...'"
@@ -152,6 +152,6 @@ Edite `crontab`, commit, `fly deploy --remote-only`.
 ## 8. Não-objetivos desta entrega
 
 - Tabela `campaign_runs` no Supabase com dedup forte: skill já encerra em PAUSED + cap LLM em $2; impacto financeiro real é zero antes de ativação manual.
-- Multi-cliente: primeiro `<nome-cliente>`. cliente na onda 2.
+- Multi-cliente: primeiro `brunobracaioli`. cliente na onda 2.
 - Dashboard observabilidade: `fly logs` + manifest folder são suficientes.
 - Retry automático em falha: 1x/dia é suficiente; operador investiga falhas no dia seguinte.

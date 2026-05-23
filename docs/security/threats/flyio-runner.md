@@ -4,7 +4,7 @@
 |---|---|
 | Status | accepted |
 | Data | 2026-05-19 |
-| Owner | <nome-cliente> |
+| Owner | brunobracaioli |
 | Surface | Fly Machine `meta-agents-v3` em `gru` rodando Claude Code CLI + supercronic |
 | Spec | [docs/specs/flyio-cron-campaign-runner.md](../../specs/flyio-cron-campaign-runner.md) |
 | ADR | [docs/adr/0001-fly-machine-supercronic.md](../../adr/0001-fly-machine-supercronic.md) |

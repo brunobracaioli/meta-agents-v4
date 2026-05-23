@@ -3,7 +3,7 @@
 # See docs/specs/flyio-cron-campaign-runner.md §3.6.
 #
 # Usage: run-skill.sh <skill-name>
-#   e.g. run-skill.sh create-traffic-<nome-cliente>-campaign
+#   e.g. run-skill.sh create-traffic-brunobracaioli-campaign
 
 set -euo pipefail
 

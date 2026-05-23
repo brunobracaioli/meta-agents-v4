@@ -8,7 +8,7 @@
 ## Workflow
 
 **Instruções gerais**:
-- em ".claude\materiais-das-empresas" você encontrará informações adicionais sobre as empresas como "logo"(.claude\materiais-das-empresas\<nome-cliente>\logo\logo.png), imagem do infoprodutor (.claude\materiais-das-empresas\<nome-cliente>\logo\foto-do-infoprodutor\nome-do-cliente.jpg) e exemplos de anúncios que o infoprodutor já usou antes (.claude\materiais-das-empresas\<nome-cliente>\exemplo-de-ads\meta-ads-agents.png).
+- em ".claude\materiais-das-empresas" você encontrará informações adicionais sobre as empresas como "logo"(.claude\materiais-das-empresas\brunobracaioli\logo\logo.png), imagem do infoprodutor (.claude\materiais-das-empresas\brunobracaioli\logo\foto-do-infoprodutor\nome-do-cliente.jpg) e exemplos de anúncios que o infoprodutor já usou antes (.claude\materiais-das-empresas\brunobracaioli\exemplo-de-ads\meta-ads-agents.png).
 - em ".claude\skills\lista-de-clientes\SKILL.md" você encontrará informações sobre os clientes como número da BM, conta de anúncios, URL, regras de orçamento etc.
 
 ## Stack

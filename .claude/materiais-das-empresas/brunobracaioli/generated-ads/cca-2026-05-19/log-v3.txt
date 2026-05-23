@@ -1,2 +1,2 @@
 INFO: usando /v1/images/edits com 2 ref(s).
-OK: /mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/<nome-cliente>/generated-ads/cca-2026-05-19/ad-v3-oferta.png (1089814 bytes)
+OK: /mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/brunobracaioli/generated-ads/cca-2026-05-19/ad-v3-oferta.png (1089814 bytes)

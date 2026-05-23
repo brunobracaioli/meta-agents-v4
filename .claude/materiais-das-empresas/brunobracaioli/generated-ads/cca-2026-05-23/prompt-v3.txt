@@ -1,0 +1,49 @@
+Anuncio profissional para Meta Ads feed quadrado 1080x1080, angulo OFERTA para o curso 'Claude Code Architect' de Bruno Bracaioli. Objetivo visual: transmitir volume de conteudo, estrutura solida e valor percebido alto com o preco de lancamento R$497.
+
+Direcao de arte: estética BRUTALIST TECH militar — ops briefing layout, curriculum dashboard, campo operacional classificado. Sem pessoas, sem rostos, sem fotografia humanizada. Toda a composicao e feita de CARDS, MODULOS e ELEMENTOS GRAFICOS de interface ops.
+
+Fundo: PRETO ABSOLUTO #0A0A0A com textura faint de hex-grid / circuit trace em 4% de opacidade branco — quase invisivel, apenas sugere substrato tecnico. Zero gradiente de cor, maxima austeridade.
+
+Paleta restrita e rigida:
+- Background: #0A0A0A (preto operacional SPECOPS.BLACK)
+- Texto primario e estrutura: #FFFFFF branco puro
+- Acento de destaque e preço: #FFD700 amarelo classificacao — APENAS para o preco e stamps de destaque
+- Acento secundario UI: #00FF88 verde-terminal para icones de status, checkmarks, bordas de cards ativos
+- Laranja de marca apenas no logo: #FF6B1A
+
+COMPOSICAO QUADRADA 1080x1080 — estrutura em tres zonas horizontais:
+
+ZONA 1 — TOPO (altura ~18% do frame): stamp de classificacao horizontal full-width. Linha fina branca como separador inferior. Texto centralizado em monoespaco bold caps: [[ FIELD MANUAL // CCA-2026 // 26+2 MODULES CLASSIFIED ]]. Fundo preto solido. Letras brancas com leve glitch horizontal nos extremos. Canto superior direito: pequeno badge retangular com borda branca e interior preto, texto verde-terminal em caps: CLASSIFIED. Canto superior esquerdo: texto monoespaco branco micro: CLAUDE CODE ARCHITECT >_ com o simbolo >_ em laranja #FF6B1A.
+
+ZONA 2 — CORPO CENTRAL (altura ~62%): grade de MISSION CARDS em layout 3x3. Cada card e um retangulo com borda de 1px branco a 40% opacidade, fundo preto com micro-textura, cantos nao arredondados (brutalist sharp corners). Cada card contem:
+- Numero do modulo em amarelo #FFD700 monoespaco bold no canto superior esquerdo: M01, M02 ... M09
+- Titulo do modulo em branco bold caps duas linhas max — conteudo representativo: FOUNDATIONS // AGENT DESIGN, ORCHESTRATION // MULTI-AGENT, CLAUDE CODE // CLI MASTERY, SPEC-DRIVEN // DEV WORKFLOW, MEMORY // CONTEXT MGMT, TOOL USE // MCP SERVERS, PROD DEPLOY // AGENTS IN PROD, PROMPT ENG // SYSTEM PROMPTS, CAPSTONE // FINAL PROJECT
+- Borda inferior interna fina em verde-terminal #00FF88 a 60% opacidade como 'status bar'
+- Um card central (modulo ORCHESTRATION) tem borda full verde-terminal #00FF88 e fundo #00FF88 a 8% para indicar 'modulo central ativo'
+
+Abaixo da grade de modulos, dentro da zona 2, uma linha de bonus: dois cards menores lado a lado, label acima em amarelo #FFD700: + 2 BONUS INCLUIDOS. Cards com borda tracejada branca e titulos: BONUS 01 // TEMPLATES DE SPECS e BONUS 02 // AGENT STARTER KIT.
+
+ZONA 3 — RODAPE (altura ~20%): strip full-width dividido em duas partes. Parte esquerda (~65% da largura): fundo preto com padding. Texto principal em duas linhas — linha 1: 26 AULAS + 2 BONUS em branco bold condensado display sans, tamanho grande. Linha 2: R$497 em #FFD700 amarelo, fonte ainda maior, bold maxima, como numero de impact. Sub-texto micro abaixo em branco 40% opacidade: acesso vitalicio — comece hoje. Parte direita (~35% da largura): fundo #FF6B1A laranja solido preenchendo toda a altura do rodape, centralizado vertical. Texto bold caps branco em duas linhas: GARANTA SUA VAGA. Seta chevron branca abaixo do texto.
+
+LOGO — canto inferior esquerdo, dentro da zona 3, logo da Imagem 1 (triangulo A branco com slash laranja) composto literalmente com ~8% da largura do frame, sobre o fundo preto, logo acima da linha do rodape.
+
+TIPOGRAFIA: Druk Wide / Anton / Bebas Neue ou equivalente condensed display sans-serif para headlines e precos. Monoespaco (Courier / IBM Plex Mono feel) para stamps, numeros de modulo, labels de classificacao e micro-textos de interface.
+
+TEXTO VISIVEL WHITELIST — APENAS estes textos podem aparecer na imagem:
+1. [[ FIELD MANUAL // CCA-2026 // 26+2 MODULES CLASSIFIED ]]
+2. CLASSIFIED (badge)
+3. CLAUDE CODE >_
+4. ARCHITECT
+5. Numeros de modulo: M01 a M09
+6. Titulos dos 9 modulos conforme listado acima
+7. + 2 BONUS INCLUIDOS
+8. BONUS 01 // TEMPLATES DE SPECS
+9. BONUS 02 // AGENT STARTER KIT
+10. 26 AULAS + 2 BONUS
+11. R$497
+12. acesso vitalicio — comece hoje
+13. GARANTA SUA VAGA
+
+Mood: ops briefing military-tech, curriculum volume, confianca tecnica, urgencia fria. Sem drama emocional. Sem calor humano.
+
+Finalizacao: imagem premium, ad-grade, 1080x1080, alta resolucao, sem marca dagua, sem bordas externas, sem frames decorativos. O preco R$497 deve ser o elemento de maior impacto visual na zona inferior.

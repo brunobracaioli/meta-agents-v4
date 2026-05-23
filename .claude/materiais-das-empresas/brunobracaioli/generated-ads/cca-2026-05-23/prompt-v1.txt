@@ -1,0 +1,41 @@
+Anuncio profissional 1080x1080 para Meta Ads feed — curso Claude Code Architect, angulo AUTORIDADE, estetica SPECOPS.BLACK. Objetivo: transmitir 10 anos de experiencia em producao e autoridade tecnica absoluta, parar o scroll sem apelar para cor festiva ou sorriso.
+
+REFERENCIA #1 (LOGO) — COMPOSITE LITERAL: logomarca do cliente — triangulo branco grande formando a letra 'A' com uma barra diagonal LARANJA-VIVO no lado direito, fundo transparente. Compositar no canto inferior direito do frame, tamanho ~8% da largura do frame, preservando as cores branco e laranja intactas. NAO redesenhar o simbolo.
+
+REFERENCIA #2 (PESSOA) — HEROI, PRESERVAR ROSTO EXATAMENTE: Bruno Bracaioli. Homem branco, aparentando 30-35 anos, cabelo escuro preso, barba cheia e bem cuidada, hoodie preto zip-up. Expressao: controle, seriedade tecnica, olhar direto para a camera — sem sorriso. Posicionamento: centralizado no quadro ou levemente deslocado para a direita, quadros superiores a partir do peito, tres-quartos ou frontal. Fundo composto digitalmente com terminais ativos ao redor. Iluminacao cinematica: key-light frio de cima-esquerda (tom verde-terminal #00FF41 ou branco frio), rim-light suave no ombro direito, sem fill quente. Realismo fotografico, NAO ilustrado.
+
+use a pessoa da imagem de referencia EXATAMENTE como protagonista; mantenha rosto, identidade, expressao
+
+COMPOSICAO 1080x1080, formato quadrado para feed:
+
+FAIXA SUPERIOR (~12% da altura): header estilo classification stamp militar, fundo preto solido, texto monospacado branco em caixa alta: '// CLASSIFIED' alinhado a esquerda + 'CLEARANCE: ARCHITECT' alinhado a direita. Separador: linha horizontal fina verde-terminal #00FF41, 1px.
+
+ZONA CENTRAL (restante do frame): fundo preto profundo #080808 a #0A0A0A. Bruno ocupa ~55% da largura, centralizado verticalmente na zona central. Ao redor e ao fundo: multiplos terminais ativos com codigo scrollando — linhas de texto verde-terminal #00FF41 em fonte monospace, sem legibilidade intencional (codigo como textura, nao como conteudo legivel). Reflexos de monitor formam iluminacao ambiente suave. Faint grid horizontal de linhas verdes de 1px de opacidade ~8% sobre o fundo preto — escaneamento ops, nao decoracao festiva.
+
+BLOCO DE TEXTO PRINCIPAL (esquerda superior da zona central, empilhado verticalmente):
+Linha 1: '10 ANOS' — fonte bold condensed display sans-serif tipo Anton ou Bebas Neue, tamanho massivo (~18% frame width), cor BRANCO #FFFFFF, tracking tight.
+Linha 2: 'EM PROD.' — mesma fonte, mesmo tamanho, cor VERDE-TERMINAL #00FF41.
+Linha 3: '26 AULAS.' — mesma fonte, tamanho ~11% frame width, cor BRANCO #FFFFFF.
+Espassamento entre linhas: tight/comprimido. Bloco alinhado a esquerda, zona esquerda do frame, verticalmente centrado na zona central.
+
+ELEMENTO SECUNDARIO (abaixo do bloco de texto, antes da faixa inferior): badge/classification stamp retangular estilo clearance card — borda verde-terminal #00FF41 de 1px, fundo preto translucido, texto monospacado bold uppercase branco: 'CLAUDE CODE ARCHITECT' numa linha, abaixo 'EST. 2016 — 10 YRS PROD' em tamanho menor.
+
+FAIXA INFERIOR (~10% da altura): fundo preto solido com borda superior verde-terminal #00FF41 1px. Alinhado a esquerda: logo da Referencia #1 (~8% frame width). Alinhado a direita: texto monospacado uppercase cinza #888888 tamanho pequeno: 'BRUNOBRACAIOLI.COM.BR'.
+
+LISTA EXATA DE TEXTO VISIVEL — somente estas strings aparecem na imagem:
+  '// CLASSIFIED'
+  'CLEARANCE: ARCHITECT'
+  '10 ANOS'
+  'EM PROD.'
+  '26 AULAS.'
+  'CLAUDE CODE ARCHITECT'
+  'EST. 2016 — 10 YRS PROD'
+  'BRUNOBRACAIOLI.COM.BR'
+
+NAO incluir nenhuma outra string, tagline, CTA verbal, numero de vagas, rating, estrela, emoji ou icone decorativo fora desta lista.
+
+PALETA OBRIGATORIA: fundo #080808, verde-terminal #00FF41, branco #FFFFFF, cinza #888888. Sem laranja como cor dominante — laranja apenas no logo. Sem azul neon, sem roxo, sem gradiente colorido. Zero cores festivas.
+
+ILUMINACAO: key-light frio de cima-esquerda criando sombra dura no lado direito do rosto de Bruno. Rim-light verde-terminal muito sutil no ombro esquerdo (do ponto de vista do espectador). Reflexos de tela verde nos olhos. Sem fill light quente. Clima: bunker ops, nao home-office.
+
+FINALIZACAO: composicao premium ad-grade hyperreal, sem marca dagua, sem borda, sem frame, sem vinheta excessiva. Alta resolucao 1080x1080. Legivel em tela de celular. Clima: autoridade tecnica brutal, control room, classified ops — nao startup festiva.

@@ -228,7 +228,7 @@ Detect variant by checking the top-level keys.
 
 ---
 
-## Client preset — `<nome-cliente>`
+## Client preset — `brunobracaioli`
 
 When the caller signals this client, apply the preset described in this
 section. Detection rules (apply if ANY is true):
@@ -236,10 +236,10 @@ section. Detection rules (apply if ANY is true):
 * `scrape.configHints.brandName` contains `"nome do cliente"` (case-insensitive)
 * `creativeBrief.brandPersonality` or `creativeBrief.topic` contains
   `"nome do cliente"`, `"claude code architect"`, or the brand id
-  `"<nome-cliente>"`
+  `"brunobracaioli"`
 * Any path in `referenceImagePaths` (or any candidate path from `Glob` of
   `exampleAdsDirGlob` / `stylePackGlob`) matches the substring
-  `.claude/materiais-das-empresas/<nome-cliente>/`
+  `.claude/materiais-das-empresas/brunobracaioli/`
 
 If the **reformat exception** below also applies, that exception wins —
 skip the preset.
@@ -250,13 +250,13 @@ The brand-curated reference inventory for nome do cliente. The caller
 (orchestrator) should attach all seven paths in this exact order, each
 validated and ≤ 1 MB per the Step 1.5 rules:
 
-1. `.claude/materiais-das-empresas/<nome-cliente>/logo/logo.png`
-2. `.claude/materiais-das-empresas/<nome-cliente>/logo/foto-do-infoprodutor/nome-do-cliente.jpg`
-3. `.claude/materiais-das-empresas/<nome-cliente>/exemplo-de-ads/meta-ads-agents.png`
-4. `.claude/materiais-das-empresas/<nome-cliente>/exemplo-de-ads/ChatGPT Image May 2, 2026, 04_00_56 PM.png`
-5. `.claude/materiais-das-empresas/<nome-cliente>/exemplo-de-ads/ChatGPT Image May 2, 2026, 04_01_09 PM.png`
-6. `.claude/materiais-das-empresas/<nome-cliente>/exemplo-de-ads/ChatGPT Image May 8, 2026, 03_26_04 PM.png`
-7. `.claude/materiais-das-empresas/<nome-cliente>/exemplo-de-ads/so-falta-voce.png`
+1. `.claude/materiais-das-empresas/brunobracaioli/logo/logo.png`
+2. `.claude/materiais-das-empresas/brunobracaioli/logo/foto-do-infoprodutor/nome-do-cliente.jpg`
+3. `.claude/materiais-das-empresas/brunobracaioli/exemplo-de-ads/meta-ads-agents.png`
+4. `.claude/materiais-das-empresas/brunobracaioli/exemplo-de-ads/ChatGPT Image May 2, 2026, 04_00_56 PM.png`
+5. `.claude/materiais-das-empresas/brunobracaioli/exemplo-de-ads/ChatGPT Image May 2, 2026, 04_01_09 PM.png`
+6. `.claude/materiais-das-empresas/brunobracaioli/exemplo-de-ads/ChatGPT Image May 8, 2026, 03_26_04 PM.png`
+7. `.claude/materiais-das-empresas/brunobracaioli/exemplo-de-ads/so-falta-voce.png`
 
 Files 3-7 exceed the 1 MB validator limit at full resolution. The
 caller MUST pre-resize them to ≤ 1 MB JPEG (e.g. ffmpeg `scale=800:-2

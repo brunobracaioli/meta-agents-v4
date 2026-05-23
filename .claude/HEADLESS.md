@@ -4,7 +4,7 @@
 
 ## Por que isso importa
 
-As skills `create-traffic-<nome-cliente>-campaign` e `edicao-de-campanha-nome-do-cliente` são projetadas pra rodar autônomas (cron, queue worker, comando one-shot). Mas o modo `-p` tem 3 armadilhas:
+As skills `create-traffic-brunobracaioli-campaign` e `edicao-de-campanha-nome-do-cliente` são projetadas pra rodar autônomas (cron, queue worker, comando one-shot). Mas o modo `-p` tem 3 armadilhas:
 
 1. **`AskUserQuestion` trava a sessão** — sem humano pra responder, o agente fica em deadlock. Mitigação: as skills foram reescritas para nunca chamar `AskUserQuestion`. Se você usar OUTRA skill em headless, verifique o markdown dela.
 2. **Auto-mode classifier bloqueia writes** — mesmo com `permissions.allow` configurado, o classifier de risco do Claude Code pode negar chamadas em conta de cliente. Mitigação: ou use `--dangerously-skip-permissions`, ou garanta que TODAS as tools usadas estão na allowlist (foi o que `settings.json` faz agora — atenção ao prefixo correto `mcp__claude_ai_Meta_Ads_MCP__*`).
@@ -12,16 +12,16 @@ As skills `create-traffic-<nome-cliente>-campaign` e `edicao-de-campanha-nome-do
 
 ## Comandos
 
-### Criar campanha (cliente <nome-cliente>, produto Claude Code Architect)
+### Criar campanha (cliente brunobracaioli, produto Claude Code Architect)
 
 ```bash
-claude --dangerously-skip-permissions -p "execute a skill /create-traffic-<nome-cliente>-campaign para gerar uma nova campanha de tráfego hoje"
+claude --dangerously-skip-permissions -p "execute a skill /create-traffic-brunobracaioli-campaign para gerar uma nova campanha de tráfego hoje"
 ```
 
 `--permission-mode bypassPermissions` NÃO é suficiente para writes em conta de cliente — o classifier de risco ainda bloqueia. Use `--dangerously-skip-permissions` para headless real.
 
 Saída esperada:
-- 3 PNGs em `.claude/materiais-das-empresas/<nome-cliente>/generated-ads/cca-YYYY-MM-DD/`
+- 3 PNGs em `.claude/materiais-das-empresas/brunobracaioli/generated-ads/cca-YYYY-MM-DD/`
 - Campanha + adset + 3 ads PAUSED na conta Meta `225179730538661`
 - Manifest JSON em `tentativas-geracao-de-campanhas/YYYYMMDD-HHMM-trafego.json`
 
@@ -58,7 +58,7 @@ Pra rodar via cron do sistema (não via `/loop` ou Vercel Cron):
 
 ```cron
 # Toda segunda às 10h: criar campanha nova
-0 10 * * 1 cd /mnt/c/agents_team_meta_ads_v3 && /usr/bin/claude --dangerously-skip-permissions -p "execute a skill /create-traffic-<nome-cliente>-campaign" >> /var/log/cca-cron.log 2>&1
+0 10 * * 1 cd /mnt/c/agents_team_meta_ads_v3 && /usr/bin/claude --dangerously-skip-permissions -p "execute a skill /create-traffic-brunobracaioli-campaign" >> /var/log/cca-cron.log 2>&1
 ```
 
 ## Debug quando der ruim

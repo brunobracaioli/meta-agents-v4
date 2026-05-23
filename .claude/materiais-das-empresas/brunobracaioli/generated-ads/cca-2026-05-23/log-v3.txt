@@ -1,0 +1,2 @@
+INFO: usando /v1/images/edits com 1 ref(s).
+OK: .claude/materiais-das-empresas/brunobracaioli/generated-ads/cca-2026-05-23/ad-v3-oferta.png (1125435 bytes)

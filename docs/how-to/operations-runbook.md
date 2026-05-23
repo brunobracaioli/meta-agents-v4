@@ -50,7 +50,7 @@
 **Quando usar**: smoke test após deploy, validar que tudo funciona, ou disparar um run extra fora do cron.
 
 ```bash
-fly ssh console -a meta-agents-v3 -C "runuser -u runner -- /app/scripts/run-skill.sh create-traffic-<nome-cliente>-campaign"
+fly ssh console -a meta-agents-v3 -C "runuser -u runner -- /app/scripts/run-skill.sh create-traffic-brunobracaioli-campaign"
 ```
 
 > ⚠️ Sempre `runuser -u runner --`, **nunca** `su - runner -c`. O `su -` apaga env vars do PID 1 e a skill roda em modo degradado (sem OpenAI, sem Supabase). Detalhes no [Tutorial §A.7](../tutorials/deploying-fly-runner-from-scratch.md#a7-su---runner--c-apaga-env-vars-do-pid-1).
@@ -73,7 +73,7 @@ nano crontab
 Adiciona uma linha (separa horários pra evitar overlap da execução anterior — skills levam ~10min):
 
 ```
-0 10 * * * /app/scripts/run-skill.sh create-traffic-<nome-cliente>-campaign
+0 10 * * * /app/scripts/run-skill.sh create-traffic-brunobracaioli-campaign
 30 10 * * * /app/scripts/run-skill.sh <novo-slug>
 ```
 
@@ -120,7 +120,7 @@ fly ssh console -a meta-agents-v3 -C "ls -la /var/log/runs/"
 Pra ver um log específico (substitua o nome do arquivo):
 
 ```bash
-fly ssh console -a meta-agents-v3 -C "cat /var/log/runs/20260522T213757Z-create-traffic-<nome-cliente>-campaign.log"
+fly ssh console -a meta-agents-v3 -C "cat /var/log/runs/20260522T213757Z-create-traffic-brunobracaioli-campaign.log"
 ```
 
 Logs em **tempo real** (todos os jobs + supercronic):
@@ -146,7 +146,7 @@ Estrutura típica (ver [spec §2.3](../specs/flyio-cron-campaign-runner.md#23-co
 
 ```json
 {
-  "client": "<nome-cliente>",
+  "client": "brunobracaioli",
   "campaign_id": "...",
   "adset_id": "...",
   "ad_ids": ["...", "...", "..."],
@@ -403,7 +403,7 @@ Identifica qual etapa travou (provavelmente uma chamada API longa).
 
 ## 18. Erro Meta `100/3858634 verified advertiser missing`
 
-> **⚠️ WORKAROUND ATIVO** (desde 2026-05-22): a skill `/create-traffic-<nome-cliente>-campaign` cria o AdSet com `targeting={"countries":["US"]}` como placeholder em vez de BR, contornando a validação Meta. O operador precisa **editar targeting US→BR via Ads Manager UI antes de ativar**; nesse momento a UI força selecionar advertiser/payer (escolher Nome empresa). Quando o form de review for aprovado, reverter o workaround editando `SKILL.md` Step 5.2 (mudar `"US"` → `"BR"` e tirar `[NEEDS-RETARGET-BR]` do nome do AdSet).
+> **⚠️ WORKAROUND ATIVO** (desde 2026-05-22): a skill `/create-traffic-brunobracaioli-campaign` cria o AdSet com `targeting={"countries":["US"]}` como placeholder em vez de BR, contornando a validação Meta. O operador precisa **editar targeting US→BR via Ads Manager UI antes de ativar**; nesse momento a UI força selecionar advertiser/payer (escolher Nome empresa). Quando o form de review for aprovado, reverter o workaround editando `SKILL.md` Step 5.2 (mudar `"US"` → `"BR"` e tirar `[NEEDS-RETARGET-BR]` do nome do AdSet).
 
 
 **Causa real (validada após 4 tentativas + investigação via help articles oficiais)**: a Meta exige **DOIS** requisitos cumulativos pra criar AdSet via Marketing API targeting país regulamentado (BR/UE/IN/TH/TW/AU/SG):
@@ -417,7 +417,7 @@ Sem o item 2, qualquer string passada no item 1 é rejeitada — mesmo a razão 
 - Business Verification ≠ Advertiser/Payer registration. Você pode ter BM verificada (Nome empresa está desde set/2023, inclusive como Tech Provider) e ainda assim ver esse erro.
 - A Meta renomeou "beneficiary" → "advertiser" em mar/2026 ([fonte](https://www.facebook.com/business/help/983527276402621)). Daí o termo "Advertiser is missing" mesmo que o campo na API se chame `dsa_beneficiary`.
 
-**Fix de payload (já aplicada para nome do cliente)**: a skill `/create-traffic-<nome-cliente>-campaign` passa os 2 campos no Step 5.2 com a razão social `NOME-DO-PAGADOR`. Esse passo está correto e é prerequisite — mas só funciona depois do setup UI abaixo.
+**Fix de payload (já aplicada para nome do cliente)**: a skill `/create-traffic-brunobracaioli-campaign` passa os 2 campos no Step 5.2 com a razão social `NOME-DO-PAGADOR`. Esse passo está correto e é prerequisite — mas só funciona depois do setup UI abaixo.
 
 **Fix em ordem de tentativa (validada empiricamente em 2026-05-22)**:
 
