@@ -1,0 +1,25 @@
+Anuncio profissional 1024x1024 para Meta Ads Feed quadrado. Produto: Claude Code Architect — treinamento de orquestracao de agentes IA em portugues. Objetivo: autoridade e credibilidade, comunicar que o instructor tem skin in the game com 9 produtos em producao.
+
+DOIS REFERENCIAS FORNECIDAS. CADA UMA TEM UM PAPEL ESPECIFICO.
+
+REFERENCIA 1 (LOGO) — COMPOSITAR LITERALMENTE: logomarca triangular estilizada com triangulo branco grande (corpo do A) e slash triangular laranja vibrante (#FF5500) cortando o lado direito. Fundo transparente. Posicionar no canto inferior esquerdo a ~9% da largura do frame, acima da area de rodape. Manter cores branco e laranja intactas. NAO redesenhar o simbolo.
+
+REFERENCIA 2 (PESSOA) — PROTAGONISTA, PRESERVAR ROSTO EXATAMENTE: nome do cliente. Homem brasileiro, ~32 anos, pele oliva-clara, barba escura cheia bem aparada, cabelo escuro preso em coque baixo. Olhar direto e calmo-confiante para a camera. Hoodie preto zip-up. Replicar identidade facial, expressao, postura e roupas com fidelidade fotografica. NAO alterar etnia, formato de rosto, barba, corte de cabelo ou expressao.
+
+use a pessoa da imagem de referencia EXATAMENTE como protagonista; mantenha rosto, identidade, expressao.
+
+COMPOSICAO FINAL 1024x1024 — FEED QUADRADO:
+cliente ocupa o centro-direita do frame, enquadramento do peito para cima, angulo tres-quartos levemente voltado para a esquerda, expressao de autoridade tecnica calma — nao arrogante, nao sorridente forcado. Iluminacao cinematografica: key light suave vindo do canto superior-esquerdo com rimlight laranja quente no ombro direito criando separacao elegante do fundo escuro. Fundo: dark navy profundo #0A0F1C com textura extremamente sutil de grade de circuito/hex a 5-8% de opacidade — presente mas nunca competindo. Ao fundo desfocado (bokeh apertado, f/2.8), silhuetas de dois monitores com codigo colorido visivel mas ilegivel — verde terminal e azul IDE — criando profundidade de setup real de dev.
+
+LADO ESQUERDO (~45% do frame): space para hierarquia tipografica em branco bold condensed sans-serif (estilo Anton ou Bebas Neue), duas linhas no terco superior-esquerdo:
+Linha 1: "9 produtos" — cor branca, peso ultra-bold, tracking condensed
+Linha 2: "em producao." — cor laranja #FF5500, mesmo peso
+Abaixo das headlines, em fonte menor upright sans, cor cinza-claro #A0AEC0, uma linha:
+"metodo real. sem bullshit."
+
+RODABE/CTA: full-width strip laranja #FF5500 na borda inferior (~10% da altura), texto branco bold uppercase centralizado: "CLAUDE CODE ARCHITECT →"
+
+LISTA ESTRITA DE TEXTOS VISIVEIS — apenas estes strings aparecem na imagem:
+"9 produtos", "em producao.", "metodo real. sem bullshit.", "CLAUDE CODE ARCHITECT →"
+
+Acabamento: hyperreal photographic composite, ad-grade, premium dark SaaS Brazilian infoproduct, 1024x1024, sem bordas, sem moldura. Evitar marca dagua, textos distorcidos, rostos deformados, fundo claro, stock photo generico.

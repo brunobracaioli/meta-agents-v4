@@ -1,0 +1,31 @@
+Anuncio profissional para trafego pago Meta Ads, formato 1024x1024 quadrado para feed. Tema: oferta premium — treinamento Claude Code Architect como produto de alto valor, vagas limitadas, proximo passo claro.
+
+NENHUM ARQUIVO DE REFERENCIA DE PESSOA NESTA VARIANTE. Composicao centrada no produto como objeto de desejo.
+
+COMPOSICAO FINAL 1024x1024 — CENTRO ABSOLUTO, SIMETRIA VERTICAL:
+
+  FUNDO: gradiente radial profundo de #0A0A0A no centro expandindo para #0D1018 nas bordas. Textura sutil de grade de pontos ou padrao de circuito minimalista a 5% de opacidade. Atmosfera premium, clean tech.
+
+  ELEMENTO CENTRAL PRINCIPAL (~60% da area util): mockup de produto digital 3D levemente perspectivado — tablet ou dispositivo moderno exibindo a interface do treinamento. A tela do dispositivo mostra um dashboard limpo de curso com barra de progresso, titulos de modulos em branco, icone de status ativo em verde-esmeralda suave #00CC88. O dispositivo tem acabamento preto-fosco premium, reflexo suave na tela, sombra suave embaixo. Iluminacao de produto: luz de estudio suave vinda de cima e a esquerda, reflexo de contorno dourado-laranja no lado direito do dispositivo.
+
+  MOLDURA SUPERIOR: arco ou semi-circulo geometrico formado por linhas finas em #333333, sugerindo abertura ou portal de entrada. Dentro do arco, no topo do frame, texto tipografico de uma unica palavra em peso condensado heavy branco.
+
+  BLOCO DE CREDENCIAL INFERIOR-ESQUERDO: pequeno retangulo arredondado em #1A1A1A com borda fina #FF5500, contendo icone de verificacao (escudo ou check geometrico) em laranja #FF5500 e texto curto em branco peso medium.
+
+  BLOCO DE ESCASSEZ INFERIOR-DIREITO: pequeno retangulo arredondado similar, borda fina em laranja, icone de relogio ou seta, texto curto de urgencia sutil em branco.
+
+  CANTO INFERIOR ESQUERDO: marca geometrica A (triangulo cinza + barra laranja) em ~9% da largura, sobre fundo escuro.
+
+  FAIXA INFERIOR: faixa horizontal laranja #FF5500, altura ~10%, texto centrado bold uppercase branco: "GARANTA SUA VAGA AGORA".
+
+PALETA GERAL: preto profundo #0A0A0A, cinza-ardosia #1A1A1A, branco #FFFFFF. Acento primario laranja #FF5500 na faixa CTA, bordas dos selos, logo. Acento secundario verde-esmeralda #00CC88 apenas no indicador de status ativo do dispositivo. Sem outras cores. Alto contraste, acabamento premium fosco.
+
+LISTA ESTRITA DE TEXTO VISIVEL — apenas estas strings podem aparecer na imagem:
+  "ARCHITECT" (topo do frame, headline principal, branco heavy condensed)
+  "CERTIFICADO" (selo inferior esquerdo, branco medium)
+  "ULTIMAS VAGAS" (selo inferior direito, branco medium)
+  "GARANTA SUA VAGA AGORA" (faixa CTA inferior, branco bold uppercase)
+
+PROMPT NEGATIVO — explicitamente proibido: rosto de pessoa, foto humana, qualquer texto fora da whitelist acima, preco monetario visivel, promessas de ganho financeiro, contagem regressiva digital, cores neon, estetica cyberpunk, background branco, muitos elementos decorativos, poluicao visual, marcas-dagua, bordas, molduras.
+
+Mood: produto premium de alto ticket, urgencia calma e elegante, confianca maxima — o proximo passo e claro e inevitavel. Output: composito digital art 3D + tipografia, qualidade de anuncio profissional, 1024x1024, sem marcas-dagua, sem bordas.

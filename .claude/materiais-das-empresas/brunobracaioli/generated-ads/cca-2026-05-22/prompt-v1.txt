@@ -1,0 +1,22 @@
+Premium 1024x1024 square Meta Ads creative for Claude Code Architect course by nome do cliente. Goal: authority and trust. Audience: Brazilian developers and tech leads aged 22-65.
+
+TWO REFERENCE IMAGES ARE SUPPLIED. EACH HAS A SPECIFIC ROLE.
+
+REFERENCE #1 (LOGO) — COMPOSITE LITERALLY: The brand logomark is a stylized capital A formed by a large near-white triangle on the left and a vivid orange right-slash triangle on its right side. Transparent background. Composite at the bottom-left corner at approximately 9% frame width, just above the lower safe-area margin. Preserve white and orange colors exactly. DO NOT redraw or reinterpret the mark.
+
+REFERENCE #2 (PERSON) — HERO, PRESERVE FACE EXACTLY: nome do cliente. White male approximately 35-40 years old, dark hair pulled back, full dark beard, calm and confident expression with direct gaze. Wears a black zip hoodie over a dark crew-neck. Preserve facial geometry, beard texture, hairline, eye color, and skin tone exactly as in the reference. Chest-up portrait, slight three-quarter angle, occupying the right 55% of the frame, vertically centered in the upper two-thirds. Photographic realism, NOT illustrated. Soft cinematic key-light from upper-left, warm amber rim-light on the right shoulder matching his studio aesthetic. Background blends into deep navy darkness.
+
+use a pessoa da imagem de referencia EXATAMENTE como protagonista; mantenha rosto, identidade, expressao
+
+FINAL COMPOSITION (1024x1024 square feed):
+Background: deep navy near-black vertical gradient #0A0F1A to #0E1422. Faint circuit-board or hex-grid pattern at 6% opacity across the entire canvas, subtle, never competing with foreground. Behind cliente on the left side, two blurred dark-theme monitor screens glow softly with blue-teal code syntax highlights at low opacity, suggesting a real developer workspace without being legible. The monitors echo his actual setup from the reference photo.
+Left 40% of frame: reserved vertical zone. Upper-left area contains the typographic brand mark — text block reading CLAUDE CODE with the >_ terminal glyph in vivid orange #FF6B1A, and ARCHITECT below it in a slightly thinner upright condensed sans-serif, all pure white #FFFFFF. Brand mark sits at approximately 16-18% frame width from the left edge, upper quarter of the frame. Below the brand mark on the left, two authority credential badges rendered as minimal dark cards with thin vivid-orange borders: first badge reads ANTHROPIC PARTNER with a small abstract partner-seal icon; second badge reads 10 ANOS DE EXPERIENCIA. Badges are ~22% frame width, stacked vertically with tight spacing, left-aligned. Bottom-left corner: logo from Reference #1 composited at 9% frame width.
+Bottom edge: full-width horizontal strip #FF6B1A vivid orange, approximately 10% frame height. Strip is empty of text — reserved for Meta overlay. The strip itself acts as a strong visual CTA anchor.
+Optional accent: one very small 8-bit pixel-art orange alien or octopus creature at approximately 4% frame width, placed in the lower-right margin just above the orange strip, single instance, subtle.
+Lighting and atmosphere: cinematic, volumetric. Soft warm glow halos around cliente separating him from the dark background. Cool blue ambient from the monitor glow behind. High contrast between cliente and background. Premium ad-grade quality.
+
+SEM TEXTO sobreposto na imagem alem da marca tipografica CLAUDE CODE >_ / ARCHITECT e dos badges de credencial. Nenhum outro texto, frase, numero ou label visivel.
+
+Negative constraints: no watermarks, no borders, no frames, no stock-photo feel, no generic tech backgrounds, no floating logos of third parties, no chat screenshots, no feature cards, no body text blocks, no urgency stamps, no deformed hands or face, no altered identity of nome do cliente, no change to beard or expression.
+
+Output: hyperreal photographic composite, ad-grade finish, 1024x1024, premium dark developer aesthetic, high contrast, readable on mobile at thumbnail size.

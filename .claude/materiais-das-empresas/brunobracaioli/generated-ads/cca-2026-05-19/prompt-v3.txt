@@ -1,0 +1,26 @@
+Anuncio profissional 1024x1024 para Meta Ads Feed quadrado. Produto: Claude Code Architect — treinamento de orquestracao de agentes IA em portugues. Objetivo: apresentar a oferta com vibe de produto premium digital empacotado — R$497, 26 aulas, 7 dias de garantia, bonus Meta Ads MCP (valor total R$1.497).
+
+DOIS REFERENCIAS FORNECIDAS.
+
+REFERENCIA 1 (LOGO) — COMPOSITAR LITERALMENTE: logomarca triangulo A — triangulo branco (corpo) com slash laranja vibrante #FF5500 no lado direito. Fundo transparente. Posicionar de forma prominente no centro-topo do frame (maior do que nas outras variacoes — ~18% da largura do frame) como elemento central de identidade de produto. Manter cores branco e laranja intactas.
+
+REFERENCIA 2 (PESSOA) — PRESENCA SUTIL: se incluida, cliente aparece como elemento de confianca no canto inferior-direito, miniatura circular ou cortada com sombra de glow laranja suave, chest-up, expressao neutra-confiante. use a pessoa da imagem de referencia EXATAMENTE como protagonista; mantenha rosto, identidade, expressao — mas mantendo o foco principal na oferta/produto.
+
+COMPOSICAO PRINCIPAL — PRODUTO/OFERTA:
+Centro do frame: representacao visual de um produto digital premium. Uma caixa/card 3D renderizado em dark navy profundo com bordas luminosas laranja #FF5500 e branco, estilo SaaS premium. Dentro do card/caixa, organizacao visual dos componentes do produto: icone de play (triangulo) indicando 26 aulas, icone de terminal/codigo estilizado, icone de agentes (nos conectados). O card tem acabamento glassmorphism — vidro translucido escuro com bordas de luz, sombra profunda, reflexo suave na base.
+
+FUNDO: dark navy profundo #0A0F1C com gradiente radial sutil de glow laranja-quente vindo do centro-baixo (#FF5500 a 12% de opacidade), como se o produto emitisse luz. Particulas hexagonais/circulares muito sutis flutuando (5% de opacidade) — tech texture sem poluicao.
+
+HIERARQUIA TIPOGRAFICA:
+Topo (acima do logo, muito pequeno): "CLAUDE CODE" em cinza-claro tracking expandido, upright sans
+Sob o logo/card central:
+  Linha 1: "R$497" — branco ultra-bold, tamanho de headline grande, tracking condensed
+  Linha 2: "26 aulas + bonus exclusivo" — cinza-claro #A0AEC0, peso medium, tamanho menor
+Badge de garantia no canto superior-direito: circulo laranja #FF5500 com borda branca, texto branco micro: "7 dias", sublinha: "garantia"
+
+RODABE/CTA: full-width strip laranja #FF5500 na borda inferior (~10% da altura), texto branco bold uppercase centralizado: "QUERO MINHA VAGA AGORA →"
+
+LISTA ESTRITA DE TEXTOS VISIVEIS:
+"CLAUDE CODE", "R$497", "26 aulas + bonus exclusivo", "7 dias", "garantia", "QUERO MINHA VAGA AGORA →"
+
+Acabamento: hyperreal digital product composite, 3D render quality, premium dark SaaS Brazilian launch ad, glassmorphism, 1024x1024, sem bordas, sem moldura. Evitar caixa fisica generica, notebook generico, screenshot de plataforma real, fundo claro, promessa de retorno financeiro especifico.

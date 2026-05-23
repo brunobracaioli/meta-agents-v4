@@ -1,0 +1,25 @@
+Anuncio profissional 1024x1024 para Meta Ads Feed quadrado. Produto: Claude Code Architect. Objetivo: comunicar a dor — vibe coding nao escala, dev gasta 30% do tempo re-explicando a stack, contexto perdido, produtividade desperdicada.
+
+UMA REFERENCIA FORNECIDA.
+
+REFERENCIA 1 (LOGO) — COMPOSITAR LITERALMENTE: logomarca triangulo A com corpo branco e slash laranja #FF5500 no lado direito. Posicionar no canto inferior esquerdo a ~9% da largura do frame. Manter cores intactas.
+
+CENA CONCEITUAL — SEM RETRATO DE PESSOA REAL:
+Dev masculino genericamente representado (cena conceitual de antagonista/dor), visto de costas ou em angulo que nao revele rosto, sentado a uma mesa de trabalho caoticamente iluminada. Ambiente: quarto/escritorio dark tech com um monitor principal exibindo um terminal com erro vermelho prominente (stack trace vermelho brilhante visivel mas propositalmente ilegivel como texto especifico). Segundo monitor mostra uma janela de chat aberta com IA (interface generica, sem logo de plataforma real) com um scroll infinito de mensagens — simbolizando o loop de re-explicacao constante. Expressao do corpo: ombros caidos, postura de exaustao, cabeca levemente inclinada para frente. Mesa com copo de cafe frio, post-its amarelos amassados, cabos emaranhados.
+
+PALETA DA CENA DE DOR: fundo dark navy #0A0F1C. Monitores emitem glow vermelho-laranja de erro (#FF3333 como tom dominante no monitor de erro) e azul-cinza frio no monitor de chat. Iluminacao ambiente caoticamente multicolorida, nao cinematografica — proposital para comunicar desordem. Sem key light limpo.
+
+HIERARQUIA TIPOGRAFICA — centro-esquerda do frame, texto em branco bold condensed sans-serif:
+Linha 1: "Quanto tempo" — branco, ultra-bold
+Linha 2: "voce joga fora" — branco, ultra-bold
+Linha 3: "re-explicando" — cor laranja #FF5500, ultra-bold
+Linha 4: "a mesma stack?" — laranja #FF5500, ultra-bold
+Abaixo, em fonte menor, cor cinza-claro #A0AEC0: "Isso tem nome: contexto perdido."
+
+RODABE/CTA: full-width strip laranja #FF5500 na borda inferior (~10% da altura), texto branco bold uppercase: "TEM UMA SAIDA MELHOR →"
+
+LISTA ESTRITA DE TEXTOS VISIVEIS:
+"Quanto tempo", "voce joga fora", "re-explicando", "a mesma stack?", "Isso tem nome: contexto perdido.", "TEM UMA SAIDA MELHOR →"
+Os textos nos monitores sao propositalmente ilegíveis (blur/smear).
+
+Acabamento: hyperreal photographic composite, ad-grade, dark tech editorial, tensao emocional proposital, 1024x1024, sem bordas, sem moldura. Evitar logos de plataformas reais identificaveis, texto legivel nos monitores, rosto de pessoa real identificavel, qualquer elemento de solucao, fundo claro.

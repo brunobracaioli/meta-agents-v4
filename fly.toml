@@ -1,0 +1,36 @@
+# Fly.io app config for meta-agents-v3
+# See docs/specs/flyio-cron-campaign-runner.md
+#
+# This Machine has no public network surface — it's a pure worker that runs
+# supercronic and fires Claude Code non-interactively once a day.
+
+app            = "meta-agents-v3"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  TZ        = "America/Sao_Paulo"
+  LOG_LEVEL = "info"
+
+# Persistent volume — stores Claude Code OAuth credentials + Claude.ai connector
+# state (Meta Ads MCP, Supabase MCP). Seeded once via `claude` interactive run
+# from `fly ssh console`. Without this volume the runner cannot authenticate.
+[[mounts]]
+  source       = "claude_state"
+  destination  = "/home/runner/.claude"
+  initial_size = "1GB"
+
+[[vm]]
+  size   = "shared-cpu-2x"
+  memory = "1024mb"
+  cpus   = 2
+
+[deploy]
+  strategy = "immediate"
+
+# NOTE: top-level [[checks]] no Fly schema só aceita type=http|tcp. Como esta
+# Machine não expõe porta, deixamos a liveness por conta do tini + supercronic
+# (PID 1). Diagnóstico manual via:
+#   fly ssh console -a meta-agents-v3 -C "/app/scripts/healthz.sh"

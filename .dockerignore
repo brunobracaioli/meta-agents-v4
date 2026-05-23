@@ -1,0 +1,34 @@
+# Never bake these into the image — go via fly secrets instead
+.env
+.env.*
+
+# VCS and IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Local tooling
+node_modules/
+venv/
+__pycache__/
+*.pyc
+
+# Build artifacts and logs
+*.log
+*.bak
+*.tmp
+/var/log/runs/
+
+# Local outputs (not needed in the image; volume + Supabase carry state)
+tentativas-geracao-de-campanhas/
+.claude/materiais-das-empresas/*/generated-ads/
+.claude/materiais-das-empresas/*/imagens-geradas/
+
+# Plan / scratch artifacts
+docs/spec-driven/
+
+# Self
+Dockerfile
+.dockerignore
+fly.toml

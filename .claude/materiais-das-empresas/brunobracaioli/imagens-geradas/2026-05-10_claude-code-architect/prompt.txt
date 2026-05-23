@@ -1,0 +1,17 @@
+Premium 1:1 Meta Ads creative for nome do cliente, a developer educator positioned as "Claude Code Architect". The composition MUST feature cliente (from the supplied infoprodutor photo) as the dominant subject — keep his face, hair, beard, glasses, and skin tone faithful to the reference. Crop chest-up, three-quarter angle, confident expression, looking slightly off-camera with subtle authority. Place cliente on the right side of the square frame.
+
+On the left side, large clean headline typography in a modern geometric sans-serif (think Inter or General Sans, semi-bold), white text, perfectly kerned, only TWO short text elements total:
+- Primary headline (large, two lines, tight leading): "CLAUDE CODE / ARCHITECT"
+- Tiny single-line tagline below it (much smaller, lighter weight): "Construa agentes que escalam."
+
+NO other text, NO bullet points, NO badges, NO ratings, NO arrows, NO testimonial quotes, NO logos in the body — keep it MINIMAL.
+
+Place the nome do cliente logomark (from the supplied logo) discreetly at the bottom-left corner, small (≈8% of frame width), white version, single-line. Do not repeat the logo.
+
+Background: deep dark editorial gradient — near-black charcoal (#0B0D12) on the left fading to a subtle very-dark cool indigo (#121826) on the right behind cliente. Add an extremely soft warm rim-light on cliente's right shoulder/face edge to separate him from the background. A faint, barely-visible monospace code grid pattern at very low opacity (3-5%) behind the text area as a tech-texture cue — must NOT compete with the headline.
+
+Lighting on cliente: cinematic, soft key light from upper-left, gentle fill, slight rim. Color grade: cool teal shadows, warm subtle highlights, premium SaaS / Anthropic-inspired editorial palette. High dynamic range, sharp focus on eyes, photographic realism, NOT illustrated.
+
+Style reference (composition only, do NOT copy text): the supplied example ad — large-headline-left + portrait-right layout, generous negative space, single visual hierarchy. But far CLEANER than the example: drop all the small text, badges, stars, supporting visuals. This must feel like a single confident statement, not a brochure.
+
+Mood: authority, premium, tech-craft, calm confidence. Output: hyperreal photographic composite, ad-grade, 1:1 (1024x1024), no watermarks, no borders, no frames.

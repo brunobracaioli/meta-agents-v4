@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "model": "gpt-image-2",
+  "aspect": "1:1",
+  "size": "1024x1024",
+  "prompt_source": "inline",
+  "prompt_path": "/tmp/img-gen-cliente-architect/prompt.txt",
+  "refs_requested": [
+    "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/<nome-cliente>/logo/logo.png",
+    "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/<nome-cliente>/logo/foto-do-infoprodutor/nome-do-cliente.jpg",
+    "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/<nome-cliente>/exemplo-de-ads/meta-ads-agents.png"
+  ],
+  "refs_used": [
+    "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/<nome-cliente>/logo/logo.png",
+    "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/<nome-cliente>/logo/foto-do-infoprodutor/nome-do-cliente.jpg",
+    "/tmp/img-gen-cliente-architect/example-ad-resized.jpg"
+  ],
+  "refs_skipped": [
+    {
+      "path": "/mnt/c/agents_team_meta_ads_v3/.claude/materiais-das-empresas/<nome-cliente>/exemplo-de-ads/meta-ads-agents.png",
+      "code": "reference_skipped_too_large:1121104",
+      "remediation": "resized to /tmp/img-gen-cliente-architect/example-ad-resized.jpg (125288 bytes) and used as composition style reference"
+    }
+  ],
+  "generation_mode": "edits",
+  "images": [
+    {
+      "n": 1,
+      "path": "/tmp/img-gen-cliente-architect/cliente-architect-1.png",
+      "bytes": 1296854,
+      "status": "succeeded"
+    }
+  ],
+  "cost_usd_estimate": 0.40,
+  "duration_ms": 190817,
+  "warnings": [
+    "example-ad reference exceeded 1MB validator limit; downscaled to 800px JPEG quality=4 to stay within ref size budget"
+  ]
+}

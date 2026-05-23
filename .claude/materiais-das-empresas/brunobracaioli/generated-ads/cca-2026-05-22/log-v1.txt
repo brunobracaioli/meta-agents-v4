@@ -1,0 +1,2 @@
+INFO: usando /v1/images/edits com 2 ref(s).
+OK: .claude/materiais-das-empresas/<nome-cliente>/generated-ads/cca-2026-05-22/ad-v1-autoridade.png (1293268 bytes)

@@ -1,0 +1,23 @@
+Premium 1024x1024 square Meta Ads creative for Claude Code Architect course. Conceptual split-screen visual representing the contrast between chaotic AI-assisted coding (the pain state) and structured agentic architecture (the solution state). No human faces. Dark cyberpunk aesthetic with vivid orange accent.
+
+ONE REFERENCE IMAGE IS SUPPLIED.
+
+REFERENCE #1 (LOGO) — COMPOSITE LITERALLY: Stylized capital A logomark — large near-white triangle on the left, vivid orange right-slash triangle on the right. Transparent background. Composite at the bottom-left corner at approximately 9% frame width, just above the orange CTA strip. DO NOT redraw the mark.
+
+FINAL COMPOSITION (1024x1024 square):
+The canvas is divided vertically down the center with a thin vivid-orange #FF6B1A vertical divider line, approximately 3px, acting as a visual tension element.
+
+LEFT HALF — CHAOS / PAIN STATE: Cold color palette. Deep dark background #06090F with desaturated blue-gray tones. Foreground: a terminal window or code editor in chaos — multiple overlapping prompt windows stacked at uneven angles, each showing fragments of long unstructured LLM prompts in monospace font, illegible at a glance, overwhelming volume of text. Colors: cold muted blue #1A2A3A, slate gray #2A2F3A, dim green text #4A7A4A. Subtle visual noise and blur at the edges. A faint red-orange error glow pulsing at the bottom of this half. Overall mood: cognitive overload, disorder, technical debt. A cracked or fragmented subtle texture overlay suggests instability. Small floating question marks or broken-chain icon in very low opacity as texture accents.
+
+RIGHT HALF — ORDER / SOLUTION STATE: Warm dark background #0E1422 with faint hex-grid pattern at 6% opacity. Foreground: a clean isometric or top-down node diagram showing a multi-agent orchestration architecture — a central orchestrator node in vivid orange #FF6B1A connected by clean glowing lines to four or five specialized subagent nodes in deep navy cards with white labels. Lines glow softly orange-to-white. The diagram is minimal, precise, and readable at a glance. A soft warm volumetric light emanates from the central node, creating a halo effect. Overall mood: clarity, structure, control, premium engineering.
+
+TYPOGRAPHIC BRAND MARK: Upper-left of the right half (or upper-center): CLAUDE CODE with >_ glyph in vivid orange #FF6B1A, ARCHITECT below in thinner upright condensed sans-serif, pure white #FFFFFF. Heavy condensed display sans-serif, Druk Wide or Bebas Neue aesthetic.
+
+Bottom-left: logo from Reference #1 at 9% frame width.
+Bottom edge: full-width orange strip #FF6B1A, approximately 10% frame height, empty of text — reserved for Meta CTA overlay.
+
+SEM TEXTO sobreposto na imagem alem da marca tipografica CLAUDE CODE >_ / ARCHITECT. Nenhum outro texto legivel visivel. Os fragmentos de codigo e prompts no lado esquerdo devem ser ilegíveis — textura visual, nao mensagem.
+
+Negative constraints: no watermarks, no borders, no human faces, no stock icons, no feature cards with readable text, no third-party logos, no chat-app UI, no deformed elements, no neon overload, no dated cyberpunk cliches like skulls or hackers. Keep the split clean and graphic.
+
+Output: 1024x1024, conceptual graphic composite, ad-grade finish, high contrast, dark cyberpunk meets clean SaaS architecture, scroll-stopping at thumbnail size.

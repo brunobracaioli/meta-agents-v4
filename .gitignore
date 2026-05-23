@@ -1,0 +1,94 @@
+# =============================================================================
+# Seller-only artifacts (Claude Code Bootstrap Pro — must NOT reach buyers)
+# These exist on the seller's working machine but are excluded from the
+# master GitHub repo so buyers using "Use this template" never see them.
+# =============================================================================
+tools/
+deliveries/
+*-deliveries/
+_deliveries.tsv
+_repo_access.tsv
+NOTICE.stamped.md
+
+# Personal notes / session worklogs / local memory (never commit)
+WORKLOG.md
+NOTES.md
+notes/
+.notes/
+*.worklog.md
+.session/
+
+# Claude Code — personal/local settings (auto-gitignored by the CLI; declared for clarity)
+.claude/settings.local.json
+.claude/agent-memory-local/
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+.claude/hooks/mirror/failures.log
+CLAUDE.local.md
+
+# Claude Code — operator-local visual assets (PII / client-owned material)
+# Reference style examples in .claude/test-images/ads-images-example/ ARE committed.
+.claude/test-images/user-profile/
+.claude/test-images/logo/
+
+# Secrets / env
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+id_ecdsa*
+credentials.json
+service-account*.json
+serviceAccount*.json
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build artifacts (kitchen-sink defaults — trim to your stack)
+node_modules/
+.next/
+*.tsbuildinfo
+.nuxt/
+.svelte-kit/
+dist/
+build/
+out/
+target/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+.tox/
+htmlcov/
+coverage/
+*.coverage
+.coverage.*
+
+# IaC state — never commit
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform.lock.hcl
+.pulumi/
+
+# Logs
+*.log
+logs/
+
+# Sprite review artifacts (the PNGs are intentional, GIFs are review-only)
+public/sprites/**/*.gif

@@ -1,0 +1,27 @@
+Premium 1024x1024 square Meta Ads creative for Claude Code Architect course — offer and value focus. Clean product-digital composition emphasizing course value, price anchor, and guarantee. No human faces. Dark background with vivid orange and gold accents.
+
+ONE REFERENCE IMAGE IS SUPPLIED.
+
+REFERENCE #1 (LOGO) — COMPOSITE LITERALLY: Stylized capital A logomark — large near-white triangle on the left, vivid orange right-slash triangle on the right. Transparent background. Composite at the bottom-left corner at approximately 9% frame width, above the CTA strip. DO NOT redraw the mark.
+
+FINAL COMPOSITION (1024x1024 square):
+Background: deep navy near-black #0A0F1A. Subtle faint circuit-grid or code-grid texture at 5% opacity. Centered radial warm glow in deep gold-amber #A06010 at very low opacity (~15%) emanating from center-canvas, adding depth without competing with foreground.
+
+CENTER-UPPER ZONE (~35% of frame height): A large, bold price-anchor badge. Circular or hexagonal shape with a vivid orange #FF6B1A border (4px glow), dark fill #0E1422. Inside the badge: original price in strikethrough style in muted gray, and below it the featured price R$ 497 in large heavy white condensed display sans-serif (Bebas Neue or Druk Wide aesthetic), sized to dominate. Beneath the price, a smaller line in warm gold #FFB830 reads 91% OFF. The badge has a subtle outer glow in orange, as if illuminated.
+
+CENTER ZONE (~30% frame): Three mini product cards arranged in a slight perspective fan or clean horizontal row, representing course modules or bonuses. Each card: dark #131C2E background, thin orange top-edge accent line, a monoline icon in vivid orange (terminal icon, network-nodes icon, shield-check icon respectively), and a short symbolic title that is visually suggestive but intentionally abstract/illegible at ad size — rendered as a thin line-block placeholder, NOT readable text. Cards have a soft inner glow and a premium glass-morphism feel with subtle blur edges.
+
+LOWER-CENTER ZONE (~15% frame above CTA strip): A guarantee badge rendered as a minimal round medal or stamp shape. Outer ring in warm gold #FFB830, inner dark circle, center icon of a shield with a checkmark in gold. Around the outer ring, very small text reading 7 DIAS DE GARANTIA in spaced uppercase condensed sans-serif — this text may be rendered very small and tight around the ring as part of the badge graphic, not as a floating overlay. Treat it as part of the badge illustration, not readable body copy.
+
+TYPOGRAPHIC BRAND MARK: Upper-left: CLAUDE CODE with >_ in vivid orange #FF6B1A, ARCHITECT below in thinner upright condensed sans-serif, pure white. Place at approximately 16% frame width from the left edge, upper 12% of frame.
+
+Bottom-left: logo from Reference #1 at 9% frame width.
+Bottom edge: full-width orange strip #FF6B1A, approximately 10-11% frame height, empty of text — reserved for Meta CTA overlay. Optional chevron or arrow icon centered in the strip as a subtle visual cue.
+
+SEM TEXTO sobreposto na imagem alem da marca tipografica CLAUDE CODE >_ / ARCHITECT, do preco R$ 497, do desconto 91% OFF, e do badge 7 DIAS DE GARANTIA (este ultimo como elemento grafico circular). Nenhum outro texto legivel ou body copy visivel.
+
+Visual hierarchy: eye lands first on the price badge center (high contrast circular focal point), second on the product module cards below it, third on the guarantee badge, fourth on the brand mark upper-left, fifth on the orange CTA strip bottom edge.
+
+Negative constraints: no watermarks, no human faces, no borders, no frames, no cluttered layout, no third-party logos, no chat screenshots, no stock-photo textures, no overly realistic product mockups that look generic, no deformed elements, no rainbow gradients. Keep it premium, dark, and conversion-focused.
+
+Output: 1024x1024, clean product-digital ad composite, dark premium SaaS offer aesthetic, gold and orange accents, ad-grade finish, high contrast, clear hierarchy readable on mobile.

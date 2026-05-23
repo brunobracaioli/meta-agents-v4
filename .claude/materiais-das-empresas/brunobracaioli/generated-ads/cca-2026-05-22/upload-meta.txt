@@ -1,0 +1,4 @@
+REMOTE_DIR=nome-do-cliente/cca-2026-05-22-1779498047
+URL_v1-autoridade=https://yluxllhibdvhnuvekkir.supabase.co/storage/v1/object/public/generated-images/nome-do-cliente/cca-2026-05-22-1779498047/ad-v1-autoridade.png
+URL_v2-dor=https://yluxllhibdvhnuvekkir.supabase.co/storage/v1/object/public/generated-images/nome-do-cliente/cca-2026-05-22-1779498047/ad-v2-dor.png
+URL_v3-oferta=https://yluxllhibdvhnuvekkir.supabase.co/storage/v1/object/public/generated-images/nome-do-cliente/cca-2026-05-22-1779498047/ad-v3-oferta.png

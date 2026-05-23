@@ -1,0 +1,26 @@
+Anuncio profissional para trafego pago Meta Ads, formato 1024x1024 quadrado para feed. Tema: dor do desenvolvedor — contraste entre a ilusao do codigo que parece funcionar e o caos silencioso de sistemas que quebram em producao.
+
+NENHUM ARQUIVO DE REFERENCIA DE PESSOA NESTA VARIANTE. Apenas composicao visual abstrata e ambiental.
+
+COMPOSICAO FINAL 1024x1024 — DIVISAO DIAGONAL EM DOIS MUNDOS:
+
+  METADE SUPERIOR-ESQUERDA (o mundo do dev isolado, zona de falsa seguranca):
+  Editor de codigo escuro aberto em monitor de computador, tela levemente desfocada, luz azul fria do monitor iluminando um ambiente de madrugada. Apenas UMA figura humana sentada de costas, silhueta, cabeca inclinada para a tela, expressao invisivel. Sensacao de isolamento e sobrecarga silenciosa. Xicara de cafe esquecida ao lado. Sem rosto visivel. Luz azul-cinza #1A2035, azul-escuro #0D1420. O codigo na tela e intencional e nao-legivel — apenas a vibe de linhas de syntax coloridas, nao texto real legivel.
+
+  METADE INFERIOR-DIREITA (o mundo da producao, zona de caos controlado):
+  Dashboard de monitoramento mostrando metricas com linhas de grafico em vermelho com pico abrupto para cima — anomalia critica. Notificacoes de alerta empilhadas, icones de aviso triangulares em amarelo-vermelho, barra de progresso travada. Tudo em tela de terminal escuro #0A0A0A. Acento vermelho-alarme #CC2200 e laranja de aviso #FF5500 apenas nos elementos de alerta. Sem texto legivel nas notificacoes — apenas a forma visual de alertas.
+
+  DIVISAO ENTRE OS DOIS MUNDOS: linha diagonal sutil de gradiente, como uma fratura ou corte de tela partindo do canto superior direito ao canto inferior esquerdo. Nao ha ponte entre os dois mundos — esse e o ponto da dor.
+
+  CANTO INFERIOR ESQUERDO: marca geometrica A (triangulo cinza + barra laranja) em ~9% da largura do quadro, sobre o fundo escuro.
+
+  FAIXA INFERIOR: faixa horizontal laranja #FF5500, altura ~10%, texto centrado bold uppercase branco: "SEU CODIGO FUNCIONA. EM PRODUCAO, NAO.".
+
+PALETA GERAL: preto profundo #0A0A0A, azul-noite #0D1420, cinza-ardosia #1E2535. Acento laranja #FF5500 apenas na faixa CTA e na marca. Acento vermelho-alarme #CC2200 apenas nos elementos de dashboard. Alto contraste, baixa saturacao exceto nos pontos de alerta.
+
+LISTA ESTRITA DE TEXTO VISIVEL — apenas estas strings podem aparecer na imagem:
+  "SEU CODIGO FUNCIONA. EM PRODUCAO, NAO." (faixa CTA inferior, branco bold uppercase)
+
+PROMPT NEGATIVO — explicitamente proibido: rosto visivel do desenvolvedor, texto legivel em qualquer janela de codigo ou terminal, nomes reais de bibliotecas ou ferramentas, pilhas de stacktrace reais, cores neon ou cyberpunk, estetica de hacker, fundo branco, bordas, marcas-dagua, qualquer texto fora da whitelist acima.
+
+Mood: tensao silenciosa, sobrecarga tecnica, momento de reconhecimento de problema — premium e serio, sem sensacionalismo. Output: composito fotografico e digital art cinematografico, qualidade de anuncio profissional, 1024x1024, sem marcas-dagua, sem bordas.

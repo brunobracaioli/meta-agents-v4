@@ -1,0 +1,6 @@
+# supercronic crontab for meta-agents-v3
+# Container TZ is America/Sao_Paulo (set in Dockerfile + fly.toml).
+# Format: m h dom mon dow command
+#
+# Daily traffic campaign for cliente <nome-cliente> at 10:00 BRT.
+0 10 * * * /app/scripts/run-skill.sh create-traffic-<nome-cliente>-campaign

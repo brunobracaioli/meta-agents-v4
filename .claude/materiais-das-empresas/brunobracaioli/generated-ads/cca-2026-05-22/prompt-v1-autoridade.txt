@@ -1,0 +1,26 @@
+Anuncio profissional para trafego pago Meta Ads, formato 1024x1024 quadrado para feed. Tema: autoridade tecnica — arquiteto de software senior apresentando o treinamento Claude Code Architect.
+
+DOIS ARQUIVOS DE REFERENCIA SAO FORNECIDOS. CADA UM TEM UM PAPEL ESPECIFICO.
+
+REFERENCIA #1 (PESSOA — HEROI, PRESERVAR IDENTIDADE EXATAMENTE): nome do cliente. Homem, final dos 30 anos, cabelo escuro preso para tras, barba cheia bem aparada, pele clara, olhar direto e expressao de confianca calma. Usa moletom preto com ziper. Preservar geometria facial, barba, linha do cabelo, cor dos olhos, tom de pele exatamente como na referencia. Posicionar no lado direito do quadro, corte do peito para cima, angulo tres quartos voltado levemente para a esquerda. Iluminacao cinematografica: luz principal suave vinda do canto superior esquerdo, luz de contorno quente no ombro direito, fundo desfocado. Realismo fotografico, NAO ilustracao.
+
+REFERENCIA #2 (LOGO — COMPOR LITERALMENTE): Marca geometrica em forma de letra A — triangulo grande cinza-claro na esquerda, barra triangular laranja viva na direita. Fundo transparente. Compor no canto inferior esquerdo em aproximadamente 10% da largura do quadro. Nao redesenhar a marca.
+
+use a pessoa da imagem de referencia EXATAMENTE como protagonista; mantenha rosto, identidade, expressao.
+
+COMPOSICAO FINAL 1024x1024:
+  FUNDO: gradiente vertical de preto profundo #0A0A0A no topo a #111318 na base. Textura sutil de grade hexagonal ou padrao de circuito a 6% de opacidade, nao competindo com o primeiro plano.
+  LADO ESQUERDO (~50%): bloco de texto visual tipografico com hierarquia clara. Linha 1 grande — palavra-chave de autoridade em branco, peso heavy condensado. Linha 2 menor em laranja #FF5500 — especializacao. Linha 3 bem menor em cinza claro #AAAAAA — credencial de prova social.
+  LADO DIREITO (~50%): cliente da Referencia #1, peito acima, tres quartos, confiante, fundo da workstation levemente visivel e desfocado com brilho azul-laranja de monitores.
+  CANTO INFERIOR ESQUERDO: logo da Referencia #2, ~10% da largura, laranja + branco intactos.
+  FAIXA INFERIOR: faixa horizontal de largura total em #FF5500 laranja, altura ~10% do quadro, texto centrado bold uppercase branco: "ARQUITETURA DE AGENTES EM PRODUCAO".
+
+LISTA ESTRITA DE TEXTO VISIVEL — apenas estas strings podem aparecer na imagem:
+  "9 SISTEMAS" (headline principal, branco, heavy condensed)
+  "EM PRODUCAO" (sublinha, laranja #FF5500)
+  "SIMULTANEOS" (terceira linha, cinza #AAAAAA, menor)
+  "ARQUITETURA DE AGENTES EM PRODUCAO" (faixa CTA inferior, branco bold)
+
+PROMPT NEGATIVO — explicitamente proibido: qualquer outro texto visivel alem da whitelist acima, capturas de tela de chat, diagramas de pipeline, cartoes de funcionalidades, badges de check, numeros de avaliacao, estrelas, marcas-dagua, bordas, molduras, fundo branco, cores neon, estetica cyberpunk.
+
+Mood: autoridade tecnica premium, confianca calma, ad de alto desempenho para devs. Output: composito fotografico hiperrealista, qualidade de anuncio profissional, 1024x1024, sem marcas-dagua, sem bordas, sem molduras.
