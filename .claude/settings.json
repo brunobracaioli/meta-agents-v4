@@ -88,6 +88,19 @@
 
     "deny": []
   },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|ads_create_campaign|mcp__supabase__execute_sql",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/remind-update-project-memory.py\""
+          }
+        ]
+      }
+    ]
+  },
   "includeCoAuthoredBy": false,
   "cleanupPeriodDays": 30
 }

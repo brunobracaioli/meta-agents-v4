@@ -43,6 +43,7 @@ WORKDIR /app
 COPY --chown=runner:runner .claude /app/.claude
 COPY --chown=runner:runner docs /app/docs
 COPY --chown=runner:runner CLAUDE.md /app/CLAUDE.md
+COPY --chown=runner:runner .mcp.json /app/.mcp.json
 COPY --chown=runner:runner scripts /app/scripts
 COPY --chown=runner:runner crontab /app/crontab
 
