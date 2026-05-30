@@ -4,6 +4,7 @@ import { useUltronVoice, type UltronStatus } from "./use-ultron-voice";
 
 const STATUS_LABEL: Record<UltronStatus, string> = {
   idle: "Ocioso",
+  armed: 'Aguardando "Ultron"…',
   listening: "Ouvindo…",
   recording: "Gravando…",
   transcribing: "Transcrevendo…",
@@ -14,6 +15,7 @@ const STATUS_LABEL: Record<UltronStatus, string> = {
 
 const STATUS_COLOR: Record<UltronStatus, string> = {
   idle: "bg-white/30",
+  armed: "bg-cyan-400 animate-pulse",
   listening: "bg-blue-400 animate-pulse",
   recording: "bg-red-500 animate-pulse",
   transcribing: "bg-yellow-400 animate-pulse",
@@ -23,8 +25,10 @@ const STATUS_COLOR: Record<UltronStatus, string> = {
 };
 
 export function UltronWidget() {
-  const { state, startPushToTalk, stopPushToTalk, toggleHandsFree, stopSpeaking } = useUltronVoice();
-  const busy = state.status !== "idle" && state.status !== "listening" && state.status !== "error";
+  const { state, startPushToTalk, stopPushToTalk, toggleHandsFree, toggleWakeWord, stopSpeaking } =
+    useUltronVoice();
+  const idleish = state.status === "idle" || state.status === "armed" || state.status === "listening";
+  const busy = !idleish && state.status !== "error";
 
   return (
     <div className="fixed bottom-6 right-6 z-50 w-80 rounded-2xl border border-white/10 bg-[var(--color-navy-soft)]/95 p-4 shadow-2xl backdrop-blur">
@@ -66,7 +70,7 @@ export function UltronWidget() {
             stopPushToTalk();
           }}
           onPointerLeave={() => stopPushToTalk()}
-          disabled={busy || state.handsFree}
+          disabled={busy || state.handsFree || state.wakeActive}
           className="flex-1 select-none rounded-lg bg-[var(--color-orange)] px-3 py-2 text-sm font-medium text-black transition active:scale-[0.98] disabled:opacity-40"
         >
           Segurar p/ falar
@@ -74,7 +78,8 @@ export function UltronWidget() {
 
         <button
           onClick={toggleHandsFree}
-          className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+          disabled={state.wakeActive}
+          className={`rounded-lg px-3 py-2 text-sm font-medium transition disabled:opacity-40 ${
             state.handsFree
               ? "bg-blue-500 text-white"
               : "border border-white/15 text-white/80 hover:bg-white/5"
@@ -94,9 +99,24 @@ export function UltronWidget() {
         )}
       </div>
 
+      {state.wakeSupported && (
+        <button
+          onClick={toggleWakeWord}
+          disabled={state.handsFree}
+          className={`mt-2 w-full rounded-lg px-3 py-2 text-sm font-medium transition disabled:opacity-40 ${
+            state.wakeActive
+              ? "bg-cyan-500 text-black"
+              : "border border-white/15 text-white/80 hover:bg-white/5"
+          }`}
+        >
+          {state.wakeActive ? 'Wake word ON — diga "Ultron"' : 'Ativar wake word "Ultron"'}
+        </button>
+      )}
+
       <p className="mt-2 text-[11px] leading-tight text-white/30">
-        Pergunte o que os agents fizeram, métricas ou status de um cliente. Wake word
-        &ldquo;Ultron&rdquo; chega quando a chave Picovoice for configurada.
+        {state.wakeSupported
+          ? 'Ative o wake word e diga "Ultron" para falar sem as mãos, ou segure o botão. Pergunte métricas, status de um cliente ou o que os agents fizeram.'
+          : "Use Chrome/Edge para o wake word. Por enquanto, segure o botão ou use mãos livres."}
       </p>
     </div>
   );

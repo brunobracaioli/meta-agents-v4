@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSessionId } from "@/lib/ultron/session";
+import { createWakeWord, isWakeWordSupported, type WakeController } from "@/lib/ultron/wake-word";
 
 export type UltronStatus =
   | "idle"
+  | "armed" // wake-word mode: listening for "Ultron"
   | "listening" // hands-free: waiting for speech onset
   | "recording"
   | "transcribing"
@@ -15,10 +17,14 @@ export type UltronStatus =
 export type UltronState = {
   status: UltronStatus;
   handsFree: boolean;
+  wakeActive: boolean;
+  wakeSupported: boolean;
   transcript: string | null;
   reply: string | null;
   error: string | null;
 };
+
+const WAKE_WORD = "ultron";
 
 // Energy-based VAD tuning (no external deps). Works on the mic AnalyserNode RMS.
 const SILENCE_MS = 900; // stop after this much trailing silence
@@ -30,6 +36,8 @@ export function useUltronVoice() {
   const [state, setState] = useState<UltronState>({
     status: "idle",
     handsFree: false,
+    wakeActive: false,
+    wakeSupported: false,
     transcript: null,
     reply: null,
     error: null,
@@ -46,6 +54,9 @@ export function useUltronVoice() {
   const speechSeenRef = useRef<boolean>(false);
   const playerRef = useRef<HTMLAudioElement | null>(null);
   const handsFreeRef = useRef<boolean>(false);
+  const wakeRef = useRef<WakeController | null>(null);
+  const wakeModeRef = useRef<boolean>(false);
+  const armedRef = useRef<boolean>(false);
 
   const patch = useCallback((p: Partial<UltronState>) => setState((s) => ({ ...s, ...p })), []);
 
@@ -134,11 +145,12 @@ export function useUltronVoice() {
         // Non-fatal: the reply is still shown as text.
       } finally {
         playerRef.current = null;
-        if (handsFreeRef.current) startListening();
+        if (wakeModeRef.current) reArm();
+        else if (handsFreeRef.current) startListening();
         else patch({ status: "idle" });
       }
     },
-    // startListening defined below; ref-based recursion is intentional.
+    // reArm/startListening defined below; ref-based recursion is intentional.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [patch],
   );
@@ -223,6 +235,20 @@ export function useUltronVoice() {
     });
   }, [beginRecording, ensureMic, patch, rms]);
 
+  // Wake-word mode: re-arm the listener after each reply.
+  const reArm = useCallback(() => {
+    armedRef.current = true;
+    patch({ status: "armed" });
+    wakeRef.current?.start();
+  }, [patch]);
+
+  const handleWake = useCallback(() => {
+    if (!armedRef.current) return; // ignore repeat hits within one detection burst
+    armedRef.current = false;
+    wakeRef.current?.stop(); // pause recognition while we handle the command + reply
+    void beginRecording(true);
+  }, [beginRecording]);
+
   // --- public controls ---
 
   const startPushToTalk = useCallback(() => {
@@ -241,9 +267,44 @@ export function useUltronVoice() {
       finalizeRecording();
       patch({ status: "idle", handsFree: false });
     } else {
+      // mutually exclusive with wake-word mode
+      if (wakeModeRef.current) {
+        wakeModeRef.current = false;
+        armedRef.current = false;
+        wakeRef.current?.stop();
+        patch({ wakeActive: false });
+      }
       startListening();
     }
   }, [finalizeRecording, patch, startListening, stopVadLoop]);
+
+  const toggleWakeWord = useCallback(() => {
+    if (wakeModeRef.current) {
+      wakeModeRef.current = false;
+      armedRef.current = false;
+      wakeRef.current?.stop();
+      patch({ status: "idle", wakeActive: false });
+      return;
+    }
+    if (!wakeRef.current) {
+      wakeRef.current = createWakeWord({
+        word: WAKE_WORD,
+        lang: "pt-BR",
+        onWake: handleWake,
+        onError: () => {},
+      });
+    }
+    if (!wakeRef.current.isSupported) {
+      patch({ status: "error", error: "Seu navegador não suporta wake word (use Chrome ou Edge)." });
+      return;
+    }
+    // mutually exclusive with hands-free
+    handsFreeRef.current = false;
+    stopVadLoop();
+    wakeModeRef.current = true;
+    patch({ wakeActive: true, handsFree: false, error: null });
+    reArm();
+  }, [handleWake, patch, reArm, stopVadLoop]);
 
   const stopSpeaking = useCallback(() => {
     if (playerRef.current) {
@@ -253,13 +314,18 @@ export function useUltronVoice() {
   }, []);
 
   useEffect(() => {
+    patch({ wakeSupported: isWakeWordSupported() });
+  }, [patch]);
+
+  useEffect(() => {
     return () => {
       stopVadLoop();
+      wakeRef.current?.stop();
       recorderRef.current?.state !== "inactive" && recorderRef.current?.stop();
       streamRef.current?.getTracks().forEach((t) => t.stop());
       void audioCtxRef.current?.close();
     };
   }, [stopVadLoop]);
 
-  return { state, startPushToTalk, stopPushToTalk, toggleHandsFree, stopSpeaking };
+  return { state, startPushToTalk, stopPushToTalk, toggleHandsFree, toggleWakeWord, stopSpeaking };
 }

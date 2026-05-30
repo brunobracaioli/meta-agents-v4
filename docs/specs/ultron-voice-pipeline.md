@@ -10,8 +10,26 @@ Claude com function calling (tools read-only de dados). Memória de 10 trocas.
 
 ## Stack escolhida (decisão do operador)
 
-`Porcupine (wake word) → VAD silero-web (fim de fala) → MediaRecorder → OpenAI Whisper
-(STT) → Claude (brain + tools) → ElevenLabs (TTS streaming)`.
+`wake word → VAD (fim de fala) → MediaRecorder → OpenAI Whisper (STT) → Claude
+(brain + tools) → ElevenLabs (TTS streaming)`.
+
+### Wake word — implementação atual: Web Speech API (Porcupine adiado)
+
+O wake word "Ultron" usa o **SpeechRecognition nativo do navegador** (Web Speech API),
+não o Picovoice Porcupine. Motivo: o cadastro do Picovoice exige **aprovação de uso
+comercial** (pode demorar/recusar), o que travaria a entrega. A Web Speech API não exige
+conta/chave e funciona em **Chrome/Edge**.
+
+- `web/lib/ultron/wake-word.ts`: escuta contínua; ao transcrever "ultron", dispara a
+  gravação. Pausa enquanto trata o comando + resposta (não captura o próprio TTS) e
+  re-arma depois. Modo mutuamente exclusivo com "mãos livres".
+- VAD de fim de fala: detector de energia (Web Audio `AnalyserNode`), sem dependências.
+- Fallbacks sempre disponíveis: **push-to-talk** e **mãos livres** (não dependem do wake word).
+
+**Trade-offs:** só Chrome/Edge; no Chrome o áudio do reconhecimento vai para o serviço do
+Google enquanto "armado" (menos privado que on-device). Aceitável para dashboard interno
+com 1 operador. **Evolução:** migrar para **Picovoice Porcupine** (on-device, privado)
+quando/se a conta for aprovada — troca isolada em `wake-word.ts`.
 
 ## Máquina de estados (client)
 
