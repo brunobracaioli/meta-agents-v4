@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+/* Brand palette (brunobracaioli / Claude Code DNA): navy + orange accent. */
+@theme {
+  --color-navy: #0a0f1a;
+  --color-navy-soft: #111827;
+  --color-orange: #ff6b1a;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background-color: var(--color-navy);
+  color: #e5e7eb;
+}

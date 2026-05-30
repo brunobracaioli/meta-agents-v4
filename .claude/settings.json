@@ -99,6 +99,28 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Task|Agent|Skill|WebFetch|WebSearch|ads_create|ads_update|ads_activate|ads_get_ad_entities|ads_insights|execute_sql|apply_migration",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/emit-agent-event.py\""
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/emit-agent-event.py\""
+          }
+        ]
+      }
     ]
   },
   "includeCoAuthoredBy": false,

@@ -1,0 +1,148 @@
+openapi: 3.1.0
+info:
+  title: Meta Ads Agency — Dashboard & Ultron API
+  version: 0.1.0
+  description: >
+    Backend do dashboard (Vercel / Next.js route handlers via Hono). Read-only sobre os
+    dados que os agents persistem no Supabase. Endpoints de voz orquestram STT (OpenAI),
+    brain (Anthropic, function calling) e TTS (ElevenLabs). Spec:
+    docs/specs/web-dashboard-ultron.md. API-First: este contrato precede os handlers.
+servers:
+  - url: /api
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: ultron_session
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string, description: "Mensagem genérica; nunca vaza internals." }
+      required: [error]
+    LoginRequest:
+      type: object
+      properties:
+        password: { type: string, minLength: 1, maxLength: 200 }
+      required: [password]
+    Ok:
+      type: object
+      properties:
+        ok: { type: boolean }
+      required: [ok]
+    SttResponse:
+      type: object
+      properties:
+        text: { type: string }
+      required: [text]
+    ChatRequest:
+      type: object
+      properties:
+        sessionId: { type: string, minLength: 8, maxLength: 64 }
+        text: { type: string, minLength: 1, maxLength: 2000 }
+      required: [sessionId, text]
+    ChatResponse:
+      type: object
+      properties:
+        reply: { type: string }
+        usedTools:
+          type: array
+          items: { type: string }
+      required: [reply, usedTools]
+    TtsRequest:
+      type: object
+      properties:
+        text: { type: string, minLength: 1, maxLength: 2000 }
+      required: [text]
+  responses:
+    Unauthorized:
+      description: Sem sessão válida.
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    RateLimited:
+      description: Muitas requisições.
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+paths:
+  /auth/login:
+    post:
+      summary: Autentica por senha única e emite cookie JWT.
+      security: []
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/LoginRequest" } } }
+      responses:
+        "200":
+          description: OK; Set-Cookie ultron_session (httpOnly, Secure, SameSite=Lax).
+          content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /auth/logout:
+    post:
+      summary: Limpa o cookie de sessão.
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200":
+          description: OK; cookie limpo.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } }
+  /ultron/stt:
+    post:
+      summary: Transcreve áudio (OpenAI gpt-4o-transcribe, pt-BR).
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                audio: { type: string, format: binary }
+              required: [audio]
+      responses:
+        "200":
+          description: Texto transcrito (string vazia se ruído).
+          content: { application/json: { schema: { $ref: "#/components/schemas/SttResponse" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "413": { description: Áudio muito grande. }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /ultron/chat:
+    post:
+      summary: Gera resposta do Ultron (Claude + tools read-only, memória de 10 trocas).
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ChatRequest" } } }
+      responses:
+        "200":
+          description: Resposta final em texto + tools acionadas.
+          content: { application/json: { schema: { $ref: "#/components/schemas/ChatResponse" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /ultron/tts:
+    post:
+      summary: Sintetiza voz (ElevenLabs streaming, voice_id da marca).
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/TtsRequest" } } }
+      responses:
+        "200":
+          description: Stream de áudio.
+          content: { audio/mpeg: { schema: { type: string, format: binary } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /dashboard/overview:
+    get:
+      summary: Campanhas + métricas + atividade recente (DTO agregado).
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - in: query
+          name: client
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: DTO de overview (forma detalhada nos services).
+          content: { application/json: { schema: { type: object } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
