@@ -8,3 +8,6 @@
 # Performance analysis for cliente brunobracaioli, every 3 days at 08:00 BRT (read-only).
 # `*/3` em day-of-month = dias 1,4,7,...,28,31 (reinicia no mês — idiom-padrão de "a cada 3 dias").
 0 8 */3 * * /app/scripts/run-skill.sh analytic-traffic-brunobracaioli-campaign
+
+# Daily AI summary for cliente brunobracaioli at 23:30 BRT (consolida o dia p/ o Ultron).
+30 23 * * * /app/scripts/run-skill.sh daily-summary-brunobracaioli
