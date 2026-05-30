@@ -24,6 +24,11 @@ export const rateLimiters = {
   ultronStt: () => limiter("ultron-stt", 20, "1 m"),
   ultronChat: () => limiter("ultron-chat", 20, "1 m"),
   ultronTts: () => limiter("ultron-tts", 30, "1 m"),
+  // Write actions are keyed by client slug (not IP): they enqueue real agent work
+  // and, for activation, real ad spend. Tight caps are defence-in-depth on top of the
+  // two-turn confirmation and the one-job-per-(client,kind) unique index.
+  campaignCreation: () => limiter("campaign-creation", 5, "1 h"),
+  campaignActivation: () => limiter("campaign-activation", 3, "1 h"),
 };
 
 /**

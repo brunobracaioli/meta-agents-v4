@@ -31,18 +31,18 @@ export function formatRatio(value: number | null | undefined, digits = 2): strin
 
 // Verdict / severity → tailwind chip classes, shared by dashboard views.
 export const VERDICT_STYLES: Record<string, string> = {
-  healthy: "bg-green-500/15 text-green-300",
-  watch: "bg-yellow-500/15 text-yellow-300",
-  underperforming: "bg-red-500/15 text-red-300",
-  learning: "bg-blue-500/15 text-blue-300",
-  no_data: "bg-white/10 text-white/50",
-  error: "bg-red-500/20 text-red-200",
+  healthy: "border-emerald-300/25 bg-emerald-400/10 text-emerald-200",
+  watch: "border-amber-300/25 bg-amber-400/10 text-amber-200",
+  underperforming: "border-red-300/25 bg-red-500/10 text-red-200",
+  learning: "border-cyan-300/25 bg-cyan-400/10 text-cyan-200",
+  no_data: "border-white/10 bg-white/5 text-white/50",
+  error: "border-red-300/30 bg-red-500/15 text-red-200",
 };
 
 export const SEVERITY_STYLES: Record<string, string> = {
-  info: "bg-white/10 text-white/60",
-  low: "bg-blue-500/15 text-blue-300",
-  medium: "bg-yellow-500/15 text-yellow-300",
-  high: "bg-orange-500/15 text-orange-300",
-  critical: "bg-red-500/20 text-red-200",
+  info: "border-white/10 bg-white/5 text-white/60",
+  low: "border-cyan-300/25 bg-cyan-400/10 text-cyan-200",
+  medium: "border-amber-300/25 bg-amber-400/10 text-amber-200",
+  high: "border-orange-300/25 bg-orange-400/10 text-orange-200",
+  critical: "border-red-300/30 bg-red-500/15 text-red-200",
 };

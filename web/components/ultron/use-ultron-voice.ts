@@ -19,6 +19,8 @@ export type UltronState = {
   handsFree: boolean;
   wakeActive: boolean;
   wakeSupported: boolean;
+  outputLevel: number;
+  outputBands: number[];
   transcript: string | null;
   reply: string | null;
   error: string | null;
@@ -31,6 +33,12 @@ const SILENCE_MS = 900; // stop after this much trailing silence
 const SPEECH_RMS = 0.025; // onset threshold
 const SILENCE_RMS = 0.015; // below this counts as silence
 const MAX_CLIP_MS = 12_000; // hard cap per utterance
+const OUTPUT_BAND_COUNT = 18;
+const OUTPUT_FRAME_MS = 48;
+
+function silentOutputBands(): number[] {
+  return Array.from({ length: OUTPUT_BAND_COUNT }, () => 0);
+}
 
 export function useUltronVoice() {
   const [state, setState] = useState<UltronState>({
@@ -38,6 +46,8 @@ export function useUltronVoice() {
     handsFree: false,
     wakeActive: false,
     wakeSupported: false,
+    outputLevel: 0,
+    outputBands: silentOutputBands(),
     transcript: null,
     reply: null,
     error: null,
@@ -53,6 +63,12 @@ export function useUltronVoice() {
   const clipStartRef = useRef<number>(0);
   const speechSeenRef = useRef<boolean>(false);
   const playerRef = useRef<HTMLAudioElement | null>(null);
+  const speechDoneRef = useRef<(() => void) | null>(null);
+  const outputCtxRef = useRef<AudioContext | null>(null);
+  const outputSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const outputAnalyserRef = useRef<AnalyserNode | null>(null);
+  const outputRafRef = useRef<number | null>(null);
+  const outputLastFrameRef = useRef<number>(0);
   const handsFreeRef = useRef<boolean>(false);
   const wakeRef = useRef<WakeController | null>(null);
   const wakeModeRef = useRef<boolean>(false);
@@ -90,6 +106,90 @@ export function useUltronVoice() {
     silenceStartRef.current = null;
   }, []);
 
+  const stopOutputAnalysis = useCallback((resetState = true) => {
+    if (outputRafRef.current != null) cancelAnimationFrame(outputRafRef.current);
+    outputRafRef.current = null;
+    outputLastFrameRef.current = 0;
+
+    try {
+      outputSourceRef.current?.disconnect();
+    } catch {
+      // The node may already be detached when playback is interrupted.
+    }
+    try {
+      outputAnalyserRef.current?.disconnect();
+    } catch {
+      // The node may already be detached when playback is interrupted.
+    }
+    void outputCtxRef.current?.close().catch(() => {});
+
+    outputSourceRef.current = null;
+    outputAnalyserRef.current = null;
+    outputCtxRef.current = null;
+    if (resetState) patch({ outputLevel: 0, outputBands: silentOutputBands() });
+  }, [patch]);
+
+  const startOutputAnalysis = useCallback(
+    (audio: HTMLAudioElement) => {
+      stopOutputAnalysis(false);
+
+      const ctx = new AudioContext();
+      const source = ctx.createMediaElementSource(audio);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.76;
+
+      source.connect(analyser);
+      analyser.connect(ctx.destination);
+
+      outputCtxRef.current = ctx;
+      outputSourceRef.current = source;
+      outputAnalyserRef.current = analyser;
+
+      const freq = new Uint8Array(analyser.frequencyBinCount);
+      const time = new Float32Array(analyser.fftSize);
+
+      const tick = () => {
+        if (outputAnalyserRef.current !== analyser) return;
+
+        const now = performance.now();
+        if (now - outputLastFrameRef.current >= OUTPUT_FRAME_MS) {
+          analyser.getByteFrequencyData(freq);
+          analyser.getFloatTimeDomainData(time);
+
+          let sum = 0;
+          for (let i = 0; i < time.length; i++) {
+            const sample = time[i] ?? 0;
+            sum += sample * sample;
+          }
+
+          const level = Math.min(1, Math.sqrt(sum / time.length) * 3.8);
+          const bucketSize = Math.max(1, Math.floor(freq.length / OUTPUT_BAND_COUNT));
+          const bands: number[] = [];
+
+          for (let band = 0; band < OUTPUT_BAND_COUNT; band++) {
+            const start = band * bucketSize;
+            const end =
+              band === OUTPUT_BAND_COUNT - 1 ? freq.length : Math.min(freq.length, start + bucketSize);
+            let bucket = 0;
+            for (let i = start; i < end; i++) bucket += freq[i] ?? 0;
+            const width = Math.max(1, end - start);
+            bands.push(Math.min(1, (bucket / (width * 255)) * 1.65));
+          }
+
+          outputLastFrameRef.current = now;
+          patch({ outputLevel: level, outputBands: bands });
+        }
+
+        if (!audio.ended) outputRafRef.current = requestAnimationFrame(tick);
+      };
+
+      outputRafRef.current = requestAnimationFrame(tick);
+      return ctx;
+    },
+    [patch, stopOutputAnalysis],
+  );
+
   const finalizeRecording = useCallback(() => {
     const recorder = recorderRef.current;
     if (recorder && recorder.state !== "inactive") recorder.stop();
@@ -123,7 +223,8 @@ export function useUltronVoice() {
 
   const speak = useCallback(
     async (text: string) => {
-      patch({ status: "speaking" });
+      patch({ status: "speaking", outputLevel: 0, outputBands: silentOutputBands() });
+      let url: string | null = null;
       try {
         const res = await fetch("/api/ultron/tts", {
           method: "POST",
@@ -132,18 +233,32 @@ export function useUltronVoice() {
         });
         if (!res.ok) throw new Error("tts");
         const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
+        url = URL.createObjectURL(blob);
         const audio = new Audio(url);
+        audio.preload = "auto";
         playerRef.current = audio;
         await new Promise<void>((resolve) => {
-          audio.onended = () => resolve();
-          audio.onerror = () => resolve();
-          void audio.play().catch(() => resolve());
+          let done = false;
+          const settle = () => {
+            if (done) return;
+            done = true;
+            resolve();
+          };
+          speechDoneRef.current = settle;
+          audio.addEventListener("ended", settle, { once: true });
+          audio.addEventListener("error", settle, { once: true });
+          const ctx = startOutputAnalysis(audio);
+          void ctx
+            .resume()
+            .then(() => audio.play())
+            .catch(() => settle());
         });
-        URL.revokeObjectURL(url);
       } catch {
         // Non-fatal: the reply is still shown as text.
       } finally {
+        speechDoneRef.current = null;
+        stopOutputAnalysis();
+        if (url) URL.revokeObjectURL(url);
         playerRef.current = null;
         if (wakeModeRef.current) reArm();
         else if (handsFreeRef.current) startListening();
@@ -309,8 +424,10 @@ export function useUltronVoice() {
   const stopSpeaking = useCallback(() => {
     if (playerRef.current) {
       playerRef.current.pause();
+      playerRef.current.currentTime = 0;
       playerRef.current = null;
     }
+    speechDoneRef.current?.();
   }, []);
 
   useEffect(() => {
@@ -323,9 +440,15 @@ export function useUltronVoice() {
       wakeRef.current?.stop();
       recorderRef.current?.state !== "inactive" && recorderRef.current?.stop();
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      if (playerRef.current) {
+        playerRef.current.pause();
+        playerRef.current = null;
+      }
+      speechDoneRef.current?.();
+      stopOutputAnalysis(false);
       void audioCtxRef.current?.close();
     };
-  }, [stopVadLoop]);
+  }, [stopOutputAnalysis, stopVadLoop]);
 
   return { state, startPushToTalk, stopPushToTalk, toggleHandsFree, toggleWakeWord, stopSpeaking };
 }

@@ -17,11 +17,11 @@ const POLL_MS = 2000;
 const MAX_KEEP = 200;
 
 const EVENT_DOT: Record<string, string> = {
-  start: "bg-blue-400",
+  start: "bg-cyan-300 shadow-[0_0_12px_rgba(103,232,249,0.8)]",
   step: "bg-white/40",
-  decision: "bg-purple-400",
-  error: "bg-red-500",
-  end: "bg-green-400",
+  decision: "bg-violet-300 shadow-[0_0_12px_rgba(196,181,253,0.8)]",
+  error: "bg-red-400 shadow-[0_0_12px_rgba(248,113,113,0.8)]",
+  end: "bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.8)]",
 };
 
 function timeOf(iso: string): string {
@@ -70,16 +70,26 @@ export function LiveFeed() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <h1 className="text-lg font-semibold text-white">Agents ao vivo</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="font-mono text-xs uppercase tracking-[0.24em] text-cyan-200/55">Fluxo de eventos</p>
+          <h1 className="mt-1 text-2xl font-semibold text-white">Agents ao vivo</h1>
+        </div>
         <span
-          className={`inline-block h-2 w-2 rounded-full ${connected ? "bg-green-400 animate-pulse" : "bg-red-500"}`}
+          className={`inline-flex items-center gap-2 rounded border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] ${
+            connected
+              ? "border-emerald-300/25 bg-emerald-400/10 text-emerald-200"
+              : "border-red-300/25 bg-red-500/10 text-red-200"
+          }`}
           title={connected ? "conectado" : "reconectando…"}
-        />
+        >
+          <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-300" : "bg-red-400"}`} />
+          {connected ? "Conectado" : "Reconectando"}
+        </span>
       </div>
 
       {events.length === 0 ? (
-        <p className="text-sm text-white/50">
+        <p className="tech-panel rounded-lg px-4 py-3 text-sm text-white/50">
           Aguardando atividade dos agents. Quando uma skill rodar (criação ou análise de
           campanha), os passos aparecem aqui em tempo real.
         </p>
@@ -88,7 +98,7 @@ export function LiveFeed() {
           {events.map((e) => (
             <li
               key={e.id}
-              className="flex items-start gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-4 py-2"
+              className="tech-panel flex items-start gap-3 rounded-lg px-4 py-3"
             >
               <span className={`mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full ${EVENT_DOT[e.event_type] ?? "bg-white/30"}`} />
               <div className="min-w-0 flex-1">
@@ -101,6 +111,9 @@ export function LiveFeed() {
                   {e.tool_name ? ` · ${e.tool_name}` : ""} · {timeOf(e.ts)}
                 </p>
               </div>
+              <span className="hidden shrink-0 rounded border border-white/10 bg-white/[0.03] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-white/35 sm:inline">
+                {e.agent_type}
+              </span>
             </li>
           ))}
         </ol>

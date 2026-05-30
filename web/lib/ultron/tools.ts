@@ -1,11 +1,15 @@
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db/client";
+import { rateLimiters, enforceLimit } from "@/lib/ratelimit";
 
 /**
- * Read-only data tools the Ultron assistant can call. Every handler runs a
- * parameterized SELECT via the Supabase client and returns plain JSON. None of
- * them mutate anything — there is intentionally no write tool.
+ * Tools the Ultron assistant can call. The data tools run parameterized SELECTs
+ * and return plain JSON. The two write tools (request_campaign_creation,
+ * request_campaign_activation) do NOT touch the Meta API directly — they only
+ * enqueue a job into `agent_jobs` for the Fly.io runner to execute. The skill name
+ * is resolved server-side from a fixed allowlist below (never free-form user text),
+ * and both require an explicit two-turn confirmation (see prompt.ts).
  */
 
 type ToolHandler = (input: Record<string, unknown>) => Promise<unknown>;
@@ -15,14 +19,37 @@ type ToolDef = {
   handler: ToolHandler;
 };
 
+// Fixed server-side allowlist: spoken client slug -> the exact skill the runner may
+// execute. A client absent from a map simply cannot trigger that action. This is the
+// key control that keeps the write tools from becoming a "run any skill" primitive.
+const CREATE_SKILL_BY_SLUG: Record<string, string> = {
+  brunobracaioli: "create-traffic-brunobracaioli-campaign",
+};
+const ACTIVATE_SKILL_BY_SLUG: Record<string, string> = {
+  brunobracaioli: "activate-campaign-brunobracaioli",
+};
+
 function str(input: Record<string, unknown>, key: string): string | undefined {
   const v = input[key];
   return typeof v === "string" && v.length > 0 ? v : undefined;
 }
 
-async function resolveClientId(slug: string): Promise<{ id: string; currency: string } | null> {
-  const { data } = await db().from("clients").select("id, currency").eq("slug", slug).maybeSingle();
+type ResolvedClient = { id: string; name: string; currency: string; daily_budget_cap_cents: number };
+
+async function resolveClientId(slug: string): Promise<ResolvedClient | null> {
+  const { data } = await db()
+    .from("clients")
+    .select("id, name, currency, daily_budget_cap_cents")
+    .eq("slug", slug)
+    .maybeSingle();
   return data ?? null;
+}
+
+// supabase-js surfaces a Postgres unique-violation as code 23505. Our partial unique
+// index (agent_jobs_one_active_per_kind) raises it when a job of the same kind is
+// already in flight for the client — i.e. a duplicate/misheard trigger.
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
 }
 
 const tools: Record<string, ToolDef> = {
@@ -60,7 +87,7 @@ const tools: Record<string, ToolDef> = {
       if (!client) return { error: `cliente '${slug}' não encontrado` };
       const { data, error } = await db()
         .from("campaigns")
-        .select("name, objective, budget_mode, daily_budget_cents, status, created_at")
+        .select("name, objective, budget_mode, daily_budget_cents, status, meta_campaign_id, created_at")
         .eq("client_id", client.id)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -205,6 +232,194 @@ const tools: Record<string, ToolDef> = {
         return { note: "sem resumo diário registrado; use get_recent_actions" };
       }
       return data;
+    },
+  },
+
+  request_campaign_creation: {
+    spec: {
+      name: "request_campaign_creation",
+      description:
+        "Enfileira a CRIAÇÃO de uma nova campanha de tráfego para um cliente (os agents rodam na VM). A campanha nasce PAUSED (sem gasto). FLUXO OBRIGATÓRIO: chame primeiro com confirm=false para obter os detalhes, leia-os ao operador e peça confirmação; só chame com confirm=true após um 'sim' explícito.",
+      input_schema: {
+        type: "object",
+        properties: {
+          client_slug: { type: "string", description: "slug do cliente, ex.: brunobracaioli" },
+          confirm: {
+            type: "boolean",
+            description: "false = apenas devolve os detalhes para confirmar; true = enfileira de fato (use só após o operador confirmar)",
+          },
+        },
+        required: ["client_slug", "confirm"],
+      },
+    },
+    handler: async (input) => {
+      const slug = str(input, "client_slug");
+      const confirm = input.confirm === true;
+      if (!slug) return { error: "client_slug é obrigatório" };
+      const client = await resolveClientId(slug);
+      if (!client) return { error: `cliente '${slug}' não encontrado` };
+      const skill = CREATE_SKILL_BY_SLUG[slug];
+      if (!skill) return { error: `cliente '${slug}' não está habilitado para criação automática de campanha` };
+
+      if (!confirm) {
+        return {
+          confirmation_required: true,
+          action: "criar campanha de tráfego",
+          client: client.name,
+          client_slug: slug,
+          daily_budget_cents: client.daily_budget_cap_cents,
+          currency: client.currency,
+          note: "A campanha nasce PAUSED (gasto zero até ser ativada). Confirme com o operador antes de chamar com confirm=true.",
+        };
+      }
+
+      const { allowed } = await enforceLimit(rateLimiters.campaignCreation(), slug, "campaign-creation");
+      if (!allowed) return { error: "muitos pedidos de criação para este cliente agora; tente de novo daqui a pouco" };
+
+      const { data, error } = await db()
+        .from("agent_jobs")
+        .insert({
+          client_id: client.id,
+          skill,
+          kind: "create",
+          args: { "budget-cents": client.daily_budget_cap_cents },
+          requested_by: "ultron",
+        })
+        .select("id")
+        .single();
+      if (error) {
+        if (isUniqueViolation(error)) {
+          return { enqueued: false, reason: "já existe um pedido de criação em andamento para este cliente" };
+        }
+        throw error;
+      }
+      return {
+        enqueued: true,
+        job_id: data.id,
+        message: "Pedido de criação enfileirado. Os agents começam em até um minuto; a campanha vai nascer pausada.",
+      };
+    },
+  },
+
+  request_campaign_activation: {
+    spec: {
+      name: "request_campaign_activation",
+      description:
+        "Enfileira a ATIVAÇÃO de uma campanha existente (coloca no ar — começa o GASTO REAL). Só ativa campanhas PAUSED dentro do teto de orçamento do cliente. Use get_client_overview para achar o campaign_meta_id. FLUXO OBRIGATÓRIO: chame com confirm=false, releia nome e orçamento ao operador avisando que é gasto real, e só chame com confirm=true após um 'sim' explícito.",
+      input_schema: {
+        type: "object",
+        properties: {
+          client_slug: { type: "string", description: "slug do cliente, ex.: brunobracaioli" },
+          campaign_meta_id: { type: "string", description: "id da campanha na Meta (meta_campaign_id), obtido via get_client_overview" },
+          confirm: {
+            type: "boolean",
+            description: "false = apenas devolve os detalhes para confirmar; true = enfileira a ativação (use só após o operador confirmar)",
+          },
+        },
+        required: ["client_slug", "campaign_meta_id", "confirm"],
+      },
+    },
+    handler: async (input) => {
+      const slug = str(input, "client_slug");
+      const campaignMetaId = str(input, "campaign_meta_id");
+      const confirm = input.confirm === true;
+      if (!slug) return { error: "client_slug é obrigatório" };
+      if (!campaignMetaId) return { error: "campaign_meta_id é obrigatório" };
+      const client = await resolveClientId(slug);
+      if (!client) return { error: `cliente '${slug}' não encontrado` };
+      const skill = ACTIVATE_SKILL_BY_SLUG[slug];
+      if (!skill) return { error: `cliente '${slug}' não está habilitado para ativação automática` };
+
+      const { data: campaign } = await db()
+        .from("campaigns")
+        .select("name, status, daily_budget_cents, meta_campaign_id")
+        .eq("client_id", client.id)
+        .eq("meta_campaign_id", campaignMetaId)
+        .maybeSingle();
+      if (!campaign) return { error: `campanha ${campaignMetaId} não encontrada para o cliente '${slug}'` };
+      if (campaign.status === "ACTIVE") return { error: `a campanha '${campaign.name}' já está ativa` };
+      if (campaign.status !== "PAUSED") {
+        return { error: `a campanha '${campaign.name}' está em status ${campaign.status}; só ativo campanhas PAUSED` };
+      }
+      const budget = campaign.daily_budget_cents;
+      if (budget != null && budget > client.daily_budget_cap_cents) {
+        return {
+          error: `o orçamento da campanha (${budget} cents/dia) excede o teto do cliente (${client.daily_budget_cap_cents} cents/dia); não vou ativar`,
+        };
+      }
+
+      if (!confirm) {
+        return {
+          confirmation_required: true,
+          action: "ATIVAR campanha — começa o gasto real",
+          client: client.name,
+          campaign: campaign.name,
+          campaign_meta_id: campaignMetaId,
+          daily_budget_cents: budget,
+          currency: client.currency,
+          warning:
+            "Ao confirmar, a campanha vai ao ar e passa a gastar de verdade. Releia nome e orçamento ao operador e só chame com confirm=true após um 'sim' explícito.",
+        };
+      }
+
+      const { allowed } = await enforceLimit(rateLimiters.campaignActivation(), slug, "campaign-activation");
+      if (!allowed) return { error: "muitos pedidos de ativação para este cliente agora; tente de novo daqui a pouco" };
+
+      const { data, error } = await db()
+        .from("agent_jobs")
+        .insert({
+          client_id: client.id,
+          skill,
+          kind: "activate",
+          args: { campaign_meta_id: campaignMetaId },
+          requested_by: "ultron",
+        })
+        .select("id")
+        .single();
+      if (error) {
+        if (isUniqueViolation(error)) {
+          return { enqueued: false, reason: "já existe um pedido de ativação em andamento para este cliente" };
+        }
+        throw error;
+      }
+      return {
+        enqueued: true,
+        job_id: data.id,
+        message: "Pedido de ativação enfileirado. A campanha vai ao ar em instantes.",
+      };
+    },
+  },
+
+  get_recent_jobs: {
+    spec: {
+      name: "get_recent_jobs",
+      description:
+        "Estado dos pedidos recentes que o Ultron enfileirou para a VM (criação/ativação): status, erro e horários. Use para responder 'começou?', 'terminou?', 'deu certo?'. Filtra por cliente se informado.",
+      input_schema: {
+        type: "object",
+        properties: {
+          client_slug: { type: "string", description: "opcional" },
+          limit: { type: "number", description: "padrão 10, máximo 25" },
+        },
+      },
+    },
+    handler: async (input) => {
+      const slug = str(input, "client_slug");
+      const rawLimit = typeof input.limit === "number" ? input.limit : 10;
+      const limit = Math.min(Math.max(1, rawLimit), 25);
+      let query = db()
+        .from("agent_jobs")
+        .select("kind, skill, status, error, exit_code, created_at, started_at, finished_at")
+        .order("created_at", { ascending: false })
+        .limit(limit);
+      if (slug) {
+        const client = await resolveClientId(slug);
+        if (!client) return { error: `cliente '${slug}' não encontrado` };
+        query = query.eq("client_id", client.id);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
     },
   },
 };

@@ -11,3 +11,8 @@
 
 # Daily AI summary for cliente brunobracaioli at 23:30 BRT (consolida o dia p/ o Ultron).
 30 23 * * * /app/scripts/run-skill.sh daily-summary-brunobracaioli
+
+# On-demand job queue: every minute, claim+run one pending agent_jobs row enqueued by
+# the Ultron dashboard (create/activate campaign). Single-flight via mkdir lock — see
+# scripts/poll-agent-jobs.sh and docs/adr/0009-on-demand-agent-jobs-queue.md.
+* * * * * /app/scripts/poll-agent-jobs.sh

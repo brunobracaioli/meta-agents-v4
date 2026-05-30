@@ -1,26 +1,27 @@
 "use client";
 
 import { useUltronVoice, type UltronStatus } from "./use-ultron-voice";
+import { UltronVisualizer } from "./ultron-visualizer";
 
 const STATUS_LABEL: Record<UltronStatus, string> = {
   idle: "Ocioso",
-  armed: 'Aguardando "Ultron"…',
-  listening: "Ouvindo…",
-  recording: "Gravando…",
-  transcribing: "Transcrevendo…",
-  thinking: "Pensando…",
-  speaking: "Falando…",
+  armed: 'Aguardando "Ultron"',
+  listening: "Ouvindo",
+  recording: "Gravando",
+  transcribing: "Transcrevendo",
+  thinking: "Pensando",
+  speaking: "Falando",
   error: "Erro",
 };
 
 const STATUS_COLOR: Record<UltronStatus, string> = {
   idle: "bg-white/30",
-  armed: "bg-cyan-400 animate-pulse",
-  listening: "bg-blue-400 animate-pulse",
-  recording: "bg-red-500 animate-pulse",
-  transcribing: "bg-yellow-400 animate-pulse",
-  thinking: "bg-purple-400 animate-pulse",
-  speaking: "bg-[var(--color-orange)] animate-pulse",
+  armed: "bg-cyan-300 shadow-[0_0_14px_rgba(103,232,249,0.9)]",
+  listening: "bg-sky-300 shadow-[0_0_14px_rgba(125,211,252,0.9)]",
+  recording: "bg-orange-300 shadow-[0_0_14px_rgba(251,146,60,0.9)]",
+  transcribing: "bg-amber-300 shadow-[0_0_14px_rgba(252,211,77,0.9)]",
+  thinking: "bg-violet-300 shadow-[0_0_14px_rgba(196,181,253,0.9)]",
+  speaking: "bg-emerald-300 shadow-[0_0_16px_rgba(110,231,183,0.95)]",
   error: "bg-red-600",
 };
 
@@ -31,35 +32,52 @@ export function UltronWidget() {
   const busy = !idleish && state.status !== "error";
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-80 rounded-2xl border border-white/10 bg-[var(--color-navy-soft)]/95 p-4 shadow-2xl backdrop-blur">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className={`inline-block h-2.5 w-2.5 rounded-full ${STATUS_COLOR[state.status]}`} />
-          <span className="text-sm font-semibold text-white">Ultron</span>
+    <div className="fixed bottom-4 right-4 z-50 max-h-[calc(100vh-2rem)] w-[min(calc(100vw-2rem),24rem)] overflow-y-auto rounded-lg border border-cyan-300/20 bg-[#06101a]/95 p-3 shadow-[0_24px_90px_rgba(0,0,0,0.5)] backdrop-blur-xl sm:bottom-6 sm:right-6">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className={`mt-0.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_COLOR[state.status]}`} />
+          <div className="min-w-0">
+            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-cyan-100">
+              Ultron
+            </p>
+            <p className="truncate text-xs text-white/45">Console de voz</p>
+          </div>
         </div>
-        <span className="text-xs text-white/40">{STATUS_LABEL[state.status]}</span>
+        <span className="shrink-0 rounded border border-white/10 bg-white/[0.03] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-white/55">
+          {STATUS_LABEL[state.status]}
+        </span>
       </div>
 
+      <UltronVisualizer
+        status={state.status}
+        outputLevel={state.outputLevel}
+        outputBands={state.outputBands}
+      />
+
       {(state.transcript || state.reply) && (
-        <div className="mb-3 max-h-40 space-y-2 overflow-y-auto text-sm">
+        <div className="mt-3 max-h-36 space-y-2 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-3 text-xs leading-relaxed">
           {state.transcript && (
             <p className="text-white/50">
-              <span className="text-white/30">você: </span>
+              <span className="font-mono uppercase tracking-[0.14em] text-cyan-200/55">você </span>
               {state.transcript}
             </p>
           )}
           {state.reply && (
             <p className="text-white/90">
-              <span className="text-[var(--color-orange)]">ultron: </span>
+              <span className="font-mono uppercase tracking-[0.14em] text-emerald-200/70">ultron </span>
               {state.reply}
             </p>
           )}
         </div>
       )}
 
-      {state.error && <p className="mb-3 text-xs text-red-400">{state.error}</p>}
+      {state.error && (
+        <p className="mt-3 rounded border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+          {state.error}
+        </p>
+      )}
 
-      <div className="flex items-center gap-2">
+      <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
         <button
           onPointerDown={(e) => {
             e.preventDefault();
@@ -69,55 +87,64 @@ export function UltronWidget() {
             e.preventDefault();
             stopPushToTalk();
           }}
+          onPointerCancel={() => stopPushToTalk()}
           onPointerLeave={() => stopPushToTalk()}
           disabled={busy || state.handsFree || state.wakeActive}
-          className="flex-1 select-none rounded-lg bg-[var(--color-orange)] px-3 py-2 text-sm font-medium text-black transition active:scale-[0.98] disabled:opacity-40"
+          className="min-h-10 select-none rounded-md border border-orange-200/30 bg-orange-300 px-3 py-2 text-sm font-semibold text-black shadow-[0_0_18px_rgba(251,146,60,0.18)] transition active:scale-[0.99] disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/10 disabled:text-white/35"
         >
-          Segurar p/ falar
-        </button>
-
-        <button
-          onClick={toggleHandsFree}
-          disabled={state.wakeActive}
-          className={`rounded-lg px-3 py-2 text-sm font-medium transition disabled:opacity-40 ${
-            state.handsFree
-              ? "bg-blue-500 text-white"
-              : "border border-white/15 text-white/80 hover:bg-white/5"
-          }`}
-        >
-          {state.handsFree ? "Parar" : "Mãos livres"}
+          Segurar para falar
         </button>
 
         {state.status === "speaking" && (
           <button
             onClick={stopSpeaking}
-            className="rounded-lg border border-white/15 px-2 py-2 text-xs text-white/60 hover:bg-white/5"
+            className="h-10 w-10 rounded-md border border-white/15 bg-white/[0.03] font-mono text-sm text-white/70 transition hover:border-red-300/45 hover:bg-red-500/10 hover:text-red-100"
             aria-label="Interromper fala"
+            title="Interromper fala"
           >
-            ⏹
+            ■
           </button>
         )}
       </div>
 
-      {state.wakeSupported && (
+      <div className="mt-2 grid grid-cols-2 gap-2">
         <button
-          onClick={toggleWakeWord}
-          disabled={state.handsFree}
-          className={`mt-2 w-full rounded-lg px-3 py-2 text-sm font-medium transition disabled:opacity-40 ${
-            state.wakeActive
-              ? "bg-cyan-500 text-black"
-              : "border border-white/15 text-white/80 hover:bg-white/5"
+          onClick={toggleHandsFree}
+          disabled={state.wakeActive}
+          aria-pressed={state.handsFree}
+          className={`min-h-9 rounded-md border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-35 ${
+            state.handsFree
+              ? "border-sky-200/40 bg-sky-400/20 text-sky-100"
+              : "border-white/15 bg-white/[0.02] text-white/70 hover:border-sky-200/35 hover:text-white"
           }`}
         >
-          {state.wakeActive ? 'Wake word ON — diga "Ultron"' : 'Ativar wake word "Ultron"'}
+          {state.handsFree ? "Parar" : "Mãos livres"}
         </button>
-      )}
 
-      <p className="mt-2 text-[11px] leading-tight text-white/30">
-        {state.wakeSupported
-          ? 'Ative o wake word e diga "Ultron" para falar sem as mãos, ou segure o botão. Pergunte métricas, status de um cliente ou o que os agents fizeram.'
-          : "Use Chrome/Edge para o wake word. Por enquanto, segure o botão ou use mãos livres."}
-      </p>
+        {state.wakeSupported ? (
+          <button
+            onClick={toggleWakeWord}
+            disabled={state.handsFree}
+            aria-pressed={state.wakeActive}
+            className={`min-h-9 rounded-md border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-35 ${
+              state.wakeActive
+                ? "border-cyan-200/45 bg-cyan-300 text-black"
+                : "border-white/15 bg-white/[0.02] text-white/70 hover:border-cyan-200/35 hover:text-white"
+            }`}
+          >
+            {state.wakeActive ? "Wake ON" : "Wake word"}
+          </button>
+        ) : (
+          <span className="flex min-h-9 items-center justify-center rounded-md border border-white/10 bg-white/[0.02] px-3 py-2 text-center text-xs text-white/35">
+            Wake indisponível
+          </span>
+        )}
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
+        <span>PTT</span>
+        <span>{state.wakeActive ? 'Diga "Ultron"' : state.handsFree ? "Mic ativo" : "Manual"}</span>
+      </div>
     </div>
   );
 }
