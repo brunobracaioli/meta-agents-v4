@@ -5,7 +5,9 @@ import { ULTRON_SYSTEM_PROMPT } from "@/lib/ultron/prompt";
 import { toolSpecs, runTool } from "@/lib/ultron/tools";
 import { loadMemory, appendExchange } from "@/lib/ultron/memory";
 
-const MODEL = process.env.ULTRON_MODEL ?? "claude-opus-4-7";
+// Sonnet 4.6: fast, strong tool use — better fit than Opus for a low-latency voice
+// loop (Opus 4.8 defaults to extended thinking, which adds latency we don't want here).
+const MODEL = process.env.ULTRON_MODEL ?? "claude-sonnet-4-6";
 const MAX_TOOL_ITERATIONS = 5;
 const MAX_TOKENS = 1024;
 
