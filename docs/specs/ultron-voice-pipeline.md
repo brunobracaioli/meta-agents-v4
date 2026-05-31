@@ -23,8 +23,56 @@ conta/chave e funciona em **Chrome/Edge**.
 - `web/lib/ultron/wake-word.ts`: escuta contínua; ao transcrever "ultron", dispara a
   gravação. Pausa enquanto trata o comando + resposta (não captura o próprio TTS) e
   re-arma depois. Modo mutuamente exclusivo com "mãos livres".
-- VAD de fim de fala: detector de energia (Web Audio `AnalyserNode`), sem dependências.
+- VAD de fim de fala: ver seção **VAD em AudioWorklet** abaixo (antes era um
+  detector de energia em `AnalyserNode` + `requestAnimationFrame`).
 - Fallbacks sempre disponíveis: **push-to-talk** e **mãos livres** (não dependem do wake word).
+
+### VAD em AudioWorklet (ouvir com a aba em segundo plano)
+
+> Decisão: [ADR 0011](../adr/0011-ultron-vad-audioworklet.md). Implementado em
+> 2026-05-31.
+
+O VAD (onset da fala + silêncio de encerramento) roda num **AudioWorklet**
+(`web/public/ultron/vad-processor.js`), na thread de áudio em tempo real. Diferente
+do `requestAnimationFrame`, essa thread **não** é congelada quando a aba está em
+segundo plano — então o modo **mãos-livres** continua ouvindo o operador mesmo com
+outra aba/janela em foco ou a janela minimizada.
+
+**Grafo de áudio:** `getUserMedia → MediaStreamSource → AudioWorkletNode('ultron-vad')
+→ GainNode(gain=0) → destination`. O sink mudo garante que `process()` seja chamado
+em background sem emitir som. O `MediaRecorder` consome o **mesmo** stream em
+paralelo (webm → `/api/ultron/stt`, inalterado).
+
+**Contrato de mensagens** (`AudioWorkletNode.port`):
+- main → worklet: `{type:'arm'}` (reset → IDLE, passa a emitir), `{type:'disarm'}`
+  (dormente), `{type:'configure', config}` (ajusta thresholds em runtime).
+- worklet → main: `{type:'speech-start'}` quando o onset é sustentado por
+  `onsetDebounceMs`; `{type:'speech-end', reason:'silence'|'maxclip'}` no
+  encerramento. O worklet **auto-disarma** após `speech-end` (o main re-arma para a
+  próxima fala).
+
+**Máquina de estados pura** (`createVadStateMachine`, no mesmo arquivo, testável
+isolada): `IDLE` → (onset `rms > speechRms` por `onsetDebounceMs`) → `SPEAKING` →
+(silêncio `rms < silenceRms` por `silenceMs`, **ou** duração > `maxClipMs`) →
+emite evento e volta a `IDLE`. Defaults: `speechRms 0.025`, `silenceRms 0.015`,
+`silenceMs 900`, `maxClipMs 12000`, `onsetDebounceMs 50` (espelham as constantes de
+`use-ultron-voice.ts`). Testada em `web/lib/ultron/vad-state-machine.test.ts`
+carregando o arquivo shipado num sandbox (zero duplicação de lógica).
+
+**Encapsulamento:** `web/components/ultron/vad-mic.ts` cria o `AudioContext`/grafo e
+carrega o módulo via `audioWorklet.addModule('/ultron/vad-processor.js')` (same-origin,
+permitido por `worker-src 'self'`); se falhar, faz fallback `fetch → Blob →
+addModule(blobURL)` (`worker-src blob:`). Nenhuma mudança de CSP foi necessária.
+
+**Fallback sem regressão:** navegadores sem AudioWorklet (ou se o `addModule` falhar
+nas duas vias) caem no caminho **rAF** anterior (`vadMode: 'raf'`) — funciona como
+antes, inclusive o congelamento em background.
+
+**Limite conhecido:** o **gatilho por wake word** ("Ultron") usa a Web Speech API do
+Chrome, que o próprio Chrome suspende em abas ocultas — isso **não** é corrigido
+pelo worklet (Picovoice foi descartado). Para falar com a janela trocada, use
+**mãos-livres**. Uma vez gravando, o auto-stop por silêncio (worklet) é confiável em
+qualquer modo.
 
 **Trade-offs:** só Chrome/Edge; no Chrome o áudio do reconhecimento vai para o serviço do
 Google enquanto "armado" (menos privado que on-device). Aceitável para dashboard interno

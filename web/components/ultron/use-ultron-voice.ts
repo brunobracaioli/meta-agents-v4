@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSessionId } from "@/lib/ultron/session";
 import { createWakeWord, isWakeWordSupported, type WakeController } from "@/lib/ultron/wake-word";
+import { createVadMic, isVadWorkletSupported, type VadEvent, type VadMicHandle } from "./vad-mic";
 import { useScreenShare } from "./use-screen-share";
 
 export type UltronStatus =
@@ -30,7 +31,10 @@ export type UltronState = {
 
 const WAKE_WORD = "ultron";
 
-// Energy-based VAD tuning (no external deps). Works on the mic AnalyserNode RMS.
+// Energy-based VAD tuning. The detection runs in an AudioWorklet (vad-mic.ts +
+// public/ultron/vad-processor.js) so it survives tab backgrounding; these are the
+// authoritative thresholds passed to the worklet. The rAF path below reuses them
+// as a fallback for browsers without AudioWorklet.
 const SILENCE_MS = 900; // stop after this much trailing silence
 const SPEECH_RMS = 0.025; // onset threshold
 const SILENCE_RMS = 0.015; // below this counts as silence
@@ -38,6 +42,13 @@ const MAX_CLIP_MS = 12_000; // hard cap per utterance
 const OUTPUT_BAND_COUNT = 18;
 const OUTPUT_FRAME_MS = 48;
 const MAX_CAPTURE_HOPS = 4; // bound client-side capture round-trips per turn
+
+const VAD_CONFIG = {
+  speechRms: SPEECH_RMS,
+  silenceRms: SILENCE_RMS,
+  silenceMs: SILENCE_MS,
+  maxClipMs: MAX_CLIP_MS,
+};
 
 const CLIENT_FALLBACK = "Desculpa, tive um problema agora. Tenta de novo.";
 const NO_SCREEN_MSG =
@@ -81,22 +92,51 @@ export function useUltronVoice() {
   const wakeModeRef = useRef<boolean>(false);
   const armedRef = useRef<boolean>(false);
 
+  // VAD-via-worklet state. `vadMode` is decided once on first mic setup.
+  const vadMicRef = useRef<VadMicHandle | null>(null);
+  const vadModeRef = useRef<"worklet" | "raf">("raf");
+  const vadReadyRef = useRef<Promise<void> | null>(null);
+  const listeningRef = useRef<boolean>(false); // hands-free: armed for onset, not yet recording
+  const onVadEventRef = useRef<(event: VadEvent) => void>(() => {});
+
   const patch = useCallback((p: Partial<UltronState>) => setState((s) => ({ ...s, ...p })), []);
 
   const { sharing, start: startShare, stop: stopShare, captureFrame } = useScreenShare();
 
+  // Sets up the mic stream and, once, the VAD path (worklet preferred; rAF
+  // fallback). Idempotent: safe to call from every entry point.
   const ensureMic = useCallback(async (): Promise<MediaStream> => {
-    if (streamRef.current) return streamRef.current;
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    streamRef.current = stream;
-    const ctx = new AudioContext();
-    const source = ctx.createMediaStreamSource(stream);
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 2048;
-    source.connect(analyser);
-    audioCtxRef.current = ctx;
-    analyserRef.current = analyser;
-    return stream;
+    if (!streamRef.current) {
+      streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+    }
+    if (!vadReadyRef.current) {
+      vadReadyRef.current = (async () => {
+        const stream = streamRef.current!;
+        if (isVadWorkletSupported()) {
+          try {
+            vadMicRef.current = await createVadMic({
+              stream,
+              config: VAD_CONFIG,
+              onEvent: (event) => onVadEventRef.current(event),
+            });
+            vadModeRef.current = "worklet";
+            return;
+          } catch {
+            vadModeRef.current = "raf";
+          }
+        }
+        // rAF fallback: an input analyser polled by requestAnimationFrame.
+        const ctx = new AudioContext();
+        const source = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 2048;
+        source.connect(analyser);
+        audioCtxRef.current = ctx;
+        analyserRef.current = analyser;
+      })();
+    }
+    await vadReadyRef.current;
+    return streamRef.current!;
   }, []);
 
   const rms = useCallback((): number => {
@@ -204,7 +244,8 @@ export function useUltronVoice() {
     if (recorder && recorder.state !== "inactive") recorder.stop();
   }, []);
 
-  // VAD loop while recording: stop on trailing silence or max-clip timeout.
+  // rAF fallback only: stop on trailing silence or max-clip timeout. In worklet
+  // mode the AudioWorklet emits speech-end instead and this is never started.
   const monitorWhileRecording = useCallback(() => {
     const tick = () => {
       const level = rms();
@@ -342,8 +383,12 @@ export function useUltronVoice() {
     [patch, speak, resolveReply],
   );
 
+  // Starts the MediaRecorder. `withVad` enables auto-stop (worklet event in
+  // worklet mode, rAF loop in fallback). `armWorklet` arms the worklet here —
+  // used by the wake-word path; the hands-free path arms in startListening and
+  // begins recording only after the worklet's onset event.
   const beginRecording = useCallback(
-    async (withVad: boolean) => {
+    async (withVad: boolean, armWorklet = false) => {
       const stream = await ensureMic();
       chunksRef.current = [];
       speechSeenRef.current = false;
@@ -361,16 +406,31 @@ export function useUltronVoice() {
       };
       recorder.start();
       patch({ status: "recording", error: null });
-      if (withVad) monitorWhileRecording();
+
+      if (vadModeRef.current === "worklet") {
+        if (!withVad) vadMicRef.current?.disarm();
+        else if (armWorklet) vadMicRef.current?.arm();
+        // hands-free with !armWorklet: worklet already armed + in SPEAKING; it
+        // will emit speech-end on its own.
+      } else if (withVad) {
+        monitorWhileRecording();
+      }
     },
     [ensureMic, monitorWhileRecording, patch, sendPipeline, stopVadLoop],
   );
 
-  // Hands-free: listen for speech onset, then record with VAD auto-stop.
+  // Hands-free: arm onset detection, then record once speech starts.
   const startListening = useCallback(() => {
     handsFreeRef.current = true;
     patch({ status: "listening", handsFree: true });
     void ensureMic().then(() => {
+      if (!handsFreeRef.current) return;
+      if (vadModeRef.current === "worklet") {
+        listeningRef.current = true;
+        vadMicRef.current?.arm();
+        return;
+      }
+      // rAF fallback: poll for speech onset.
       const waitForSpeech = () => {
         if (!handsFreeRef.current) return;
         if (rms() > SPEECH_RMS) {
@@ -383,6 +443,27 @@ export function useUltronVoice() {
     });
   }, [beginRecording, ensureMic, patch, rms]);
 
+  // Reacts to worklet VAD events (worklet mode only).
+  const handleVadEvent = useCallback(
+    (event: VadEvent) => {
+      if (event.type === "speech-start") {
+        // Only the hands-free onset starts a recording; in wake/PTT modes the
+        // recorder is already running, so we ignore (and let speech-end stop it).
+        if (handsFreeRef.current && listeningRef.current) {
+          listeningRef.current = false;
+          void beginRecording(true);
+        }
+      } else {
+        finalizeRecording();
+      }
+    },
+    [beginRecording, finalizeRecording],
+  );
+
+  useEffect(() => {
+    onVadEventRef.current = handleVadEvent;
+  }, [handleVadEvent]);
+
   // Wake-word mode: re-arm the listener after each reply.
   const reArm = useCallback(() => {
     armedRef.current = true;
@@ -394,13 +475,14 @@ export function useUltronVoice() {
     if (!armedRef.current) return; // ignore repeat hits within one detection burst
     armedRef.current = false;
     wakeRef.current?.stop(); // pause recognition while we handle the command + reply
-    void beginRecording(true);
+    void beginRecording(true, true); // arm the worklet here for endpoint detection
   }, [beginRecording]);
 
   // --- public controls ---
 
   const startPushToTalk = useCallback(() => {
     handsFreeRef.current = false;
+    listeningRef.current = false;
     void beginRecording(false);
   }, [beginRecording]);
 
@@ -411,7 +493,9 @@ export function useUltronVoice() {
   const toggleHandsFree = useCallback(() => {
     if (handsFreeRef.current) {
       handsFreeRef.current = false;
+      listeningRef.current = false;
       stopVadLoop();
+      vadMicRef.current?.disarm();
       finalizeRecording();
       patch({ status: "idle", handsFree: false });
     } else {
@@ -448,7 +532,9 @@ export function useUltronVoice() {
     }
     // mutually exclusive with hands-free
     handsFreeRef.current = false;
+    listeningRef.current = false;
     stopVadLoop();
+    vadMicRef.current?.disarm();
     wakeModeRef.current = true;
     patch({ wakeActive: true, handsFree: false, error: null });
     reArm();
@@ -472,12 +558,23 @@ export function useUltronVoice() {
     patch({ wakeSupported: isWakeWordSupported() });
   }, [patch]);
 
+  // Resume the VAD audio context when the tab becomes visible again — contexts
+  // can get suspended after a long time backgrounded on some platforms.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void vadMicRef.current?.resume();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   useEffect(() => {
     return () => {
       stopVadLoop();
       wakeRef.current?.stop();
       recorderRef.current?.state !== "inactive" && recorderRef.current?.stop();
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      void vadMicRef.current?.close();
       if (playerRef.current) {
         playerRef.current.pause();
         playerRef.current = null;

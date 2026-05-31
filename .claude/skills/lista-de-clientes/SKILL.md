@@ -5,10 +5,10 @@ allowed-tools: Read, Bash
 ---
 
 ## Clientes
-Nome: nome do cliente
-- Business Manager:  Nome empresa — `772813643612039`
+Nome: brunobracaioli
+- Business Manager:  B2 Tech — `772813643612039`
 - Ad Account:        `[brunobracaioli][cursos][3]` — `225179730538661`
-- Facebook Page:     nome do cliente — `867347659802006`
+- Facebook Page:     brunobracaioli — `867347659802006`
 - URLs: https://b2tech.io, https://claude-code.b2tech.io, https://cca.b2tech.io 
 - Orçamento máximo permitido para esse cliente: 50,00 reais por dia por campanha.
 - materiais desse cliente estão em ".claude\materiais-das-empresas\brunobracaioli"
