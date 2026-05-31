@@ -19,6 +19,22 @@ type ToolDef = {
   handler: ToolHandler;
 };
 
+// Client-side tools have NO server handler: they are executed in the operator's
+// browser. The chat loop (chat.ts) detects a call to one of these and pauses,
+// asking the client to produce the result (e.g. a screen capture) before resuming.
+export const CLIENT_TOOLS = new Set<string>(["capture_screen"]);
+
+const CAPTURE_SCREEN_TOOL: Anthropic.Tool = {
+  name: "capture_screen",
+  description:
+    "Captura o que o operador está vendo na tela AGORA e te entrega a imagem para você analisar com visão. " +
+    "Use quando ele pedir para você VER/olhar/analisar algo na tela (ex.: 'que erro é esse?', " +
+    "'analisa o que estou vendo', 'essa campanha aqui'). Depois de ver a imagem, se precisar de números ou " +
+    "status, use as tools de dados (ex.: identifique a campanha na tela e busque com get_client_overview ou " +
+    "get_campaign_metrics). Se a captura não vier, é porque o operador não compartilhou a tela.",
+  input_schema: { type: "object", properties: {} },
+};
+
 // Fixed server-side allowlist: spoken client slug -> the exact skill the runner may
 // execute. A client absent from a map simply cannot trigger that action. This is the
 // key control that keeps the write tools from becoming a "run any skill" primitive.
@@ -424,7 +440,10 @@ const tools: Record<string, ToolDef> = {
   },
 };
 
-export const toolSpecs: Anthropic.Tool[] = Object.values(tools).map((t) => t.spec);
+export const toolSpecs: Anthropic.Tool[] = [
+  ...Object.values(tools).map((t) => t.spec),
+  CAPTURE_SCREEN_TOOL,
+];
 
 export async function runTool(name: string, input: Record<string, unknown>): Promise<unknown> {
   const tool = tools[name];

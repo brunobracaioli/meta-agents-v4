@@ -32,7 +32,7 @@ function applyStaticHeaders(res: NextResponse, csp: string, isProd: boolean): Ne
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.headers.set("Permissions-Policy", "camera=(), geolocation=(), microphone=(self)");
+  res.headers.set("Permissions-Policy", "camera=(), geolocation=(), microphone=(self), display-capture=(self)");
   if (isProd) {
     res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
   }

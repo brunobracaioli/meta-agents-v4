@@ -60,6 +60,13 @@ const MODE_STYLES: Record<UltronStatus, ModeStyle> = {
     core: "from-violet-200/70 via-fuchsia-400/20 to-transparent",
     rgb: "196, 181, 253",
   },
+  capturing: {
+    label: "SCREEN",
+    text: "text-fuchsia-200",
+    border: "border-fuchsia-300/35",
+    core: "from-fuchsia-200/70 via-violet-400/20 to-transparent",
+    rgb: "240, 171, 252",
+  },
   speaking: {
     label: "VOICE",
     text: "text-emerald-200",

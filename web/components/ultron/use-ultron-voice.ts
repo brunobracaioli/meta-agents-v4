@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSessionId } from "@/lib/ultron/session";
 import { createWakeWord, isWakeWordSupported, type WakeController } from "@/lib/ultron/wake-word";
+import { useScreenShare } from "./use-screen-share";
 
 export type UltronStatus =
   | "idle"
@@ -11,6 +12,7 @@ export type UltronStatus =
   | "recording"
   | "transcribing"
   | "thinking"
+  | "capturing" // grabbing a screen frame for Ultron to look at
   | "speaking"
   | "error";
 
@@ -35,6 +37,11 @@ const SILENCE_RMS = 0.015; // below this counts as silence
 const MAX_CLIP_MS = 12_000; // hard cap per utterance
 const OUTPUT_BAND_COUNT = 18;
 const OUTPUT_FRAME_MS = 48;
+const MAX_CAPTURE_HOPS = 4; // bound client-side capture round-trips per turn
+
+const CLIENT_FALLBACK = "Desculpa, tive um problema agora. Tenta de novo.";
+const NO_SCREEN_MSG =
+  "Não consigo ver sua tela. Ativa o compartilhamento ali no painel do Ultron e me pede de novo.";
 
 function silentOutputBands(): number[] {
   return Array.from({ length: OUTPUT_BAND_COUNT }, () => 0);
@@ -75,6 +82,8 @@ export function useUltronVoice() {
   const armedRef = useRef<boolean>(false);
 
   const patch = useCallback((p: Partial<UltronState>) => setState((s) => ({ ...s, ...p })), []);
+
+  const { sharing, start: startShare, stop: stopShare, captureFrame } = useScreenShare();
 
   const ensureMic = useCallback(async (): Promise<MediaStream> => {
     if (streamRef.current) return streamRef.current;
@@ -270,6 +279,37 @@ export function useUltronVoice() {
     [patch],
   );
 
+  // Sends the transcript to Ultron and resolves any capture_screen pauses: when the
+  // server replies need_capture, grab a frame from the shared screen and resume.
+  const resolveReply = useCallback(
+    async (text: string): Promise<string> => {
+      const chatRes = await fetch("/api/ultron/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId: getSessionId(), text }),
+      });
+      if (!chatRes.ok) throw new Error("chat");
+      let data = (await chatRes.json()) as { reply?: string; status?: string; pendingId?: string };
+
+      let hops = 0;
+      while (data.status === "need_capture" && data.pendingId && hops++ < MAX_CAPTURE_HOPS) {
+        patch({ status: "capturing" });
+        const frame = await captureFrame();
+        if (!frame) return NO_SCREEN_MSG;
+        patch({ status: "thinking" });
+        const capRes = await fetch("/api/ultron/capture", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sessionId: getSessionId(), pendingId: data.pendingId, image: frame }),
+        });
+        if (!capRes.ok) throw new Error("capture");
+        data = (await capRes.json()) as { reply?: string; status?: string; pendingId?: string };
+      }
+      return data.reply ?? CLIENT_FALLBACK;
+    },
+    [captureFrame, patch],
+  );
+
   const sendPipeline = useCallback(
     async (blob: Blob) => {
       if (blob.size < 1200) {
@@ -291,14 +331,7 @@ export function useUltronVoice() {
           return;
         }
         patch({ status: "thinking", transcript: text });
-
-        const chatRes = await fetch("/api/ultron/chat", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ sessionId: getSessionId(), text }),
-        });
-        if (!chatRes.ok) throw new Error("chat");
-        const { reply } = (await chatRes.json()) as { reply: string };
+        const reply = await resolveReply(text);
         patch({ reply });
         await speak(reply);
       } catch {
@@ -306,7 +339,7 @@ export function useUltronVoice() {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [patch, speak],
+    [patch, speak, resolveReply],
   );
 
   const beginRecording = useCallback(
@@ -430,6 +463,11 @@ export function useUltronVoice() {
     speechDoneRef.current?.();
   }, []);
 
+  const toggleShare = useCallback(() => {
+    if (sharing) stopShare();
+    else void startShare();
+  }, [sharing, startShare, stopShare]);
+
   useEffect(() => {
     patch({ wakeSupported: isWakeWordSupported() });
   }, [patch]);
@@ -450,5 +488,14 @@ export function useUltronVoice() {
     };
   }, [stopOutputAnalysis, stopVadLoop]);
 
-  return { state, startPushToTalk, stopPushToTalk, toggleHandsFree, toggleWakeWord, stopSpeaking };
+  return {
+    state,
+    startPushToTalk,
+    stopPushToTalk,
+    toggleHandsFree,
+    toggleWakeWord,
+    stopSpeaking,
+    sharing,
+    toggleShare,
+  };
 }

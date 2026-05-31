@@ -11,7 +11,7 @@ import {
 } from "@/lib/auth/session";
 import { rateLimiters, enforceLimit, clientIp } from "@/lib/ratelimit";
 import { transcribe } from "@/lib/ultron/stt";
-import { runChat } from "@/lib/ultron/chat";
+import { runChat, resumeChat } from "@/lib/ultron/chat";
 import { synthesizeStream } from "@/lib/ultron/tts";
 import { getEvents } from "@/lib/services/events";
 
@@ -19,6 +19,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const MAX_AUDIO_BYTES = 2_500_000; // ~2.5MB; VAD keeps clips short
+const MAX_IMAGE_B64 = 4_000_000; // ~3MB decoded; client downscales to ~1280px JPEG
 
 const app = new Hono().basePath("/api");
 
@@ -33,6 +34,15 @@ const chatSchema = z.object({
 
 const ttsSchema = z.object({
   text: z.string().min(1).max(2000),
+});
+
+const captureSchema = z.object({
+  sessionId: z.string().min(8).max(64),
+  pendingId: z.string().uuid(),
+  image: z.object({
+    media_type: z.enum(["image/jpeg", "image/png", "image/webp"]),
+    data: z.string().min(1),
+  }),
 });
 
 app.post("/auth/login", async (c) => {
@@ -92,10 +102,37 @@ app.post("/ultron/chat", async (c) => {
   if (!parsed.success) return c.json({ error: "invalid_request" }, 400);
 
   try {
-    const { reply, usedTools } = await runChat(parsed.data.sessionId, parsed.data.text);
-    return c.json({ reply, usedTools });
+    const result = await runChat(parsed.data.sessionId, parsed.data.text);
+    if (result.kind === "need_capture") {
+      return c.json({ status: "need_capture", pendingId: result.pendingId, usedTools: result.usedTools });
+    }
+    return c.json({ reply: result.reply, usedTools: result.usedTools });
   } catch (err) {
     console.error(JSON.stringify({ level: "error", event: "chat_failed", message: errMsg(err) }));
+    return c.json({ error: "chat_failed" }, 502);
+  }
+});
+
+// Resumes a chat turn that paused on capture_screen with the browser's screenshot.
+app.post("/ultron/capture", async (c) => {
+  const { allowed } = await enforceLimit(rateLimiters.ultronCapture(), clientIp(c.req.raw), "ultron-capture");
+  if (!allowed) return c.json({ error: "rate_limited" }, 429, { "Retry-After": "60" });
+
+  const parsed = captureSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "invalid_request" }, 400);
+
+  const { data } = parsed.data.image;
+  if (data.length > MAX_IMAGE_B64) return c.json({ error: "image_too_large" }, 413);
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return c.json({ error: "invalid_request" }, 400);
+
+  try {
+    const result = await resumeChat(parsed.data.sessionId, parsed.data.pendingId, parsed.data.image);
+    if (result.kind === "need_capture") {
+      return c.json({ status: "need_capture", pendingId: result.pendingId, usedTools: result.usedTools });
+    }
+    return c.json({ reply: result.reply, usedTools: result.usedTools });
+  } catch (err) {
+    console.error(JSON.stringify({ level: "error", event: "capture_failed", message: errMsg(err) }));
     return c.json({ error: "chat_failed" }, 502);
   }
 });

@@ -10,6 +10,7 @@ const STATUS_LABEL: Record<UltronStatus, string> = {
   recording: "Gravando",
   transcribing: "Transcrevendo",
   thinking: "Pensando",
+  capturing: "Vendo a tela",
   speaking: "Falando",
   error: "Erro",
 };
@@ -21,13 +22,22 @@ const STATUS_COLOR: Record<UltronStatus, string> = {
   recording: "bg-orange-300 shadow-[0_0_14px_rgba(251,146,60,0.9)]",
   transcribing: "bg-amber-300 shadow-[0_0_14px_rgba(252,211,77,0.9)]",
   thinking: "bg-violet-300 shadow-[0_0_14px_rgba(196,181,253,0.9)]",
+  capturing: "bg-fuchsia-300 shadow-[0_0_14px_rgba(240,171,252,0.9)]",
   speaking: "bg-emerald-300 shadow-[0_0_16px_rgba(110,231,183,0.95)]",
   error: "bg-red-600",
 };
 
 export function UltronWidget() {
-  const { state, startPushToTalk, stopPushToTalk, toggleHandsFree, toggleWakeWord, stopSpeaking } =
-    useUltronVoice();
+  const {
+    state,
+    startPushToTalk,
+    stopPushToTalk,
+    toggleHandsFree,
+    toggleWakeWord,
+    stopSpeaking,
+    sharing,
+    toggleShare,
+  } = useUltronVoice();
   const idleish = state.status === "idle" || state.status === "armed" || state.status === "listening";
   const busy = !idleish && state.status !== "error";
 
@@ -141,9 +151,22 @@ export function UltronWidget() {
         )}
       </div>
 
+      <button
+        onClick={toggleShare}
+        aria-pressed={sharing}
+        className={`mt-2 min-h-9 w-full rounded-md border px-3 py-2 text-xs font-semibold transition ${
+          sharing
+            ? "border-fuchsia-200/45 bg-fuchsia-400/20 text-fuchsia-100"
+            : "border-white/15 bg-white/[0.02] text-white/70 hover:border-fuchsia-200/35 hover:text-white"
+        }`}
+        title="Compartilhe a tela uma vez; depois o Ultron consegue olhar quando você pedir."
+      >
+        {sharing ? "Ultron está vendo sua tela" : "Ultron pode ver minha tela"}
+      </button>
+
       <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
         <span>PTT</span>
-        <span>{state.wakeActive ? 'Diga "Ultron"' : state.handsFree ? "Mic ativo" : "Manual"}</span>
+        <span>{sharing ? "Tela ON" : state.wakeActive ? 'Diga "Ultron"' : state.handsFree ? "Mic ativo" : "Manual"}</span>
       </div>
     </div>
   );
