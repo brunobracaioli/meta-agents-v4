@@ -1,6 +1,7 @@
 # Spec: Ultron Screen Vision
 
-> Status: accepted · Owner: operação · Última atualização: 2026-05-31
+> Status: **shipped** — em produção (Vercel) e verificado pelo operador em 2026-05-31 (commit `d70b1bd`).
+> Owner: operação · Última atualização: 2026-05-31
 > ADR: [0010-ultron-screen-vision](../adr/0010-ultron-screen-vision.md) ·
 > Threat model: [ultron-screen-vision](../security/threats/ultron-screen-vision.md)
 
