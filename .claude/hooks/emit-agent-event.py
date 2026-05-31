@@ -113,6 +113,10 @@ def _emit(row: dict) -> None:
     key = os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not base or not key:
         return
+    # Strip stray whitespace/CR: a secret set from a CRLF source carries a trailing \r
+    # that would make the URL illegal and silently drop the event.
+    base = base.strip()
+    key = key.strip()
     url = f"{base.rstrip('/')}/rest/v1/{_INGEST_TABLE}"
     data = json.dumps(row).encode("utf-8")
     req = urllib.request.Request(

@@ -22,6 +22,11 @@ WORKER_ID="${FLY_MACHINE_ID:-$(hostname)}"
 SUPABASE_URL="${SUPABASE_URL:-}"
 SUPABASE_KEY="${SUPABASE_SECRET_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}"
 
+# Strip stray whitespace/CR — a secret set from a CRLF source carries a trailing \r
+# that makes the URL illegal (`curl: (3) bad/illegal format`) and silently breaks polling.
+SUPABASE_URL="$(printf '%s' "${SUPABASE_URL}" | tr -d '[:space:]')"
+SUPABASE_KEY="$(printf '%s' "${SUPABASE_KEY}" | tr -d '[:space:]')"
+
 CURRENT_JOB_ID=""
 FINALIZED=""
 
