@@ -91,7 +91,7 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Write|ads_create_campaign|mcp__supabase__execute_sql",
+        "matcher": "Write|mcp__meta-ads-mcp__ads_create_campaign|mcp__supabase__execute_sql",
         "hooks": [
           {
             "type": "command",
@@ -102,7 +102,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Task|Agent|Skill|WebFetch|WebSearch|ads_create|ads_update|ads_activate|ads_get_ad_entities|ads_insights|execute_sql|apply_migration",
+        "matcher": "Task|Agent|Skill|WebFetch|WebSearch|mcp__meta-ads-mcp__ads_.*|mcp__supabase__execute_sql|mcp__supabase__apply_migration",
         "hooks": [
           {
             "type": "command",
