@@ -23,6 +23,7 @@ describe("deriveNeuralCoreState", () => {
       mode: "stand-by",
       recentEventCount: 0,
       activeSubagents: [],
+      overflowSubagentCount: 0,
       lastEventAt: null,
     });
   });
@@ -48,7 +49,7 @@ describe("deriveNeuralCoreState", () => {
     expect(state.recentEventCount).toBe(1);
   });
 
-  it("creates colored branches for recent subagents", () => {
+  it("creates stable colored branches for recent subagents", () => {
     const state = deriveNeuralCoreState(
       [
         event({ agent_name: "Audience", agent_type: "subagent", ts: new Date(NOW - 10_000).toISOString() }),
@@ -58,8 +59,42 @@ describe("deriveNeuralCoreState", () => {
     );
 
     expect(state.activeSubagents).toEqual([
-      expect.objectContaining({ name: "Audience", color: "#f472b6" }),
-      expect.objectContaining({ name: "Creative", color: "#6ee7b7" }),
+      expect.objectContaining({ name: "Audience", color: expect.stringMatching(/^#[0-9a-f]{6}$/) }),
+      expect.objectContaining({ name: "Creative", color: expect.stringMatching(/^#[0-9a-f]{6}$/) }),
+    ]);
+  });
+
+  it("preserves a subagent color when the active set changes", () => {
+    const first = deriveNeuralCoreState(
+      [event({ agent_name: "Creative", agent_type: "subagent", ts: new Date(NOW - 10_000).toISOString() })],
+      NOW,
+    );
+    const second = deriveNeuralCoreState(
+      [
+        event({ agent_name: "Audience", agent_type: "subagent", ts: new Date(NOW - 8_000).toISOString() }),
+        event({ agent_name: "Creative", agent_type: "subagent", ts: new Date(NOW - 10_000).toISOString() }),
+        event({ agent_name: "Planner", agent_type: "subagent", ts: new Date(NOW - 12_000).toISOString() }),
+      ],
+      NOW,
+    );
+
+    expect(second.activeSubagents.find((subagent) => subagent.name === "Creative")?.color).toBe(
+      first.activeSubagents[0]?.color,
+    );
+  });
+
+  it("does not duplicate subagents when repeat events arrive", () => {
+    const state = deriveNeuralCoreState(
+      [
+        event({ agent_name: "Creative", agent_type: "subagent", ts: new Date(NOW - 50_000).toISOString() }),
+        event({ agent_name: "Creative", agent_type: "subagent", ts: new Date(NOW - 20_000).toISOString() }),
+        event({ agent_name: "Creative", agent_type: "subagent", ts: new Date(NOW - 5_000).toISOString() }),
+      ],
+      NOW,
+    );
+
+    expect(state.activeSubagents).toEqual([
+      expect.objectContaining({ name: "Creative", eventCount: 3, lastEventAt: new Date(NOW - 5_000).toISOString() }),
     ]);
   });
 
@@ -75,9 +110,9 @@ describe("deriveNeuralCoreState", () => {
     expect(state.activeSubagents.map((subagent) => subagent.name)).toEqual(["Fresh Subagent"]);
   });
 
-  it("limits visual subagents to four", () => {
+  it("limits visual subagents to six and reports overflow", () => {
     const state = deriveNeuralCoreState(
-      ["A", "B", "C", "D", "E"].map((name, index) =>
+      ["A", "B", "C", "D", "E", "F", "G", "H"].map((name, index) =>
         event({
           agent_name: name,
           agent_type: "subagent",
@@ -87,7 +122,8 @@ describe("deriveNeuralCoreState", () => {
       NOW,
     );
 
-    expect(state.activeSubagents).toHaveLength(4);
-    expect(state.activeSubagents.map((subagent) => subagent.name)).toEqual(["A", "B", "C", "D"]);
+    expect(state.activeSubagents).toHaveLength(6);
+    expect(state.activeSubagents.map((subagent) => subagent.name)).toEqual(["A", "B", "C", "D", "E", "F"]);
+    expect(state.overflowSubagentCount).toBe(2);
   });
 });

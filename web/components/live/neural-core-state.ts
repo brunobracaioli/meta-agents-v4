@@ -22,18 +22,27 @@ export type NeuralCoreState = {
   mode: NeuralCoreMode;
   activeAgents: string[];
   activeSubagents: ActiveSubagent[];
+  overflowSubagentCount: number;
   recentEventCount: number;
   lastEventAt: string | null;
 };
 
 const CORE_ACTIVITY_MS = 60_000;
 const SUBAGENT_ACTIVITY_MS = 120_000;
-const MAX_SUBAGENTS = 4;
-const SUBAGENT_COLORS = ["#f472b6", "#6ee7b7", "#fb923c", "#c4b5fd"];
+const MAX_SUBAGENTS = 6;
+const SUBAGENT_COLORS = ["#f472b6", "#6ee7b7", "#fb923c", "#c4b5fd", "#facc15", "#60a5fa"];
 
 function eventTime(event: Pick<LiveEvent, "ts">): number {
   const parsed = Date.parse(event.ts);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function colorForSubagent(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  }
+  return SUBAGENT_COLORS[hash % SUBAGENT_COLORS.length] ?? "#f472b6";
 }
 
 export function deriveNeuralCoreState(events: LiveEvent[], nowMs: number): NeuralCoreState {
@@ -60,19 +69,15 @@ export function deriveNeuralCoreState(events: LiveEvent[], nowMs: number): Neura
     }
   }
 
-  const subagentColorOrder = Array.from(subagentMap.keys()).sort((a, b) => a.localeCompare(b));
-  const activeSubagents = Array.from(subagentMap.entries())
+  const allActiveSubagents = Array.from(subagentMap.entries())
     .sort(([, a], [, b]) => b.lastMs - a.lastMs)
-    .slice(0, MAX_SUBAGENTS)
-    .map(([name, value]) => {
-      const colorIndex = Math.max(0, subagentColorOrder.indexOf(name)) % SUBAGENT_COLORS.length;
-      return {
-        name,
-        color: SUBAGENT_COLORS[colorIndex] ?? "#f472b6",
-        lastEventAt: value.lastEventAt,
-        eventCount: value.eventCount,
-      };
-    });
+    .map(([name, value]) => ({
+      name,
+      color: colorForSubagent(name),
+      lastEventAt: value.lastEventAt,
+      eventCount: value.eventCount,
+    }));
+  const activeSubagents = allActiveSubagents.slice(0, MAX_SUBAGENTS);
 
   const lastEvent = events.reduce<LiveEvent | null>((latest, event) => {
     if (!latest) return event;
@@ -83,6 +88,7 @@ export function deriveNeuralCoreState(events: LiveEvent[], nowMs: number): Neura
     mode,
     activeAgents,
     activeSubagents,
+    overflowSubagentCount: Math.max(0, allActiveSubagents.length - activeSubagents.length),
     recentEventCount: recentEvents.length,
     lastEventAt: lastEvent?.ts ?? null,
   };

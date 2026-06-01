@@ -120,7 +120,7 @@ export function LiveFeed() {
       </div>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="tech-panel-strong overflow-hidden rounded-lg p-3">
+        <div className="overflow-hidden rounded-lg border border-cyan-200/20 bg-[#030712] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_24px_80px_rgba(0,0,0,0.34)]">
           <NeuralCoreScene state={coreState} />
         </div>
 
@@ -168,6 +168,14 @@ export function LiveFeed() {
                   Nenhum subagent com evento nos últimos 120s.
                 </p>
               )}
+              {coreState.overflowSubagentCount > 0 ? (
+                <div className="flex items-center justify-between gap-3 rounded border border-white/10 bg-white/[0.02] px-3 py-2">
+                  <span className="truncate text-sm text-white/55">Subagents em overflow visual</span>
+                  <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] text-cyan-100/45">
+                    +{coreState.overflowSubagentCount}
+                  </span>
+                </div>
+              ) : null}
             </div>
           </section>
         </div>
