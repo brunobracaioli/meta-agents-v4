@@ -21,7 +21,7 @@ ENV TZ=America/Sao_Paulo \
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      bash curl ca-certificates tini jq tzdata git \
+      bash curl ca-certificates tini jq tzdata git python3 \
  && ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime \
  && echo "${TZ}" > /etc/timezone \
  && rm -rf /var/lib/apt/lists/*
