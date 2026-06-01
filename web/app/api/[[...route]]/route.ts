@@ -13,7 +13,7 @@ import { rateLimiters, enforceLimit, clientIp } from "@/lib/ratelimit";
 import { transcribe } from "@/lib/ultron/stt";
 import { runChat, resumeChat } from "@/lib/ultron/chat";
 import { synthesizeStream } from "@/lib/ultron/tts";
-import { getEvents } from "@/lib/services/events";
+import { getEvents, getProcesses } from "@/lib/services/events";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -166,8 +166,8 @@ app.get("/dashboard/events", async (c) => {
   const sinceRaw = c.req.query("since");
   const since = sinceRaw && !Number.isNaN(Date.parse(sinceRaw)) ? sinceRaw : undefined;
   try {
-    const events = await getEvents(since);
-    return c.json({ events, now: new Date().toISOString() });
+    const [events, processes] = await Promise.all([getEvents(since), getProcesses()]);
+    return c.json({ events, processes, now: new Date().toISOString() });
   } catch (err) {
     console.error(JSON.stringify({ level: "error", event: "events_failed", message: errMsg(err) }));
     return c.json({ error: "events_failed" }, 502);

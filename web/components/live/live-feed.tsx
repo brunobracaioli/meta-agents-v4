@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NeuralCoreScene } from "./neural-core-scene";
-import { deriveNeuralCoreState, type LiveEvent } from "./neural-core-state";
+import { deriveNeuralCoreState, type LiveEvent, type LiveProcess } from "./neural-core-state";
 
 const POLL_MS = 2000;
 const MAX_KEEP = 200;
@@ -28,8 +28,32 @@ function ageOf(iso: string, nowMs: number): string {
   return `${Math.floor(seconds / 60)}m`;
 }
 
+function statusClass(state: "activated" | "stand-by" | "success" | "error"): string {
+  if (state === "activated") return "border-cyan-300/30 bg-cyan-400/10 text-cyan-100";
+  if (state === "success") return "border-emerald-300/25 bg-emerald-400/10 text-emerald-200";
+  if (state === "error") return "border-red-300/25 bg-red-500/10 text-red-200";
+  return "border-white/10 bg-white/[0.03] text-white/45";
+}
+
+function statusDotClass(state: "activated" | "stand-by" | "success" | "error"): string {
+  if (state === "activated") return "bg-cyan-200 shadow-[0_0_14px_rgba(103,232,249,0.9)]";
+  if (state === "success") return "bg-emerald-300 shadow-[0_0_14px_rgba(110,231,183,0.75)]";
+  if (state === "error") return "bg-red-400 shadow-[0_0_14px_rgba(248,113,113,0.75)]";
+  return "bg-white/25";
+}
+
+function processSummary(process: LiveProcess | null, nowMs: number): string {
+  if (!process) return "Nenhum processo carregado";
+  const marker = process.state === "active" ? process.phase : process.state;
+  const iso = process.finishedAt ?? process.startedAt;
+  const age = iso ? ` · ${ageOf(iso, nowMs)} atrás` : "";
+  const error = process.error ? ` · ${process.error}` : "";
+  return `${process.skill} · ${marker}${age}${error}`;
+}
+
 export function LiveFeed() {
   const [events, setEvents] = useState<LiveEvent[]>([]);
+  const [processes, setProcesses] = useState<LiveProcess[]>([]);
   const [connected, setConnected] = useState(true);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const sinceRef = useRef<string | undefined>(undefined);
@@ -42,9 +66,10 @@ export function LiveFeed() {
         : "/api/dashboard/events";
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error("poll");
-      const data = (await res.json()) as { events: LiveEvent[]; now: string };
+      const data = (await res.json()) as { events: LiveEvent[]; processes?: LiveProcess[]; now: string };
       setConnected(true);
       setNowMs(Date.parse(data.now));
+      setProcesses(data.processes ?? []);
       if (data.events.length > 0) {
         const fresh = data.events.filter((e) => !seenRef.current.has(e.id));
         fresh.forEach((e) => seenRef.current.add(e.id));
@@ -73,10 +98,15 @@ export function LiveFeed() {
     return () => clearInterval(id);
   }, []);
 
-  const coreState = useMemo(() => deriveNeuralCoreState(events, nowMs), [events, nowMs]);
+  const coreState = useMemo(() => deriveNeuralCoreState(events, nowMs, processes), [events, nowMs, processes]);
   const feedEvents = useMemo(() => events.slice(-MAX_FEED).reverse(), [events]);
   const latestEvent = feedEvents[0] ?? null;
-  const activeNodeCount = coreState.activeAgents.length;
+  const displayState: "activated" | "stand-by" | "success" | "error" =
+    coreState.mode === "activated"
+      ? "activated"
+      : coreState.lastProcess?.state === "success" || coreState.lastProcess?.state === "error"
+        ? coreState.lastProcess.state
+        : "stand-by";
 
   return (
     <div className="space-y-5">
@@ -85,7 +115,7 @@ export function LiveFeed() {
           <p className="font-mono text-xs uppercase tracking-[0.24em] text-cyan-200/55">Neural Core Interface</p>
           <h1 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">Operação ao vivo</h1>
           <p className="mt-1 max-w-2xl text-sm text-white/48">
-            Espelho em tempo real de `agent_events`, com ativação baseada somente nos eventos recebidos.
+            Estado baseado em `agent_jobs` e lifecycle de `run-skill.sh`; `agent_events` alimenta o feed de passos.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -101,20 +131,12 @@ export function LiveFeed() {
             {connected ? "Conectado" : "Reconectando"}
           </span>
           <span
-            className={`inline-flex items-center gap-2 rounded border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] ${
-              coreState.mode === "activated"
-                ? "border-cyan-300/30 bg-cyan-400/10 text-cyan-100"
-                : "border-white/10 bg-white/[0.03] text-white/45"
-            }`}
+            className={`inline-flex items-center gap-2 rounded border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] ${statusClass(
+              displayState,
+            )}`}
           >
-            <span
-              className={`h-2 w-2 rounded-full ${
-                coreState.mode === "activated"
-                  ? "bg-cyan-200 shadow-[0_0_14px_rgba(103,232,249,0.9)]"
-                  : "bg-white/25"
-              }`}
-            />
-            {coreState.mode}
+            <span className={`h-2 w-2 rounded-full ${statusDotClass(displayState)}`} />
+            {displayState}
           </span>
         </div>
       </div>
@@ -129,16 +151,20 @@ export function LiveFeed() {
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-100/45">Core telemetry</p>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div className="rounded border border-white/10 bg-white/[0.025] p-3">
-                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/35">Eventos 60s</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{coreState.recentEventCount}</p>
+                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/35">Processos ativos</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{coreState.activeProcessCount}</p>
               </div>
               <div className="rounded border border-white/10 bg-white/[0.025] p-3">
-                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/35">Nós ativos</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{activeNodeCount}</p>
+                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/35">Subagents 120s</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{coreState.activeSubagents.length}</p>
               </div>
             </div>
             <div className="mt-4 rounded border border-cyan-200/10 bg-cyan-300/[0.035] p-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-cyan-100/45">Último pulso</p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-cyan-100/45">Processo</p>
+              <p className="mt-2 text-sm text-white/80">{processSummary(coreState.lastProcess, nowMs)}</p>
+            </div>
+            <div className="mt-3 rounded border border-cyan-200/10 bg-cyan-300/[0.035] p-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-cyan-100/45">Último passo</p>
               <p className="mt-2 text-sm text-white/80">
                 {latestEvent ? `${latestEvent.agent_name} · ${ageOf(latestEvent.ts, nowMs)} atrás` : "Sem atividade carregada"}
               </p>
@@ -185,7 +211,7 @@ export function LiveFeed() {
         <div className="tech-panel rounded-lg p-4">
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-100/45">Fluxo de dados</p>
           <div className="mt-4 space-y-3">
-            {["poll /api/dashboard/events", "agent_events stream", "HUD render"].map((label, index) => (
+            {["agent_jobs/lifecycle state", "agent_events stream", "HUD render"].map((label, index) => (
               <div key={label} className="flex items-center gap-3">
                 <span className="grid h-7 w-7 shrink-0 place-items-center rounded border border-cyan-200/15 bg-cyan-300/10 font-mono text-[10px] text-cyan-100/70">
                   {index + 1}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveNeuralCoreState, type LiveEvent } from "./neural-core-state";
+import { deriveNeuralCoreState, type LiveEvent, type LiveProcess } from "./neural-core-state";
 
 const NOW = Date.parse("2026-06-01T13:00:00.000Z");
 let nextId = 0;
@@ -17,6 +17,20 @@ function event(overrides: Partial<LiveEvent> = {}): LiveEvent {
   };
 }
 
+function process(overrides: Partial<LiveProcess> = {}): LiveProcess {
+  return {
+    id: overrides.id ?? "process-1",
+    source: overrides.source ?? "agent_job",
+    skill: overrides.skill ?? "create-traffic-brunobracaioli-campaign",
+    kind: overrides.kind ?? "create",
+    state: overrides.state ?? "active",
+    phase: overrides.phase ?? "running",
+    startedAt: overrides.startedAt ?? new Date(NOW - 5 * 60_000).toISOString(),
+    finishedAt: overrides.finishedAt ?? null,
+    error: overrides.error ?? null,
+  };
+}
+
 describe("deriveNeuralCoreState", () => {
   it("returns stand-by with no events", () => {
     expect(deriveNeuralCoreState([], NOW)).toMatchObject({
@@ -24,6 +38,8 @@ describe("deriveNeuralCoreState", () => {
       recentEventCount: 0,
       activeSubagents: [],
       overflowSubagentCount: 0,
+      activeProcessCount: 0,
+      lastProcess: null,
       lastEventAt: null,
     });
   });
@@ -38,14 +54,75 @@ describe("deriveNeuralCoreState", () => {
     expect(state.recentEventCount).toBe(0);
   });
 
-  it("activates the core when any event is recent", () => {
+  it("counts recent events without activating the core by event recency alone", () => {
     const state = deriveNeuralCoreState(
       [event({ agent_name: "Planner", ts: new Date(NOW - 20_000).toISOString() })],
       NOW,
     );
 
+    expect(state.mode).toBe("stand-by");
+    expect(state.activeAgents).toEqual([]);
+    expect(state.recentEventCount).toBe(1);
+  });
+
+  it("keeps the core activated while there is an active process, even without recent events", () => {
+    const state = deriveNeuralCoreState(
+      [event({ ts: new Date(NOW - 10 * 60_000).toISOString() })],
+      NOW,
+      [process({ state: "active", phase: "pending", startedAt: new Date(NOW - 10 * 60_000).toISOString() })],
+    );
+
     expect(state.mode).toBe("activated");
-    expect(state.activeAgents).toEqual(["Planner"]);
+    expect(state.activeAgents).toEqual(["create-traffic-brunobracaioli-campaign"]);
+    expect(state.activeProcessCount).toBe(1);
+  });
+
+  it("turns the core off immediately when the process succeeds", () => {
+    const state = deriveNeuralCoreState(
+      [event({ ts: new Date(NOW - 5_000).toISOString() })],
+      NOW,
+      [process({ state: "success", phase: "completed", finishedAt: new Date(NOW - 4_000).toISOString() })],
+    );
+
+    expect(state.mode).toBe("stand-by");
+    expect(state.activeProcessCount).toBe(0);
+    expect(state.lastProcess).toEqual(expect.objectContaining({ state: "success", phase: "completed" }));
+  });
+
+  it("turns the core off for terminal errors and preserves the error result", () => {
+    const state = deriveNeuralCoreState(
+      [event({ ts: new Date(NOW - 5_000).toISOString() })],
+      NOW,
+      [
+        process({
+          state: "error",
+          phase: "failed",
+          finishedAt: new Date(NOW - 4_000).toISOString(),
+          error: "Meta API failed",
+        }),
+      ],
+    );
+
+    expect(state.mode).toBe("stand-by");
+    expect(state.lastProcess).toEqual(expect.objectContaining({ state: "error", error: "Meta API failed" }));
+  });
+
+  it("does not reactivate from a recent event when the related process already ended", () => {
+    const state = deriveNeuralCoreState(
+      [event({ run_id: "run-1", ts: new Date(NOW - 2_000).toISOString() })],
+      NOW,
+      [
+        process({
+          id: "run-1",
+          source: "agent_run",
+          state: "success",
+          phase: "end",
+          finishedAt: new Date(NOW - 1_000).toISOString(),
+        }),
+      ],
+    );
+
+    expect(state.mode).toBe("stand-by");
     expect(state.recentEventCount).toBe(1);
   });
 

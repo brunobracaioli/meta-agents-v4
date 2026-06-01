@@ -115,7 +115,7 @@ patch_job "${JOB_ID}" "{\"status\":\"running\",\"started_at\":\"$(now_iso)\"}"
 # it was charset-validated above, so this is safe.
 RUN_LOG=$(mktemp)
 # shellcheck disable=SC2086
-/app/scripts/run-skill.sh "${SKILL}" ${ARGS} >"${RUN_LOG}" 2>&1
+AGENT_JOB_ID="${JOB_ID}" /app/scripts/run-skill.sh "${SKILL}" ${ARGS} >"${RUN_LOG}" 2>&1
 EC=$?
 
 if [[ ${EC} -eq 0 ]]; then

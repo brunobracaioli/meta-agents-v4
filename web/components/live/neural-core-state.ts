@@ -9,6 +9,18 @@ export type LiveEvent = {
   summary: string | null;
 };
 
+export type LiveProcess = {
+  id: string;
+  source: "agent_job" | "agent_run";
+  skill: string;
+  kind: string | null;
+  state: "active" | "success" | "error";
+  phase: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string | null;
+};
+
 export type NeuralCoreMode = "stand-by" | "activated";
 
 export type ActiveSubagent = {
@@ -24,6 +36,8 @@ export type NeuralCoreState = {
   activeSubagents: ActiveSubagent[];
   overflowSubagentCount: number;
   recentEventCount: number;
+  activeProcessCount: number;
+  lastProcess: LiveProcess | null;
   lastEventAt: string | null;
 };
 
@@ -45,10 +59,12 @@ function colorForSubagent(name: string): string {
   return SUBAGENT_COLORS[hash % SUBAGENT_COLORS.length] ?? "#f472b6";
 }
 
-export function deriveNeuralCoreState(events: LiveEvent[], nowMs: number): NeuralCoreState {
+export function deriveNeuralCoreState(events: LiveEvent[], nowMs: number, processes: LiveProcess[] = []): NeuralCoreState {
   const recentEvents = events.filter((event) => nowMs - eventTime(event) <= CORE_ACTIVITY_MS);
-  const mode: NeuralCoreMode = recentEvents.length > 0 ? "activated" : "stand-by";
-  const activeAgents = Array.from(new Set(recentEvents.map((event) => event.agent_name))).sort((a, b) =>
+  const activeProcesses = processes.filter((process) => process.state === "active").sort(compareProcesses);
+  const terminalProcesses = processes.filter((process) => process.state !== "active").sort(compareProcesses);
+  const mode: NeuralCoreMode = activeProcesses.length > 0 ? "activated" : "stand-by";
+  const activeAgents = Array.from(new Set(activeProcesses.map((process) => process.skill))).sort((a, b) =>
     a.localeCompare(b),
   );
 
@@ -90,6 +106,17 @@ export function deriveNeuralCoreState(events: LiveEvent[], nowMs: number): Neura
     activeSubagents,
     overflowSubagentCount: Math.max(0, allActiveSubagents.length - activeSubagents.length),
     recentEventCount: recentEvents.length,
+    activeProcessCount: activeProcesses.length,
+    lastProcess: activeProcesses[0] ?? terminalProcesses[0] ?? null,
     lastEventAt: lastEvent?.ts ?? null,
   };
+}
+
+function compareProcesses(a: LiveProcess, b: LiveProcess): number {
+  return processTime(b) - processTime(a);
+}
+
+function processTime(process: LiveProcess): number {
+  const parsed = Date.parse(process.finishedAt ?? process.startedAt ?? "");
+  return Number.isFinite(parsed) ? parsed : 0;
 }
