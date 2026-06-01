@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useUltronVoice, type UltronStatus } from "./use-ultron-voice";
 import { UltronVisualizer } from "./ultron-visualizer";
 
@@ -28,6 +29,7 @@ const STATUS_COLOR: Record<UltronStatus, string> = {
 };
 
 export function UltronWidget() {
+  const [open, setOpen] = useState(false);
   const {
     state,
     startPushToTalk,
@@ -40,6 +42,21 @@ export function UltronWidget() {
   } = useUltronVoice();
   const idleish = state.status === "idle" || state.status === "armed" || state.status === "listening";
   const busy = !idleish && state.status !== "error";
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="fixed bottom-4 right-4 z-50 grid h-11 w-11 place-items-center rounded-full border border-cyan-300/25 bg-[#06101a]/95 font-mono text-sm font-semibold uppercase text-cyan-100 shadow-[0_18px_55px_rgba(0,0,0,0.45)] backdrop-blur-xl transition hover:border-cyan-200/45 sm:bottom-6 sm:right-6"
+        aria-label="Abrir console Ultron"
+        title="Abrir Ultron"
+      >
+        <span className={`absolute left-1.5 top-1.5 h-2.5 w-2.5 rounded-full ${STATUS_COLOR[state.status]}`} />
+        U
+      </button>
+    );
+  }
 
   return (
     <div className="fixed bottom-4 right-4 z-50 max-h-[calc(100vh-2rem)] w-[min(calc(100vw-2rem),24rem)] overflow-y-auto rounded-lg border border-cyan-300/20 bg-[#06101a]/95 p-3 shadow-[0_24px_90px_rgba(0,0,0,0.5)] backdrop-blur-xl sm:bottom-6 sm:right-6">
@@ -56,6 +73,15 @@ export function UltronWidget() {
         <span className="shrink-0 rounded border border-white/10 bg-white/[0.03] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-white/55">
           {STATUS_LABEL[state.status]}
         </span>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="grid h-7 w-7 shrink-0 place-items-center rounded border border-white/10 bg-white/[0.03] font-mono text-xs text-white/60 transition hover:border-cyan-200/35 hover:text-white"
+          aria-label="Recolher console Ultron"
+          title="Recolher"
+        >
+          ×
+        </button>
       </div>
 
       <UltronVisualizer
