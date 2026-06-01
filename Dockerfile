@@ -49,6 +49,19 @@ COPY --chown=runner:runner crontab /app/crontab
 
 RUN chmod +x /app/scripts/*.sh
 
+# Claude Code discovers project `.claude/settings.json` by walking up to a `.git`
+# repo root — but /app is not a git repo (`.git` is dockerignored), so the project
+# hooks never load in the headless runner. Promote the hooks to *managed settings*
+# (/etc/claude-code/managed-settings.json): highest precedence, git-independent,
+# unaffected by the /home/runner/.claude volume mount, and approval-free under `-p`.
+# Derived from the single source of truth (.claude/settings.json) at build time.
+# `${CLAUDE_PROJECT_DIR}` is unreliable without a detected project root (no .git),
+# so pin the hook commands to the fixed runner path /app.
+RUN mkdir -p /etc/claude-code \
+ && jq '{hooks: .hooks}' /app/.claude/settings.json \
+    | sed 's#\${CLAUDE_PROJECT_DIR}#/app#g' \
+    > /etc/claude-code/managed-settings.json
+
 USER runner
 
 VOLUME ["/home/runner/.claude"]
