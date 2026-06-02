@@ -1,6 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  AGENT_TRIGGER_CHANNEL,
+  AGENT_TRIGGER_EVENT,
+  isAgentTrigger,
+  type AgentTrigger,
+} from "@/lib/ultron/agent-trigger";
 import { getSessionId } from "@/lib/ultron/session";
 import { createWakeWord, isWakeWordSupported, type WakeController } from "@/lib/ultron/wake-word";
 import { createVadMic, isVadWorkletSupported, type VadEvent, type VadMicHandle } from "./vad-mic";
@@ -54,6 +60,13 @@ const CLIENT_FALLBACK = "Desculpa, tive um problema agora. Tenta de novo.";
 const NO_SCREEN_MSG =
   "Não consigo ver sua tela. Ativa o compartilhamento ali no painel do Ultron e me pede de novo.";
 
+type UltronApiResponse = {
+  reply?: string;
+  status?: string;
+  pendingId?: string;
+  agentTriggers?: unknown[];
+};
+
 function silentOutputBands(): number[] {
   return Array.from({ length: OUTPUT_BAND_COUNT }, () => 0);
 }
@@ -91,6 +104,7 @@ export function useUltronVoice() {
   const wakeRef = useRef<WakeController | null>(null);
   const wakeModeRef = useRef<boolean>(false);
   const armedRef = useRef<boolean>(false);
+  const publishedTriggerIdsRef = useRef<Set<string>>(new Set());
 
   // VAD-via-worklet state. `vadMode` is decided once on first mic setup.
   const vadMicRef = useRef<VadMicHandle | null>(null);
@@ -102,6 +116,29 @@ export function useUltronVoice() {
   const patch = useCallback((p: Partial<UltronState>) => setState((s) => ({ ...s, ...p })), []);
 
   const { sharing, start: startShare, stop: stopShare, captureFrame } = useScreenShare();
+
+  const publishAgentTriggers = useCallback((values: unknown[] | undefined) => {
+    if (!values || values.length === 0) return;
+    const fresh = values.filter(isAgentTrigger).filter((trigger) => {
+      if (publishedTriggerIdsRef.current.has(trigger.jobId)) return false;
+      publishedTriggerIdsRef.current.add(trigger.jobId);
+      return true;
+    });
+    if (fresh.length === 0) return;
+
+    fresh.forEach((trigger) => {
+      window.dispatchEvent(new CustomEvent<AgentTrigger>(AGENT_TRIGGER_EVENT, { detail: trigger }));
+    });
+
+    if (!("BroadcastChannel" in window)) return;
+    try {
+      const channel = new BroadcastChannel(AGENT_TRIGGER_CHANNEL);
+      fresh.forEach((trigger) => channel.postMessage(trigger));
+      window.setTimeout(() => channel.close(), 0);
+    } catch {
+      // Same-window CustomEvent already delivered the trigger; cross-tab delivery is best-effort.
+    }
+  }, []);
 
   // Sets up the mic stream and, once, the VAD path (worklet preferred; rAF
   // fallback). Idempotent: safe to call from every entry point.
@@ -330,7 +367,8 @@ export function useUltronVoice() {
         body: JSON.stringify({ sessionId: getSessionId(), text }),
       });
       if (!chatRes.ok) throw new Error("chat");
-      let data = (await chatRes.json()) as { reply?: string; status?: string; pendingId?: string };
+      let data = (await chatRes.json()) as UltronApiResponse;
+      publishAgentTriggers(data.agentTriggers);
 
       let hops = 0;
       while (data.status === "need_capture" && data.pendingId && hops++ < MAX_CAPTURE_HOPS) {
@@ -344,11 +382,12 @@ export function useUltronVoice() {
           body: JSON.stringify({ sessionId: getSessionId(), pendingId: data.pendingId, image: frame }),
         });
         if (!capRes.ok) throw new Error("capture");
-        data = (await capRes.json()) as { reply?: string; status?: string; pendingId?: string };
+        data = (await capRes.json()) as UltronApiResponse;
+        publishAgentTriggers(data.agentTriggers);
       }
       return data.reply ?? CLIENT_FALLBACK;
     },
-    [captureFrame, patch],
+    [captureFrame, patch, publishAgentTriggers],
   );
 
   const sendPipeline = useCallback(

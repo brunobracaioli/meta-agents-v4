@@ -1,6 +1,7 @@
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import { redis } from "@/lib/redis";
+import type { AgentTrigger } from "@/lib/ultron/agent-trigger";
 import type { ChatTurn } from "@/lib/ultron/memory";
 
 /**
@@ -24,6 +25,7 @@ export type PendingTurn = {
   userText: string;
   iteration: number;
   usedTools: string[];
+  agentTriggers?: AgentTrigger[];
 };
 
 const TTL_SECONDS = 120; // a capture round-trip is seconds; don't keep state around.

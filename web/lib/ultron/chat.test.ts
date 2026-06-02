@@ -23,7 +23,7 @@ const { loadMemory, appendExchange } = vi.hoisted(() => ({
 }));
 
 const { runTool } = vi.hoisted(() => ({
-  runTool: vi.fn(async () => ({ ok: true, note: "dados de teste" })),
+  runTool: vi.fn(async (): Promise<unknown> => ({ ok: true, note: "dados de teste" })),
 }));
 
 vi.mock("@anthropic-ai/sdk", () => ({
@@ -84,6 +84,52 @@ describe("runChat — pause on capture_screen", () => {
     expect(savedState.captureToolUseId).toBe("tu_cap");
     // Memory is NOT persisted until the turn completes on resume.
     expect(appendExchange).not.toHaveBeenCalled();
+  });
+});
+
+describe("runChat — agent trigger metadata", () => {
+  it("exposes a trigger when an Ultron write tool enqueues a job", async () => {
+    runTool.mockResolvedValueOnce({
+      enqueued: true,
+      job_id: "job-1",
+      skill: "create-traffic-brunobracaioli-campaign",
+      kind: "create",
+      client_slug: "brunobracaioli",
+      queued_at: "2026-06-01T13:00:00.000Z",
+    });
+    createMock
+      .mockResolvedValueOnce(
+        toolTurn("tu_create", "request_campaign_creation", { client_slug: "brunobracaioli", confirm: true }),
+      )
+      .mockResolvedValueOnce(textTurn("Pedido enfileirado."));
+
+    const result = await runChat(SESSION, "sim, pode criar");
+
+    expect(result.kind).toBe("reply");
+    expect(result.agentTriggers).toEqual([
+      {
+        jobId: "job-1",
+        skill: "create-traffic-brunobracaioli-campaign",
+        kind: "create",
+        clientSlug: "brunobracaioli",
+        queuedAt: "2026-06-01T13:00:00.000Z",
+        source: "ultron",
+      },
+    ]);
+  });
+
+  it("does not expose a trigger when enqueue is rejected", async () => {
+    runTool.mockResolvedValueOnce({ enqueued: false, reason: "já existe um pedido em andamento" });
+    createMock
+      .mockResolvedValueOnce(
+        toolTurn("tu_create", "request_campaign_creation", { client_slug: "brunobracaioli", confirm: true }),
+      )
+      .mockResolvedValueOnce(textTurn("Já existe um pedido em andamento."));
+
+    const result = await runChat(SESSION, "sim, pode criar");
+
+    expect(result.kind).toBe("reply");
+    expect(result.agentTriggers).toEqual([]);
   });
 });
 

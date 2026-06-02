@@ -77,6 +77,11 @@ describe("request_campaign_creation", () => {
     state.clients = { data: KNOWN_CLIENT, error: null };
     const out = (await runTool("request_campaign_creation", { client_slug: "brunobracaioli", confirm: true })) as Record<string, unknown>;
     expect(out.enqueued).toBe(true);
+    expect(out.job_id).toBe("job-1");
+    expect(out.client_slug).toBe("brunobracaioli");
+    expect(out.kind).toBe("create");
+    expect(out.skill).toBe("create-traffic-brunobracaioli-campaign");
+    expect(typeof out.queued_at).toBe("string");
     expect(state.inserts).toHaveLength(1);
     expect((state.inserts[0]!.row as Record<string, unknown>).kind).toBe("create");
     expect((state.inserts[0]!.row as Record<string, unknown>).skill).toBe("create-traffic-brunobracaioli-campaign");
@@ -138,6 +143,11 @@ describe("request_campaign_activation", () => {
       confirm: true,
     })) as Record<string, unknown>;
     expect(out.enqueued).toBe(true);
+    expect(out.job_id).toBe("job-1");
+    expect(out.client_slug).toBe("brunobracaioli");
+    expect(out.kind).toBe("activate");
+    expect(out.skill).toBe("activate-campaign-brunobracaioli");
+    expect(typeof out.queued_at).toBe("string");
     expect(state.inserts).toHaveLength(1);
     expect((state.inserts[0]!.row as Record<string, unknown>).kind).toBe("activate");
     expect((state.inserts[0]!.row as Record<string, unknown>).args).toEqual({ campaign_meta_id: "120" });

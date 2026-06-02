@@ -3,6 +3,10 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import type { ActiveSubagent, NeuralCoreState } from "./neural-core-state";
 
 type NeuralCoreSceneProps = {
@@ -11,7 +15,13 @@ type NeuralCoreSceneProps = {
 
 type Disposable = { dispose: () => void };
 
-type OrganicFiber = {
+type VisualState = {
+  standby: number;
+  active: number;
+  pulse: number;
+};
+
+type EnergyFilament = {
   line: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>;
   geometry: THREE.BufferGeometry;
   material: THREE.LineBasicMaterial;
@@ -25,7 +35,7 @@ type OrganicFiber = {
 };
 
 type SignalRoute = {
-  fiberIndex: number;
+  filamentIndex: number;
   offset: number;
   speed: number;
   phase: number;
@@ -42,15 +52,49 @@ type SignalField = {
   baseSize: number;
 };
 
+type DataShell = {
+  group: THREE.Group;
+  meshMaterial: THREE.MeshBasicMaterial;
+  wireMaterial: THREE.LineBasicMaterial;
+  phase: number;
+  spin: THREE.Vector3;
+  baseOpacity: number;
+};
+
+type SessionRing = {
+  mesh: THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>;
+  material: THREE.MeshBasicMaterial;
+  baseRotation: THREE.Euler;
+  baseOpacity: number;
+  phase: number;
+  speed: number;
+};
+
+type OrbitBeam = {
+  group: THREE.Group;
+  material: THREE.LineBasicMaterial;
+  baseOpacity: number;
+  phase: number;
+  speed: number;
+};
+
+type SynapseWeb = {
+  line: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>;
+  geometry: THREE.BufferGeometry;
+  material: THREE.LineBasicMaterial;
+};
+
 type SubagentBranch = {
   name: string;
   group: THREE.Group;
-  line: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>;
+  points: THREE.Vector3[];
   lineMaterial: THREE.LineBasicMaterial;
   cluster: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>;
   clusterMaterial: THREE.PointsMaterial;
-  terminal: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>;
   terminalMaterial: THREE.PointsMaterial;
+  flowGeometry: THREE.BufferGeometry;
+  flowMaterial: THREE.PointsMaterial;
+  color: THREE.Color;
   angle: number;
   createdAt: number;
   eventCount: number;
@@ -62,57 +106,47 @@ type SubagentBranch = {
 };
 
 type SceneHandles = {
-  neuralGroup: THREE.Group;
-  ambientParticles: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>;
-  synapseNodes: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>;
-  organicFibers: OrganicFiber[];
-  signalFields: SignalField[];
   branchGroup: THREE.Group;
-};
-
-type VisualState = {
-  standby: number;
-  active: number;
-  pulse: number;
 };
 
 const LOOK = {
   activated: {
-    nodeOpacity: 0.82,
-    fiberOpacity: 0.5,
-    particleOpacity: 0.4,
+    nodeOpacity: 0.88,
+    filamentOpacity: 0.58,
+    particleOpacity: 0.46,
+    shellOpacity: 0.028,
     speed: 1,
   },
   "stand-by": {
-    nodeOpacity: 0.36,
-    fiberOpacity: 0.18,
-    particleOpacity: 0.18,
+    nodeOpacity: 0.34,
+    filamentOpacity: 0.18,
+    particleOpacity: 0.17,
+    shellOpacity: 0.008,
     speed: 0.34,
   },
 } as const;
 
-const AMBIENT_PARTICLE_COUNT = 360;
-const SYNAPSE_NODE_COUNT = 78;
-const ORGANIC_FIBER_COUNT = 52;
-const ORGANIC_FIBER_SEGMENTS = 90;
-const SIGNAL_PARTICLE_COUNT = 96;
-const BRANCH_CLUSTER_COUNT = 30;
 const PULSE_MS = 2200;
 const BRANCH_FADE_MS = 1800;
-
-function hashName(name: string): number {
-  let hash = 2166136261;
-  for (let i = 0; i < name.length; i += 1) {
-    hash ^= name.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
+const AMBIENT_PARTICLE_COUNT = 520;
+const SYNAPSE_NODE_COUNT = 128;
+const INTERNAL_LINK_COUNT = 96;
+const FILAMENT_COUNT = 72;
+const FILAMENT_SEGMENTS = 86;
+const SIGNAL_PARTICLE_COUNT = 136;
+const BRANCH_CLUSTER_COUNT = 34;
+const BRANCH_PACKET_COUNT = 8;
+const GOLDEN_ANGLE = 2.399963229728653;
 
 function pulseFromAge(ageMs: number): number {
   if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > PULSE_MS) return 0;
   const normalized = 1 - ageMs / PULSE_MS;
   return normalized * normalized;
+}
+
+function smoothProgress(value: number): number {
+  const clamped = THREE.MathUtils.clamp(value, 0, 1);
+  return clamped * clamped * (3 - 2 * clamped);
 }
 
 function getVisualState(state: NeuralCoreState, nowMs: number): VisualState {
@@ -125,6 +159,46 @@ function getVisualState(state: NeuralCoreState, nowMs: number): VisualState {
   };
 }
 
+function hashName(name: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < name.length; i += 1) {
+    hash ^= name.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function pointInNeuralVolume(index: number, count: number, radiusBase: number, radiusSpread: number): THREE.Vector3 {
+  const y = 1 - (index / Math.max(count - 1, 1)) * 2;
+  const ring = Math.sqrt(Math.max(0, 1 - y * y));
+  const theta = index * GOLDEN_ANGLE;
+  const radius = radiusBase + ((index * 47) % 100) / 100 * radiusSpread;
+  return new THREE.Vector3(
+    Math.cos(theta) * ring * radius,
+    y * radius * 0.82,
+    Math.sin(theta) * ring * radius * 0.72,
+  );
+}
+
+function makeGlowTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext("2d");
+  if (context) {
+    const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gradient.addColorStop(0, "rgba(255,255,255,1)");
+    gradient.addColorStop(0.18, "rgba(180,250,255,0.82)");
+    gradient.addColorStop(0.48, "rgba(34,211,238,0.25)");
+    gradient.addColorStop(1, "rgba(34,211,238,0)");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 128, 128);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 function makeLine(points: THREE.Vector3[], color: THREE.ColorRepresentation, opacity: number) {
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
   const material = new THREE.LineBasicMaterial({
@@ -132,99 +206,127 @@ function makeLine(points: THREE.Vector3[], color: THREE.ColorRepresentation, opa
     transparent: true,
     opacity,
     blending: THREE.AdditiveBlending,
+    depthTest: false,
     depthWrite: false,
   });
-  return {
-    line: new THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>(geometry, material),
-    geometry,
-    material,
-  };
+  const line = new THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>(geometry, material);
+  line.frustumCulled = false;
+  line.renderOrder = 8;
+  return { line, geometry, material };
 }
 
-function makeAmbientParticles() {
+function makeAmbientParticles(): THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> {
   const positions = new Float32Array(AMBIENT_PARTICLE_COUNT * 3);
   for (let i = 0; i < AMBIENT_PARTICLE_COUNT; i += 1) {
-    const theta = i * 2.399963;
-    const y = 1 - (i / Math.max(AMBIENT_PARTICLE_COUNT - 1, 1)) * 2;
-    const ring = Math.sqrt(1 - y * y);
-    const radius = 2.8 + ((i * 37) % 100) / 100;
-    positions[i * 3] = Math.cos(theta) * ring * radius;
-    positions[i * 3 + 1] = y * radius * 0.68;
-    positions[i * 3 + 2] = Math.sin(theta) * ring * radius;
+    const point = pointInNeuralVolume(i, AMBIENT_PARTICLE_COUNT, 2.35, 1.18);
+    positions[i * 3] = point.x;
+    positions[i * 3 + 1] = point.y;
+    positions[i * 3 + 2] = point.z;
   }
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   const material = new THREE.PointsMaterial({
     color: "#bff7ff",
-    size: 0.015,
+    size: 0.014,
     transparent: true,
     opacity: LOOK["stand-by"].particleOpacity,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
 
-  return new THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>(geometry, material);
+  const points = new THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>(geometry, material);
+  points.frustumCulled = false;
+  points.renderOrder = 2;
+  return points;
 }
 
-function makeSynapseNodes() {
-  const pointPositions = new Float32Array(SYNAPSE_NODE_COUNT * 3);
-
+function makeSynapseNodes(): THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> {
+  const positions = new Float32Array(SYNAPSE_NODE_COUNT * 3);
   for (let i = 0; i < SYNAPSE_NODE_COUNT; i += 1) {
-    const theta = i * 2.399963;
-    const y = 1 - (i / Math.max(SYNAPSE_NODE_COUNT - 1, 1)) * 2;
-    const ring = Math.sqrt(1 - y * y);
-    const radius = 0.5 + ((i * 53) % 100) / 96;
-    pointPositions[i * 3] = Math.cos(theta) * ring * radius;
-    pointPositions[i * 3 + 1] = y * radius * 0.82;
-    pointPositions[i * 3 + 2] = Math.sin(theta) * ring * radius;
+    const point = pointInNeuralVolume(i, SYNAPSE_NODE_COUNT, 0.48, 1.02);
+    positions[i * 3] = point.x;
+    positions[i * 3 + 1] = point.y;
+    positions[i * 3 + 2] = point.z;
   }
 
-  const nodeGeometry = new THREE.BufferGeometry();
-  nodeGeometry.setAttribute("position", new THREE.BufferAttribute(pointPositions, 3));
-  const nodeMaterial = new THREE.PointsMaterial({
-    color: "#dffcff",
-    size: 0.055,
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const material = new THREE.PointsMaterial({
+    color: "#e7ffff",
+    size: 0.052,
     transparent: true,
     opacity: LOOK["stand-by"].nodeOpacity,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
 
-  return new THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>(nodeGeometry, nodeMaterial);
+  const points = new THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>(geometry, material);
+  points.frustumCulled = false;
+  points.renderOrder = 7;
+  return points;
 }
 
-function fiberColor(index: number) {
-  if (index % 13 === 0) return "#f59e0b";
-  if (index % 8 === 0) return "#f0abfc";
-  if (index % 5 === 0) return "#7dd3fc";
+function makeSynapseWeb(): SynapseWeb {
+  const positions = new Float32Array(INTERNAL_LINK_COUNT * 2 * 3);
+  for (let i = 0; i < INTERNAL_LINK_COUNT; i += 1) {
+    const from = pointInNeuralVolume(i * 5 + 3, INTERNAL_LINK_COUNT * 5, 0.42, 0.98);
+    const to = pointInNeuralVolume(i * 11 + 17, INTERNAL_LINK_COUNT * 11, 0.48, 0.92);
+    positions[i * 6] = from.x;
+    positions[i * 6 + 1] = from.y;
+    positions[i * 6 + 2] = from.z;
+    positions[i * 6 + 3] = to.x;
+    positions[i * 6 + 4] = to.y;
+    positions[i * 6 + 5] = to.z;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const material = new THREE.LineBasicMaterial({
+    color: "#67e8f9",
+    transparent: true,
+    opacity: 0.13,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const line = new THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>(geometry, material);
+  line.frustumCulled = false;
+  line.renderOrder = 5;
+  return { line, geometry, material };
+}
+
+function filamentColor(index: number): string {
+  if (index % 17 === 0) return "#f0abfc";
+  if (index % 11 === 0) return "#facc15";
+  if (index % 7 === 0) return "#6ee7b7";
   return "#67e8f9";
 }
 
-function makeOrganicFibers(): OrganicFiber[] {
-  const fibers: OrganicFiber[] = [];
+function makeEnergyFilaments(): EnergyFilament[] {
+  const filaments: EnergyFilament[] = [];
 
-  for (let i = 0; i < ORGANIC_FIBER_COUNT; i += 1) {
-    const angle = i * 2.399963;
-    const y = 1 - (i / Math.max(ORGANIC_FIBER_COUNT - 1, 1)) * 2;
+  for (let i = 0; i < FILAMENT_COUNT; i += 1) {
+    const angle = i * GOLDEN_ANGLE;
+    const y = 1 - (i / Math.max(FILAMENT_COUNT - 1, 1)) * 2;
     const ring = Math.sqrt(Math.max(0, 1 - y * y));
-    const reach = 2.95 + ((i * 31) % 100) / 70;
+    const reach = 2.5 + ((i * 31) % 100) / 90;
     const end = new THREE.Vector3(
       Math.cos(angle) * ring * reach,
-      y * 1.58 + Math.sin(angle * 1.7) * 0.34,
-      Math.sin(angle) * ring * reach * 0.68,
+      y * 1.44 + Math.sin(angle * 1.7) * 0.32,
+      Math.sin(angle) * ring * reach * 0.72,
     );
     const radial = end.clone().normalize();
-    const tangent = new THREE.Vector3(-Math.sin(angle), Math.cos(angle * 1.3) * 0.22, Math.cos(angle) * 0.58).normalize();
+    const tangent = new THREE.Vector3(-Math.sin(angle), Math.cos(angle * 1.3) * 0.22, Math.cos(angle) * 0.62).normalize();
     const curl = new THREE.Vector3().crossVectors(radial, tangent);
     if (curl.lengthSq() < 0.0001) curl.set(0, 1, 0);
     curl.normalize();
 
-    const controlA = radial.clone().multiplyScalar(0.54 + ((i * 17) % 100) / 310).add(curl.clone().multiplyScalar(0.28));
-    const controlB = radial.clone().multiplyScalar(1.26 + ((i * 23) % 100) / 210).add(curl.clone().multiplyScalar(Math.sin(angle) * 0.72));
-    const controlC = end.clone().multiplyScalar(0.78).add(curl.clone().multiplyScalar(Math.cos(angle * 0.7) * 0.5));
+    const controlA = radial.clone().multiplyScalar(0.42 + ((i * 17) % 100) / 330).add(curl.clone().multiplyScalar(0.22));
+    const controlB = radial.clone().multiplyScalar(1.1 + ((i * 23) % 100) / 230).add(curl.clone().multiplyScalar(Math.sin(angle) * 0.66));
+    const controlC = end.clone().multiplyScalar(0.78).add(curl.clone().multiplyScalar(Math.cos(angle * 0.7) * 0.48));
     const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), controlA, controlB, controlC, end], false, "catmullrom", 0.62);
-    const basePoints = curve.getPoints(ORGANIC_FIBER_SEGMENTS);
+    const basePoints = curve.getPoints(FILAMENT_SEGMENTS);
     const positions = new Float32Array(basePoints.length * 3);
     const normals: THREE.Vector3[] = [];
     const radials: THREE.Vector3[] = [];
@@ -234,8 +336,8 @@ function makeOrganicFibers(): OrganicFiber[] {
       positions[pointIndex * 3 + 1] = point.y;
       positions[pointIndex * 3 + 2] = point.z;
 
-      const t = pointIndex / Math.max(basePoints.length - 1, 1);
-      const curveTangent = curve.getTangent(t).normalize();
+      const progress = pointIndex / Math.max(basePoints.length - 1, 1);
+      const curveTangent = curve.getTangent(progress).normalize();
       const pointRadial = point.lengthSq() > 0.0001 ? point.clone().normalize() : radial.clone();
       const normal = new THREE.Vector3().crossVectors(curveTangent, pointRadial);
       if (normal.lengthSq() < 0.0001) normal.copy(curl);
@@ -246,9 +348,9 @@ function makeOrganicFibers(): OrganicFiber[] {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     const material = new THREE.LineBasicMaterial({
-      color: fiberColor(i),
+      color: filamentColor(i),
       transparent: true,
-      opacity: LOOK["stand-by"].fiberOpacity * 0.78,
+      opacity: LOOK["stand-by"].filamentOpacity * 0.78,
       blending: THREE.AdditiveBlending,
       depthTest: false,
       depthWrite: false,
@@ -257,7 +359,7 @@ function makeOrganicFibers(): OrganicFiber[] {
     line.frustumCulled = false;
     line.renderOrder = 6;
 
-    fibers.push({
+    filaments.push({
       line,
       geometry,
       material,
@@ -265,17 +367,17 @@ function makeOrganicFibers(): OrganicFiber[] {
       normals,
       radials,
       phase: angle + ((i * 11) % 100) / 37,
-      amplitude: 0.052 + ((i * 7) % 100) / 1450,
-      speed: 0.78 + ((i * 19) % 100) / 115,
+      amplitude: 0.045 + ((i * 7) % 100) / 1500,
+      speed: 0.74 + ((i * 19) % 100) / 118,
       baseOpacity: 0.72 + ((i * 29) % 100) / 170,
     });
   }
 
-  return fibers;
+  return filaments;
 }
 
 function makeSignalField(
-  fibers: OrganicFiber[],
+  filaments: EnergyFilament[],
   color: THREE.ColorRepresentation,
   count: number,
   routeOffset: number,
@@ -297,7 +399,7 @@ function makeSignalField(
   });
 
   const routes = Array.from({ length: count }, (_, index): SignalRoute => ({
-    fiberIndex: fibers.length > 0 ? (index * 7 + routeOffset) % fibers.length : 0,
+    filamentIndex: filaments.length > 0 ? (index * 7 + routeOffset) % filaments.length : 0,
     offset: ((index * 17 + routeOffset * 11) % 100) / 100,
     speed: 0.34 + ((index * 13 + routeOffset) % 100) / 190,
     phase: index * 0.73 + routeOffset,
@@ -306,7 +408,7 @@ function makeSignalField(
 
   const points = new THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>(geometry, material);
   points.frustumCulled = false;
-  points.renderOrder = 8;
+  points.renderOrder = 10;
 
   return {
     points,
@@ -319,41 +421,151 @@ function makeSignalField(
   };
 }
 
-function branchEndpoint(name: string) {
-  const hash = hashName(name);
-  const angle = ((hash % 1000) / 1000) * Math.PI * 2;
-  const lift = ((((hash >>> 10) % 100) / 100) - 0.5) * 1.38;
+function makeDataShell(radius: number, color: string, baseOpacity: number, phase: number): { shell: DataShell; disposables: Disposable[] } {
+  const group = new THREE.Group();
+  const geometry = new THREE.IcosahedronGeometry(radius, 3);
+  const meshMaterial = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: baseOpacity,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh<THREE.IcosahedronGeometry, THREE.MeshBasicMaterial>(geometry, meshMaterial);
+  mesh.renderOrder = 1;
+
+  const edgeGeometry = new THREE.EdgesGeometry(geometry, 18);
+  const wireMaterial = new THREE.LineBasicMaterial({
+    color,
+    transparent: true,
+    opacity: baseOpacity * 4,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const wire = new THREE.LineSegments<THREE.EdgesGeometry, THREE.LineBasicMaterial>(edgeGeometry, wireMaterial);
+  wire.renderOrder = 3;
+  group.add(mesh);
+  group.add(wire);
+
   return {
-    angle,
-    end: new THREE.Vector3(Math.cos(angle) * 3.18, lift, Math.sin(angle) * 1.42),
+    shell: {
+      group,
+      meshMaterial,
+      wireMaterial,
+      phase,
+      spin: new THREE.Vector3(0.012 + phase * 0.003, 0.018 + phase * 0.004, 0.009 + phase * 0.002),
+      baseOpacity,
+    },
+    disposables: [geometry, meshMaterial, edgeGeometry, wireMaterial],
   };
 }
 
-function makeBranchPoints(name: string) {
+function makeSessionRing(radius: number, tube: number, color: string, rotation: THREE.Euler, phase: number): {
+  ring: SessionRing;
+  disposables: Disposable[];
+} {
+  const geometry = new THREE.TorusGeometry(radius, tube, 8, 160);
+  const material = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.08,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const mesh = new THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>(geometry, material);
+  mesh.rotation.copy(rotation);
+  mesh.renderOrder = 9;
+  return {
+    ring: {
+      mesh,
+      material,
+      baseRotation: rotation.clone(),
+      baseOpacity: 0.16,
+      phase,
+      speed: 0.12 + phase * 0.04,
+    },
+    disposables: [geometry, material],
+  };
+}
+
+function makeOrbitBeam(index: number): { beam: OrbitBeam; disposables: Disposable[] } {
+  const points: THREE.Vector3[] = [];
+  const radiusX = 2.04 + index * 0.28;
+  const radiusZ = 0.86 + index * 0.16;
+  const lift = 0.12 + index * 0.03;
+  for (let i = 0; i <= 160; i += 1) {
+    const progress = i / 160;
+    const angle = progress * Math.PI * 2;
+    points.push(new THREE.Vector3(Math.cos(angle) * radiusX, Math.sin(angle * 2 + index) * lift, Math.sin(angle) * radiusZ));
+  }
+
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  const material = new THREE.LineBasicMaterial({
+    color: index % 3 === 0 ? "#a5f3fc" : index % 3 === 1 ? "#c4b5fd" : "#6ee7b7",
+    transparent: true,
+    opacity: 0.12,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const line = new THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>(geometry, material);
+  line.frustumCulled = false;
+  line.renderOrder = 4;
+
+  const group = new THREE.Group();
+  group.rotation.set(index * 0.42, index * 0.74, index * 0.31);
+  group.add(line);
+
+  return {
+    beam: {
+      group,
+      material,
+      baseOpacity: 0.18 + index * 0.018,
+      phase: index * 0.77,
+      speed: 0.07 + index * 0.015,
+    },
+    disposables: [geometry, material],
+  };
+}
+
+function branchEndpoint(name: string): { angle: number; end: THREE.Vector3 } {
+  const hash = hashName(name);
+  const angle = ((hash % 1000) / 1000) * Math.PI * 2;
+  const lift = ((((hash >>> 10) % 100) / 100) - 0.5) * 1.42;
+  return {
+    angle,
+    end: new THREE.Vector3(Math.cos(angle) * 3.05, lift, Math.sin(angle) * 1.48),
+  };
+}
+
+function makeBranchPoints(name: string): { angle: number; end: THREE.Vector3; points: THREE.Vector3[] } {
   const { angle, end } = branchEndpoint(name);
   const radial = end.clone().normalize();
-  const tangent = new THREE.Vector3(-Math.sin(angle), Math.cos(angle * 0.8) * 0.18, Math.cos(angle) * 0.52).normalize();
+  const tangent = new THREE.Vector3(-Math.sin(angle), Math.cos(angle * 0.8) * 0.18, Math.cos(angle) * 0.54).normalize();
   const curl = new THREE.Vector3().crossVectors(radial, tangent);
   if (curl.lengthSq() < 0.0001) curl.set(0, 1, 0);
   curl.normalize();
-  const controlA = radial.clone().multiplyScalar(0.7).add(curl.clone().multiplyScalar(0.36));
-  const controlB = end.clone().multiplyScalar(0.54).add(curl.clone().multiplyScalar(Math.sin(angle * 1.7) * 0.86));
-  const controlC = end.clone().multiplyScalar(0.82).add(tangent.clone().multiplyScalar(0.34));
+  const controlA = radial.clone().multiplyScalar(0.62).add(curl.clone().multiplyScalar(0.34));
+  const controlB = end.clone().multiplyScalar(0.52).add(curl.clone().multiplyScalar(Math.sin(angle * 1.7) * 0.8));
+  const controlC = end.clone().multiplyScalar(0.82).add(tangent.clone().multiplyScalar(0.32));
   const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), controlA, controlB, controlC, end], false, "catmullrom", 0.64);
   return {
     angle,
     end,
-    points: curve.getPoints(58),
+    points: curve.getPoints(64),
   };
 }
 
-function makeClusterPositions(center: THREE.Vector3, count: number) {
+function makeClusterPositions(center: THREE.Vector3, count: number): Float32Array {
   const positions = new Float32Array(count * 3);
   for (let i = 0; i < count; i += 1) {
-    const theta = i * 2.399963;
+    const theta = i * GOLDEN_ANGLE;
     const y = 1 - (i / Math.max(count - 1, 1)) * 2;
-    const ring = Math.sqrt(1 - y * y);
-    const radius = 0.24 + ((i * 19) % 100) / 520;
+    const ring = Math.sqrt(Math.max(0, 1 - y * y));
+    const radius = 0.23 + ((i * 19) % 100) / 540;
     positions[i * 3] = center.x + Math.cos(theta) * ring * radius;
     positions[i * 3 + 1] = center.y + y * radius * 0.72;
     positions[i * 3 + 2] = center.z + Math.sin(theta) * ring * radius;
@@ -369,42 +581,63 @@ function makeSubagentBranch(subagent: ActiveSubagent, nowMs: number): SubagentBr
   clusterGeometry.setAttribute("position", new THREE.BufferAttribute(makeClusterPositions(end, BRANCH_CLUSTER_COUNT), 3));
   const clusterMaterial = new THREE.PointsMaterial({
     color: subagent.color,
-    size: 0.035,
+    size: 0.036,
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
   const cluster = new THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>(clusterGeometry, clusterMaterial);
+  cluster.frustumCulled = false;
+  cluster.renderOrder = 11;
 
-  // A single bright terminal point marks the synapse forming at the branch tip — a point, not a sphere.
   const terminalGeometry = new THREE.BufferGeometry();
   terminalGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array([end.x, end.y, end.z]), 3));
   const terminalMaterial = new THREE.PointsMaterial({
     color: subagent.color,
-    size: 0.16,
+    size: 0.15,
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
   const terminal = new THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>(terminalGeometry, terminalMaterial);
+  terminal.frustumCulled = false;
+  terminal.renderOrder = 12;
+
+  const flowGeometry = new THREE.BufferGeometry();
+  flowGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(BRANCH_PACKET_COUNT * 3), 3));
+  const flowMaterial = new THREE.PointsMaterial({
+    color: subagent.color,
+    size: 0.07,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const flow = new THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>(flowGeometry, flowMaterial);
+  flow.frustumCulled = false;
+  flow.renderOrder = 13;
 
   const group = new THREE.Group();
   group.scale.setScalar(0.18);
   group.add(branchLine.line);
   group.add(cluster);
   group.add(terminal);
+  group.add(flow);
 
   return {
     name: subagent.name,
     group,
-    line: branchLine.line,
+    points,
     lineMaterial: branchLine.material,
     cluster,
     clusterMaterial,
-    terminal,
     terminalMaterial,
+    flowGeometry,
+    flowMaterial,
+    color: new THREE.Color(subagent.color),
     angle,
     createdAt: nowMs,
     eventCount: subagent.eventCount,
@@ -412,27 +645,71 @@ function makeSubagentBranch(subagent: ActiveSubagent, nowMs: number): SubagentBr
     pulseStartedAt: nowMs,
     fading: false,
     fadeStartedAt: null,
-    disposables: [branchLine.geometry, branchLine.material, clusterGeometry, clusterMaterial, terminalGeometry, terminalMaterial],
+    disposables: [
+      branchLine.geometry,
+      branchLine.material,
+      clusterGeometry,
+      clusterMaterial,
+      terminalGeometry,
+      terminalMaterial,
+      flowGeometry,
+      flowMaterial,
+    ],
   };
 }
 
-function setBranchColor(branch: SubagentBranch, color: string) {
-  branch.lineMaterial.color.set(color);
-  branch.clusterMaterial.color.set(color);
-  branch.terminalMaterial.color.set(color);
-}
-
-function setBranchOpacity(branch: SubagentBranch, opacity: number, pulse: number) {
-  branch.lineMaterial.opacity = 0.62 * opacity + 0.28 * pulse;
-  branch.clusterMaterial.opacity = 0.28 * opacity + 0.44 * pulse;
-  branch.terminalMaterial.opacity = 0.6 * opacity + 0.32 * pulse;
-}
-
-function disposeBranch(branch: SubagentBranch) {
+function disposeBranch(branch: SubagentBranch): void {
   branch.group.parent?.remove(branch.group);
   for (const disposable of branch.disposables) {
     disposable.dispose();
   }
+}
+
+function setInterpolatedPosition(
+  attribute: THREE.BufferAttribute,
+  index: number,
+  points: THREE.Vector3[],
+  progress: number,
+  offset: THREE.Vector3,
+): void {
+  const first = points[0];
+  if (!first) {
+    attribute.setXYZ(index, 0, 0, 0);
+    return;
+  }
+  const clamped = THREE.MathUtils.clamp(progress, 0, 1);
+  const scaled = clamped * Math.max(points.length - 1, 1);
+  const lowerIndex = Math.floor(scaled);
+  const upperIndex = Math.min(points.length - 1, lowerIndex + 1);
+  const mix = scaled - lowerIndex;
+  const lower = points[lowerIndex] ?? first;
+  const upper = points[upperIndex] ?? lower;
+  attribute.setXYZ(
+    index,
+    THREE.MathUtils.lerp(lower.x, upper.x, mix) + offset.x,
+    THREE.MathUtils.lerp(lower.y, upper.y, mix) + offset.y,
+    THREE.MathUtils.lerp(lower.z, upper.z, mix) + offset.z,
+  );
+}
+
+function updateBranchFlow(branch: SubagentBranch, frame: number, opacity: number): void {
+  const attribute = branch.flowGeometry.getAttribute("position") as THREE.BufferAttribute;
+  const direction = branch.fading ? -1 : 1;
+  for (let i = 0; i < BRANCH_PACKET_COUNT; i += 1) {
+    const raw = frame * 0.24 * direction + i / BRANCH_PACKET_COUNT + branch.angle * 0.13;
+    const wrapped = ((raw % 1) + 1) % 1;
+    const progress = branch.fading ? 1 - wrapped : wrapped;
+    const flare = Math.sin(frame * 2.8 + i + branch.angle) * 0.018 * opacity;
+    setInterpolatedPosition(attribute, i, branch.points, progress, new THREE.Vector3(flare, flare * 0.35, -flare * 0.2));
+  }
+  attribute.needsUpdate = true;
+}
+
+function setBranchOpacity(branch: SubagentBranch, opacity: number, pulse: number): void {
+  branch.lineMaterial.opacity = 0.54 * opacity + 0.26 * pulse;
+  branch.clusterMaterial.opacity = 0.24 * opacity + 0.46 * pulse;
+  branch.terminalMaterial.opacity = 0.58 * opacity + 0.34 * pulse;
+  branch.flowMaterial.opacity = 0.4 * opacity + 0.36 * pulse;
 }
 
 export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
@@ -448,16 +725,17 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
     if (!host) return;
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x030712, 0.052);
+    scene.fog = new THREE.FogExp2(0x000000, 0.05);
 
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-    camera.position.set(0, 0, 7.8);
+    camera.position.set(0, 0, 5.8);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setClearColor(0x000000, 0);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+    renderer.setClearColor(0x000000, 1);
+    renderer.setPixelRatio(pixelRatio);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.domElement.style.display = "block";
     renderer.domElement.style.height = "100%";
@@ -465,8 +743,6 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
     renderer.domElement.style.cursor = "grab";
     host.appendChild(renderer.domElement);
 
-    // Drag-to-orbit around the neural core. Rotation only — pan/zoom stay off so the
-    // core stays centred and the page scroll/zoom behaviour is untouched.
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0, 0, 0);
     controls.enablePan = false;
@@ -474,7 +750,6 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
     controls.enableDamping = !reducedMotion;
     controls.dampingFactor = 0.08;
     controls.rotateSpeed = 0.55;
-    // One-finger touch rotates horizontally; vertical finger gestures fall through to page scroll.
     renderer.domElement.style.touchAction = "pan-y";
     const onControlsStart = () => {
       renderer.domElement.style.cursor = "grabbing";
@@ -485,51 +760,123 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
     controls.addEventListener("start", onControlsStart);
     controls.addEventListener("end", onControlsEnd);
 
+    const composer = new EffectComposer(renderer);
+    composer.setPixelRatio(pixelRatio);
+    const renderPass = new RenderPass(scene, camera);
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.72, 0.48, 0.68);
+    const outputPass = new OutputPass();
+    composer.addPass(renderPass);
+    composer.addPass(bloomPass);
+    composer.addPass(outputPass);
+
     const disposables: Disposable[] = [];
     const neuralGroup = new THREE.Group();
     scene.add(neuralGroup);
+
+    const glowTexture = makeGlowTexture();
+    const coreGroup = new THREE.Group();
+    const coreGeometry = new THREE.SphereGeometry(0.34, 32, 16);
+    const coreMaterial = new THREE.MeshBasicMaterial({
+      color: "#bffaff",
+      transparent: true,
+      opacity: 0.38,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const core = new THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>(coreGeometry, coreMaterial);
+    const coreWireGeometry = new THREE.IcosahedronGeometry(0.72, 2);
+    const coreWireMaterial = new THREE.MeshBasicMaterial({
+      color: "#67e8f9",
+      wireframe: true,
+      transparent: true,
+      opacity: 0.34,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const coreWire = new THREE.Mesh<THREE.IcosahedronGeometry, THREE.MeshBasicMaterial>(coreWireGeometry, coreWireMaterial);
+    const coreGlowMaterial = new THREE.SpriteMaterial({
+      map: glowTexture,
+      color: "#67e8f9",
+      transparent: true,
+      opacity: 0.78,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const coreGlow = new THREE.Sprite(coreGlowMaterial);
+    coreGlow.scale.set(2.18, 2.18, 1);
+    coreGroup.add(coreGlow);
+    coreGroup.add(core);
+    coreGroup.add(coreWire);
+    neuralGroup.add(coreGroup);
+    disposables.push(glowTexture, coreGeometry, coreMaterial, coreWireGeometry, coreWireMaterial, coreGlowMaterial);
+
+    const shells: DataShell[] = [];
+    [
+      makeDataShell(1.26, "#67e8f9", 0.004, 0.2),
+    ].forEach(({ shell, disposables: shellDisposables }) => {
+      shells.push(shell);
+      neuralGroup.add(shell.group);
+      disposables.push(...shellDisposables);
+    });
 
     const ambientParticles = makeAmbientParticles();
     neuralGroup.add(ambientParticles);
     disposables.push(ambientParticles.geometry, ambientParticles.material);
 
+    const synapseWeb = makeSynapseWeb();
+    neuralGroup.add(synapseWeb.line);
+    disposables.push(synapseWeb.geometry, synapseWeb.material);
+
     const synapseNodes = makeSynapseNodes();
     neuralGroup.add(synapseNodes);
     disposables.push(synapseNodes.geometry, synapseNodes.material);
 
-    const organicFibers = makeOrganicFibers();
-    for (const fiber of organicFibers) {
-      neuralGroup.add(fiber.line);
-      disposables.push(fiber.geometry, fiber.material);
+    const filaments = makeEnergyFilaments();
+    for (const filament of filaments) {
+      neuralGroup.add(filament.line);
+      disposables.push(filament.geometry, filament.material);
     }
 
     const signalFields = [
-      makeSignalField(organicFibers, "#e7ffff", SIGNAL_PARTICLE_COUNT, 3, 0.92, 0.24, 0.044),
-      makeSignalField(organicFibers, "#f59e0b", Math.floor(SIGNAL_PARTICLE_COUNT * 0.34), 19, 0.52, 0.08, 0.058),
-      makeSignalField(organicFibers, "#f0abfc", Math.floor(SIGNAL_PARTICLE_COUNT * 0.24), 31, 0.46, 0.07, 0.052),
+      makeSignalField(filaments, "#e7ffff", SIGNAL_PARTICLE_COUNT, 3, 0.92, 0.24, 0.044),
+      makeSignalField(filaments, "#facc15", Math.floor(SIGNAL_PARTICLE_COUNT * 0.34), 19, 0.5, 0.08, 0.055),
+      makeSignalField(filaments, "#f0abfc", Math.floor(SIGNAL_PARTICLE_COUNT * 0.24), 31, 0.45, 0.07, 0.05),
     ];
     for (const field of signalFields) {
       neuralGroup.add(field.points);
       disposables.push(field.geometry, field.material);
     }
 
+    const sessionRings: SessionRing[] = [];
+    [
+      makeSessionRing(1.05, 0.009, "#67e8f9", new THREE.Euler(Math.PI / 2, 0.25, 0.2), 0.2),
+      makeSessionRing(1.58, 0.007, "#a5f3fc", new THREE.Euler(0.35, Math.PI / 2, -0.38), 0.7),
+      makeSessionRing(2.13, 0.006, "#c4b5fd", new THREE.Euler(0.82, -0.28, Math.PI / 2), 1.1),
+    ].forEach(({ ring, disposables: ringDisposables }) => {
+      sessionRings.push(ring);
+      neuralGroup.add(ring.mesh);
+      disposables.push(...ringDisposables);
+    });
+
+    const orbitBeams: OrbitBeam[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      const { beam, disposables: beamDisposables } = makeOrbitBeam(i);
+      orbitBeams.push(beam);
+      neuralGroup.add(beam.group);
+      disposables.push(...beamDisposables);
+    }
+
     const branchGroup = new THREE.Group();
     neuralGroup.add(branchGroup);
-
-    handlesRef.current = {
-      neuralGroup,
-      ambientParticles,
-      synapseNodes,
-      organicFibers,
-      signalFields,
-      branchGroup,
-    };
+    handlesRef.current = { branchGroup };
 
     const resize = () => {
       const rect = host.getBoundingClientRect();
       const width = Math.max(rect.width, 1);
       const height = Math.max(rect.height, 1);
       renderer.setSize(width, height, false);
+      composer.setSize(width, height);
+      bloomPass.setSize(width, height);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
     };
@@ -549,36 +896,91 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
       const look = LOOK[stateRef.current.mode];
       const motionScale = reducedMotion ? 0.32 : 1;
       const pulse = visual.pulse;
+      const activity = 0.28 + visual.active * 0.9 + pulse * 0.56;
       frame += dt * motionScale * (0.44 + look.speed + pulse * 0.22);
 
-      neuralGroup.rotation.y = Math.sin(frame * 0.12) * 0.08;
-      ambientParticles.rotation.y = frame * 0.08;
+      neuralGroup.rotation.y = frame * 0.045 + Math.sin(frame * 0.12) * 0.055;
+      neuralGroup.rotation.x = Math.sin(frame * 0.09) * 0.046;
+      neuralGroup.rotation.z = Math.cos(frame * 0.07) * 0.032;
+
+      coreGroup.scale.setScalar(1 + visual.active * 0.055 + pulse * 0.09 + Math.sin(frame * 3.1) * 0.012);
+      core.rotation.y = frame * 0.8;
+      coreWire.rotation.x = frame * 0.32;
+      coreWire.rotation.y = -frame * 0.48;
+      coreMaterial.opacity = THREE.MathUtils.lerp(coreMaterial.opacity, 0.28 + visual.active * 0.22 + pulse * 0.18, 0.08);
+      coreWireMaterial.opacity = THREE.MathUtils.lerp(coreWireMaterial.opacity, 0.22 + visual.active * 0.3 + pulse * 0.22, 0.08);
+      coreGlowMaterial.opacity = THREE.MathUtils.lerp(coreGlowMaterial.opacity, 0.42 + visual.active * 0.32 + pulse * 0.24, 0.08);
+      const glowScale = 2.0 + visual.active * 0.3 + pulse * 0.56 + Math.sin(frame * 2.4) * 0.08;
+      coreGlow.scale.set(glowScale, glowScale, 1);
+
+      ambientParticles.rotation.y = frame * 0.065;
       ambientParticles.rotation.x = Math.sin(frame * 0.34) * 0.045;
-      ambientParticles.material.opacity = THREE.MathUtils.lerp(ambientParticles.material.opacity, look.particleOpacity + pulse * 0.06, 0.08);
+      ambientParticles.material.opacity = THREE.MathUtils.lerp(
+        ambientParticles.material.opacity,
+        look.particleOpacity + pulse * 0.06,
+        0.08,
+      );
+
+      synapseWeb.line.rotation.y = -frame * 0.13;
+      synapseWeb.line.rotation.x = Math.sin(frame * 0.26) * 0.055;
+      synapseWeb.material.opacity = THREE.MathUtils.lerp(synapseWeb.material.opacity, 0.1 + visual.active * 0.2 + pulse * 0.12, 0.08);
 
       synapseNodes.rotation.y = frame * 0.19;
       synapseNodes.rotation.x = Math.sin(frame * 0.5) * 0.08;
       synapseNodes.material.opacity = THREE.MathUtils.lerp(synapseNodes.material.opacity, look.nodeOpacity + pulse * 0.12, 0.08);
-      synapseNodes.material.size = THREE.MathUtils.lerp(synapseNodes.material.size, 0.05 + pulse * 0.024, 0.08);
+      synapseNodes.material.size = THREE.MathUtils.lerp(synapseNodes.material.size, 0.049 + visual.active * 0.01 + pulse * 0.024, 0.08);
 
-      const organicActivity = 0.34 + visual.active * 0.88 + pulse * 0.62;
-      organicFibers.forEach((fiber) => {
-        const firstBase = fiber.basePoints[0];
-        const firstNormal = fiber.normals[0];
-        const firstRadial = fiber.radials[0];
+      shells.forEach((shell, index) => {
+        shell.group.rotation.x += shell.spin.x * motionScale;
+        shell.group.rotation.y += shell.spin.y * motionScale;
+        shell.group.rotation.z += shell.spin.z * motionScale;
+        const shellPulse = Math.sin(frame * (0.7 + index * 0.14) + shell.phase) * 0.014;
+        shell.group.scale.setScalar(1 + shellPulse + pulse * 0.025);
+        const shellOpacity = look.shellOpacity * (1 + index * 0.16) + pulse * 0.022;
+        shell.meshMaterial.opacity = THREE.MathUtils.lerp(shell.meshMaterial.opacity, shell.baseOpacity + shellOpacity * 0.32, 0.08);
+        shell.wireMaterial.opacity = THREE.MathUtils.lerp(shell.wireMaterial.opacity, shellOpacity * 2.2, 0.08);
+      });
+
+      sessionRings.forEach((ring, index) => {
+        ring.mesh.rotation.set(
+          ring.baseRotation.x + Math.sin(frame * ring.speed + ring.phase) * 0.2,
+          ring.baseRotation.y + frame * (0.12 + index * 0.02),
+          ring.baseRotation.z + Math.cos(frame * ring.speed + ring.phase) * 0.18,
+        );
+        const targetOpacity = ring.baseOpacity * (0.34 + visual.active * 1.25) + pulse * 0.14;
+        ring.material.opacity = THREE.MathUtils.lerp(ring.material.opacity, targetOpacity, 0.08);
+        const scale = 1 + visual.active * 0.03 + pulse * 0.08 + Math.sin(frame * 1.2 + ring.phase) * 0.012;
+        ring.mesh.scale.setScalar(scale);
+      });
+
+      orbitBeams.forEach((beam, index) => {
+        beam.group.rotation.x += Math.sin(beam.phase + frame * 0.4) * 0.0008 * motionScale;
+        beam.group.rotation.y += beam.speed * motionScale;
+        beam.group.rotation.z += (0.012 + index * 0.002) * motionScale;
+        beam.material.opacity = THREE.MathUtils.lerp(
+          beam.material.opacity,
+          beam.baseOpacity * (0.28 + visual.active * 1.2) + pulse * 0.08,
+          0.08,
+        );
+      });
+
+      filaments.forEach((filament) => {
+        const firstBase = filament.basePoints[0];
+        const firstNormal = filament.normals[0];
+        const firstRadial = filament.radials[0];
         if (!firstBase || !firstNormal || !firstRadial) return;
 
-        const position = fiber.geometry.getAttribute("position") as THREE.BufferAttribute;
-        const maxIndex = Math.max(fiber.basePoints.length - 1, 1);
-        for (let pointIndex = 0; pointIndex < fiber.basePoints.length; pointIndex += 1) {
-          const base = fiber.basePoints[pointIndex] ?? firstBase;
-          const normal = fiber.normals[pointIndex] ?? firstNormal;
-          const radial = fiber.radials[pointIndex] ?? firstRadial;
+        const position = filament.geometry.getAttribute("position") as THREE.BufferAttribute;
+        const maxIndex = Math.max(filament.basePoints.length - 1, 1);
+        for (let pointIndex = 0; pointIndex < filament.basePoints.length; pointIndex += 1) {
+          const base = filament.basePoints[pointIndex] ?? firstBase;
+          const normal = filament.normals[pointIndex] ?? firstNormal;
+          const radial = filament.radials[pointIndex] ?? firstRadial;
           const progress = pointIndex / maxIndex;
           const falloff = Math.sin(progress * Math.PI);
-          const wave = Math.sin(frame * fiber.speed + pointIndex * 0.38 + fiber.phase);
-          const shimmer = Math.cos(frame * fiber.speed * 0.57 + pointIndex * 0.17 + fiber.phase * 1.9);
-          const amplitude = fiber.amplitude * organicActivity * (0.25 + falloff * 0.85);
+          const wave = Math.sin(frame * filament.speed + pointIndex * 0.38 + filament.phase);
+          const shimmer = Math.cos(frame * filament.speed * 0.57 + pointIndex * 0.17 + filament.phase * 1.9);
+          const amplitude = filament.amplitude * activity * (0.25 + falloff * 0.85);
           position.setXYZ(
             pointIndex,
             base.x + normal.x * wave * amplitude + radial.x * shimmer * amplitude * 0.24,
@@ -587,38 +989,34 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
           );
         }
         position.needsUpdate = true;
-        const fiberOpacity = THREE.MathUtils.clamp(
-          0.1 + visual.active * 0.18 + look.fiberOpacity * fiber.baseOpacity * 0.68 + pulse * 0.16,
+        const filamentOpacity = THREE.MathUtils.clamp(
+          0.08 + visual.active * 0.18 + look.filamentOpacity * filament.baseOpacity * 0.68 + pulse * 0.16,
           0,
-          0.72,
+          0.76,
         );
-        fiber.material.opacity = THREE.MathUtils.lerp(
-          fiber.material.opacity,
-          fiberOpacity,
-          0.08,
-        );
+        filament.material.opacity = THREE.MathUtils.lerp(filament.material.opacity, filamentOpacity, 0.08);
       });
 
       signalFields.forEach((field, fieldIndex) => {
         const position = field.geometry.getAttribute("position") as THREE.BufferAttribute;
         field.routes.forEach((route, particleIndex) => {
-          const fiber = organicFibers[route.fiberIndex];
-          const firstBase = fiber?.basePoints[0];
-          const firstNormal = fiber?.normals[0];
-          const firstRadial = fiber?.radials[0];
-          if (!fiber || !firstBase || !firstNormal || !firstRadial) return;
+          const filament = filaments[route.filamentIndex];
+          const firstBase = filament?.basePoints[0];
+          const firstNormal = filament?.normals[0];
+          const firstRadial = filament?.radials[0];
+          if (!filament || !firstBase || !firstNormal || !firstRadial) return;
 
           const travelSpeed = route.speed * (0.22 + visual.active * 0.78 + pulse * 0.28);
           const rawProgress = (frame * travelSpeed + route.offset) % 1;
           const progress = route.reverse ? 1 - rawProgress : rawProgress;
-          const scaled = progress * Math.max(fiber.basePoints.length - 1, 1);
+          const scaled = progress * Math.max(filament.basePoints.length - 1, 1);
           const lowerIndex = Math.floor(scaled);
-          const upperIndex = Math.min(fiber.basePoints.length - 1, lowerIndex + 1);
+          const upperIndex = Math.min(filament.basePoints.length - 1, lowerIndex + 1);
           const mix = scaled - lowerIndex;
-          const lower = fiber.basePoints[lowerIndex] ?? firstBase;
-          const upper = fiber.basePoints[upperIndex] ?? lower;
-          const normal = fiber.normals[lowerIndex] ?? firstNormal;
-          const radial = fiber.radials[lowerIndex] ?? firstRadial;
+          const lower = filament.basePoints[lowerIndex] ?? firstBase;
+          const upper = filament.basePoints[upperIndex] ?? lower;
+          const normal = filament.normals[lowerIndex] ?? firstNormal;
+          const radial = filament.radials[lowerIndex] ?? firstRadial;
           const wave = Math.sin(frame * (1.4 + fieldIndex * 0.22) + route.phase + progress * 8.6);
           const spark = 0.045 + visual.active * 0.055 + pulse * 0.04;
 
@@ -639,16 +1037,23 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
       });
 
       for (const [name, branch] of [...branchRegistryRef.current.entries()]) {
-        const ageMs = nowMs - branch.pulseStartedAt;
-        const branchPulse = pulseFromAge(ageMs);
+        const branchPulse = pulseFromAge(nowMs - branch.pulseStartedAt);
         const fadeProgress = branch.fading && branch.fadeStartedAt !== null ? Math.min(1, (nowMs - branch.fadeStartedAt) / BRANCH_FADE_MS) : 0;
-        const emergeProgress = Math.min(1, (nowMs - branch.createdAt) / 900);
+        const emergeProgress = smoothProgress((nowMs - branch.createdAt) / 900);
         const opacity = (branch.fading ? 1 - fadeProgress : 1) * emergeProgress;
+        const collapse = branch.fading ? 1 - fadeProgress * 0.72 : 1;
+        const color = branch.color.clone().lerp(new THREE.Color("#fb7185"), fadeProgress * 0.85);
 
-        branch.group.scale.setScalar(THREE.MathUtils.lerp(branch.group.scale.x, 0.96 + branchPulse * 0.08, 0.12));
+        branch.lineMaterial.color.copy(color);
+        branch.clusterMaterial.color.copy(color);
+        branch.terminalMaterial.color.copy(color);
+        branch.flowMaterial.color.copy(color);
+        branch.group.scale.setScalar(THREE.MathUtils.lerp(branch.group.scale.x, (0.96 + branchPulse * 0.08) * collapse, 0.12));
         branch.group.rotation.y = Math.sin(frame * 0.72 + branch.angle) * 0.035;
         branch.cluster.rotation.y = frame * (0.72 + (branch.angle % 0.4));
         branch.terminalMaterial.size = 0.13 + Math.sin(frame * 4.4 + branch.angle) * 0.02 + branchPulse * 0.12;
+        branch.flowMaterial.size = 0.052 + branchPulse * 0.035;
+        updateBranchFlow(branch, frame, opacity);
         setBranchOpacity(branch, opacity, branchPulse * opacity);
 
         if (branch.fading && fadeProgress >= 1) {
@@ -658,7 +1063,7 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
       }
 
       controls.update();
-      renderer.render(scene, camera);
+      composer.render();
       raf = window.requestAnimationFrame(render);
     };
     render();
@@ -676,6 +1081,8 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
       for (const disposable of disposables) {
         disposable.dispose();
       }
+      bloomPass.dispose();
+      composer.dispose();
       renderer.dispose();
       renderer.domElement.remove();
       handlesRef.current = null;
@@ -698,7 +1105,7 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
         branchRegistryRef.current.set(subagent.name, branch);
       }
 
-      setBranchColor(branch, subagent.color);
+      branch.color.set(subagent.color);
       if (branch.lastEventAt !== subagent.lastEventAt || branch.eventCount !== subagent.eventCount) {
         branch.lastEventAt = subagent.lastEventAt;
         branch.eventCount = subagent.eventCount;
@@ -719,7 +1126,7 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
   return (
     <div
       ref={hostRef}
-      className="h-[390px] min-h-[340px] w-full overflow-hidden rounded-md bg-[radial-gradient(circle_at_center,rgba(103,232,249,0.2),rgba(56,189,248,0.05)_34%,rgba(2,6,23,0)_68%),linear-gradient(180deg,rgba(4,12,24,0.9),rgba(2,6,23,0.62))] sm:h-[620px]"
+      className="h-[390px] min-h-[340px] w-full overflow-hidden rounded-md bg-black sm:h-[620px]"
       aria-label={`Neural Core ${state.mode}`}
     />
   );

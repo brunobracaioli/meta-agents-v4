@@ -1,8 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AGENT_TRIGGER_CHANNEL, AGENT_TRIGGER_EVENT, isAgentTrigger } from "@/lib/ultron/agent-trigger";
 import { NeuralCoreScene } from "./neural-core-scene";
 import { deriveNeuralCoreState, type LiveEvent, type LiveProcess } from "./neural-core-state";
+import {
+  liveProcessFromAgentTrigger,
+  mergeLiveProcesses,
+  pruneOptimisticProcesses,
+  type OptimisticLiveProcess,
+} from "./optimistic-processes";
 
 const POLL_MS = 2000;
 const MAX_KEEP = 200;
@@ -54,6 +61,7 @@ function processSummary(process: LiveProcess | null, nowMs: number): string {
 export function LiveFeed() {
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const [processes, setProcesses] = useState<LiveProcess[]>([]);
+  const [optimisticProcesses, setOptimisticProcesses] = useState<OptimisticLiveProcess[]>([]);
   const [connected, setConnected] = useState(true);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const sinceRef = useRef<string | undefined>(undefined);
@@ -67,9 +75,12 @@ export function LiveFeed() {
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error("poll");
       const data = (await res.json()) as { events: LiveEvent[]; processes?: LiveProcess[]; now: string };
+      const nextProcesses = data.processes ?? [];
+      const serverNowMs = Date.parse(data.now);
       setConnected(true);
-      setNowMs(Date.parse(data.now));
-      setProcesses(data.processes ?? []);
+      setNowMs(serverNowMs);
+      setProcesses(nextProcesses);
+      setOptimisticProcesses((prev) => pruneOptimisticProcesses(nextProcesses, prev, serverNowMs));
       if (data.events.length > 0) {
         const fresh = data.events.filter((e) => !seenRef.current.has(e.id));
         fresh.forEach((e) => seenRef.current.add(e.id));
@@ -87,6 +98,17 @@ export function LiveFeed() {
     }
   }, []);
 
+  const addOptimisticProcess = useCallback((value: unknown) => {
+    if (!isAgentTrigger(value)) return;
+    const receivedAtMs = Date.now();
+    const process = liveProcessFromAgentTrigger(value, receivedAtMs);
+    setNowMs(receivedAtMs);
+    setOptimisticProcesses((prev) => [
+      process,
+      ...pruneOptimisticProcesses([], prev, receivedAtMs).filter((item) => item.id !== process.id),
+    ].slice(0, 12));
+  }, []);
+
   useEffect(() => {
     void poll();
     const id = setInterval(() => void poll(), POLL_MS);
@@ -98,7 +120,35 @@ export function LiveFeed() {
     return () => clearInterval(id);
   }, []);
 
-  const coreState = useMemo(() => deriveNeuralCoreState(events, nowMs, processes), [events, nowMs, processes]);
+  useEffect(() => {
+    setOptimisticProcesses((prev) => pruneOptimisticProcesses(processes, prev, nowMs));
+  }, [nowMs, processes]);
+
+  useEffect(() => {
+    const onLocalTrigger = (event: Event) => {
+      addOptimisticProcess((event as CustomEvent<unknown>).detail);
+    };
+
+    window.addEventListener(AGENT_TRIGGER_EVENT, onLocalTrigger);
+
+    if (!("BroadcastChannel" in window)) {
+      return () => window.removeEventListener(AGENT_TRIGGER_EVENT, onLocalTrigger);
+    }
+
+    const channel = new BroadcastChannel(AGENT_TRIGGER_CHANNEL);
+    channel.onmessage = (event: MessageEvent<unknown>) => addOptimisticProcess(event.data);
+
+    return () => {
+      window.removeEventListener(AGENT_TRIGGER_EVENT, onLocalTrigger);
+      channel.close();
+    };
+  }, [addOptimisticProcess]);
+
+  const liveProcesses = useMemo(
+    () => mergeLiveProcesses(processes, optimisticProcesses, nowMs),
+    [optimisticProcesses, processes, nowMs],
+  );
+  const coreState = useMemo(() => deriveNeuralCoreState(events, nowMs, liveProcesses), [events, nowMs, liveProcesses]);
   const feedEvents = useMemo(() => events.slice(-MAX_FEED).reverse(), [events]);
   const latestEvent = feedEvents[0] ?? null;
   const displayState: "activated" | "stand-by" | "success" | "error" =

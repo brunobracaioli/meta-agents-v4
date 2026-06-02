@@ -104,9 +104,14 @@ app.post("/ultron/chat", async (c) => {
   try {
     const result = await runChat(parsed.data.sessionId, parsed.data.text);
     if (result.kind === "need_capture") {
-      return c.json({ status: "need_capture", pendingId: result.pendingId, usedTools: result.usedTools });
+      return c.json({
+        status: "need_capture",
+        pendingId: result.pendingId,
+        usedTools: result.usedTools,
+        agentTriggers: result.agentTriggers,
+      });
     }
-    return c.json({ reply: result.reply, usedTools: result.usedTools });
+    return c.json({ reply: result.reply, usedTools: result.usedTools, agentTriggers: result.agentTriggers });
   } catch (err) {
     console.error(JSON.stringify({ level: "error", event: "chat_failed", message: errMsg(err) }));
     return c.json({ error: "chat_failed" }, 502);
@@ -128,9 +133,14 @@ app.post("/ultron/capture", async (c) => {
   try {
     const result = await resumeChat(parsed.data.sessionId, parsed.data.pendingId, parsed.data.image);
     if (result.kind === "need_capture") {
-      return c.json({ status: "need_capture", pendingId: result.pendingId, usedTools: result.usedTools });
+      return c.json({
+        status: "need_capture",
+        pendingId: result.pendingId,
+        usedTools: result.usedTools,
+        agentTriggers: result.agentTriggers,
+      });
     }
-    return c.json({ reply: result.reply, usedTools: result.usedTools });
+    return c.json({ reply: result.reply, usedTools: result.usedTools, agentTriggers: result.agentTriggers });
   } catch (err) {
     console.error(JSON.stringify({ level: "error", event: "capture_failed", message: errMsg(err) }));
     return c.json({ error: "chat_failed" }, 502);

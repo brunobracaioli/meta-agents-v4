@@ -312,6 +312,10 @@ const tools: Record<string, ToolDef> = {
       return {
         enqueued: true,
         job_id: data.id,
+        skill,
+        kind: "create",
+        client_slug: slug,
+        queued_at: new Date().toISOString(),
         message: "Pedido de criação enfileirado. Os agents começam em até um minuto; a campanha vai nascer pausada.",
       };
     },
@@ -401,6 +405,10 @@ const tools: Record<string, ToolDef> = {
       return {
         enqueued: true,
         job_id: data.id,
+        skill,
+        kind: "activate",
+        client_slug: slug,
+        queued_at: new Date().toISOString(),
         message: "Pedido de ativação enfileirado. A campanha vai ao ar em instantes.",
       };
     },

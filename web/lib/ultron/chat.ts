@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { env } from "@/lib/env";
 import { ULTRON_SYSTEM_PROMPT } from "@/lib/ultron/prompt";
 import { toolSpecs, runTool, CLIENT_TOOLS } from "@/lib/ultron/tools";
+import type { AgentTrigger } from "@/lib/ultron/agent-trigger";
 import { loadMemory, appendExchange, type ChatTurn } from "@/lib/ultron/memory";
 import { savePending, loadPending, deletePending } from "@/lib/ultron/pending";
 
@@ -20,8 +21,13 @@ function anthropic(): Anthropic {
   return client;
 }
 
-export type ChatReply = { kind: "reply"; reply: string; usedTools: string[] };
-export type ChatNeedCapture = { kind: "need_capture"; pendingId: string; usedTools: string[] };
+export type ChatReply = { kind: "reply"; reply: string; usedTools: string[]; agentTriggers: AgentTrigger[] };
+export type ChatNeedCapture = {
+  kind: "need_capture";
+  pendingId: string;
+  usedTools: string[];
+  agentTriggers: AgentTrigger[];
+};
 export type ChatResult = ChatReply | ChatNeedCapture;
 
 export type CapturedImage = {
@@ -39,6 +45,39 @@ function extractText(content: Anthropic.ContentBlock[]): string {
     .trim();
 }
 
+function stringField(value: unknown, key: string): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const field = (value as Record<string, unknown>)[key];
+  return typeof field === "string" && field.length > 0 ? field : null;
+}
+
+function agentTriggerFromToolResult(toolName: string, result: unknown): AgentTrigger | null {
+  if (toolName !== "request_campaign_creation" && toolName !== "request_campaign_activation") return null;
+  if (!result || typeof result !== "object" || Array.isArray(result)) return null;
+  if ((result as Record<string, unknown>).enqueued !== true) return null;
+
+  const jobId = stringField(result, "job_id");
+  const skill = stringField(result, "skill");
+  const kind = stringField(result, "kind");
+  const clientSlug = stringField(result, "client_slug");
+  const queuedAt = stringField(result, "queued_at");
+  if (!jobId || !skill || !kind || !clientSlug || !queuedAt) return null;
+
+  return {
+    jobId,
+    skill,
+    kind,
+    clientSlug,
+    queuedAt,
+    source: "ultron",
+  };
+}
+
+function pushAgentTrigger(agentTriggers: AgentTrigger[], trigger: AgentTrigger | null): void {
+  if (!trigger || agentTriggers.some((item) => item.jobId === trigger.jobId)) return;
+  agentTriggers.push(trigger);
+}
+
 /**
  * The bounded Claude tool loop. Runs server-side tools inline. If Claude calls a
  * client-side tool (capture_screen), it CANNOT run here — we persist the in-flight
@@ -47,6 +86,7 @@ function extractText(content: Anthropic.ContentBlock[]): string {
 async function runLoop(
   messages: Anthropic.MessageParam[],
   usedTools: string[],
+  agentTriggers: AgentTrigger[],
   startIteration: number,
   ctx: LoopContext,
 ): Promise<ChatResult> {
@@ -60,7 +100,7 @@ async function runLoop(
     });
 
     if (res.stop_reason !== "tool_use") {
-      return { kind: "reply", reply: extractText(res.content) || FALLBACK, usedTools };
+      return { kind: "reply", reply: extractText(res.content) || FALLBACK, usedTools, agentTriggers };
     }
 
     messages.push({ role: "assistant", content: res.content });
@@ -78,6 +118,7 @@ async function runLoop(
         continue;
       }
       const result = await runTool(block.name, (block.input ?? {}) as Record<string, unknown>);
+      pushAgentTrigger(agentTriggers, agentTriggerFromToolResult(block.name, result));
       partialResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) });
     }
 
@@ -91,15 +132,16 @@ async function runLoop(
         userText: ctx.userText,
         iteration: i + 1,
         usedTools,
+        agentTriggers,
       });
-      return { kind: "need_capture", pendingId, usedTools };
+      return { kind: "need_capture", pendingId, usedTools, agentTriggers };
     }
 
     messages.push({ role: "user", content: partialResults });
   }
 
   // Exhausted the tool-iteration budget without a final text answer.
-  return { kind: "reply", reply: FALLBACK, usedTools };
+  return { kind: "reply", reply: FALLBACK, usedTools, agentTriggers };
 }
 
 /**
@@ -113,7 +155,7 @@ export async function runChat(sessionId: string, text: string): Promise<ChatResu
   const messages: Anthropic.MessageParam[] = memory.map((t) => ({ role: t.role, content: t.content }));
   messages.push({ role: "user", content: text });
 
-  const result = await runLoop(messages, [], 0, { sessionId, priorMemory: memory, userText: text });
+  const result = await runLoop(messages, [], [], 0, { sessionId, priorMemory: memory, userText: text });
   if (result.kind === "reply") {
     await appendExchange(sessionId, text, result.reply, memory);
   }
@@ -133,7 +175,12 @@ export async function resumeChat(
 ): Promise<ChatResult> {
   const pending = await loadPending(sessionId, pendingId);
   if (!pending) {
-    return { kind: "reply", reply: "Perdi o contexto da captura. Pode repetir o pedido?", usedTools: [] };
+    return {
+      kind: "reply",
+      reply: "Perdi o contexto da captura. Pode repetir o pedido?",
+      usedTools: [],
+      agentTriggers: [],
+    };
   }
 
   const captureResult: Anthropic.ToolResultBlockParam = {
@@ -145,7 +192,7 @@ export async function resumeChat(
   const messages = pending.messages;
   messages.push({ role: "user", content: [...pending.partialResults, captureResult] });
 
-  const result = await runLoop(messages, pending.usedTools, pending.iteration, {
+  const result = await runLoop(messages, pending.usedTools, pending.agentTriggers ?? [], pending.iteration, {
     sessionId,
     priorMemory: pending.priorMemory,
     userText: pending.userText,
