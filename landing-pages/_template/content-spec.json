@@ -1,0 +1,32 @@
+{
+  "subdomain": "cca",
+  "name": "CCA",
+  "product": "Claude Code Architect",
+  "price_cents": 149700,
+  "checkout_url": "https://pay.hub.la/KiIZ2UcpwcbOps224hbI",
+  "waitlist_url": "https://wa.me/5500000000000?text=Quero%20entrar%20na%20lista%20do%20Claude%20Code%20Architect",
+  "cart_state": "open",
+  "noindex": true,
+  "site_url": "https://cca.b2tech.io",
+  "sections": [
+    "hero",
+    "problem",
+    "solution",
+    "features",
+    "curriculum",
+    "proof",
+    "offer",
+    "faq",
+    "finalCta",
+    "footer"
+  ],
+  "tracking": {
+    "fb_pixel_id": "653995666521954",
+    "ga4_id": "G-Z60CJ7W2Z8",
+    "consent_key": "b2tech_consent_v1"
+  },
+  "seo": {
+    "title": "Claude Code Architect — domine engenharia com IA",
+    "description": "Aprenda a construir software de verdade com Claude Code: arquitetura, agentes e automação na prática."
+  }
+}

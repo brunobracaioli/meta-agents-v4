@@ -1,0 +1,257 @@
+/* B2 Tech brand tokens — navy + orange, hacker grid. See ADR 0012. */
+:root {
+  --navy-900: #0a0f1a;
+  --navy-800: #0e1422;
+  --navy-700: #141c2e;
+  --orange: #ff6b1a;
+  --orange-hi: #ff8243;
+  --text: #e8edf6;
+  --text-dim: #9aa7bd;
+  --border: #1e2940;
+  --radius: 12px;
+  --maxw: 1080px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--navy-900);
+  background-image:
+    linear-gradient(rgba(255, 107, 26, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 107, 26, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+main {
+  display: block;
+}
+
+.section {
+  padding: 72px 24px;
+}
+
+.container {
+  max-width: var(--maxw);
+  margin: 0 auto;
+}
+
+.eyebrow {
+  color: var(--orange);
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.15;
+  margin: 0 0 0.5em;
+}
+
+h1 {
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+  font-weight: 700;
+}
+
+p {
+  color: var(--text-dim);
+  font-size: 1.05rem;
+}
+
+.lead {
+  font-size: 1.2rem;
+  color: var(--text);
+}
+
+.cta {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--orange), var(--orange-hi));
+  color: #0a0f1a;
+  font-weight: 700;
+  font-size: 1.05rem;
+  padding: 16px 32px;
+  border-radius: var(--radius);
+  text-decoration: none;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  box-shadow: 0 8px 24px rgba(255, 107, 26, 0.25);
+}
+
+.cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(255, 107, 26, 0.35);
+}
+
+.hero {
+  padding: 120px 24px 96px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-top: 32px;
+}
+
+.card {
+  background: var(--navy-800);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.card h3 {
+  color: var(--text);
+  font-size: 1.15rem;
+}
+
+.bullets {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0 0;
+}
+
+.bullets li {
+  color: var(--text-dim);
+  padding: 8px 0 8px 28px;
+  position: relative;
+}
+
+.bullets li::before {
+  content: "→";
+  color: var(--orange);
+  position: absolute;
+  left: 0;
+}
+
+.offer {
+  text-align: center;
+  background: var(--navy-800);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 48px 32px;
+}
+
+.price {
+  font-size: 3rem;
+  font-weight: 800;
+  color: var(--text);
+  margin: 16px 0;
+}
+
+.anchor {
+  color: var(--text-dim);
+  text-decoration: line-through;
+  font-size: 1.1rem;
+}
+
+.guarantee {
+  margin-top: 20px;
+  font-size: 0.95rem;
+  color: var(--text-dim);
+}
+
+.faq-item {
+  border-bottom: 1px solid var(--border);
+  padding: 20px 0;
+}
+
+.faq-item h3 {
+  color: var(--text);
+  font-size: 1.1rem;
+  margin-bottom: 4px;
+}
+
+.final {
+  text-align: center;
+  background: linear-gradient(180deg, var(--navy-800), var(--navy-900));
+}
+
+footer {
+  border-top: 1px solid var(--border);
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+footer a {
+  color: var(--text-dim);
+  margin: 0 12px;
+}
+
+/* Consent banner */
+.consent {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  background: var(--navy-700);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  z-index: 50;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.consent p {
+  margin: 0;
+  font-size: 0.9rem;
+  flex: 1 1 280px;
+}
+
+.consent-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-ghost,
+.btn-accept {
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-dim);
+}
+
+.btn-accept {
+  background: var(--orange);
+  color: #0a0f1a;
+  border-color: var(--orange);
+}

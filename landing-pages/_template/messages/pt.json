@@ -1,0 +1,83 @@
+{
+  "seo": {
+    "title": "Claude Code Architect — engenharia com IA na prática",
+    "description": "O curso para devs que querem construir software de verdade com Claude Code: arquitetura, agentes e automação.",
+    "ogAlt": "Claude Code Architect"
+  },
+  "hero": {
+    "headline": "Construa software de verdade com Claude Code",
+    "subhead": "Do prompt à arquitetura: o método para devs que querem usar IA como ferramenta de engenharia, não como gambiarra.",
+    "ctaLabel": "Quero participar"
+  },
+  "sections": {
+    "problem": {
+      "heading": "IA virou ruído na sua rotina de dev",
+      "body": "Você testou copiloto, colou prompt no chat e mesmo assim continua refazendo trabalho. O problema não é a ferramenta — é a ausência de método para integrar IA ao ciclo de engenharia.",
+      "bullets": [
+        "Código gerado que ninguém revisa direito",
+        "Prompts que funcionam uma vez e quebram na próxima",
+        "Zero arquitetura: tudo vira script descartável"
+      ]
+    },
+    "solution": {
+      "heading": "Um método, não um truque",
+      "body": "O Claude Code Architect ensina a tratar IA como parte do sistema: contratos claros, agentes especializados, automação auditável. Você sai com um fluxo repetível, do design ao deploy."
+    },
+    "features": {
+      "heading": "O que você domina",
+      "items": [
+        { "title": "Arquitetura com IA", "desc": "Modelar features com spec antes de codar — IA respeitando boundaries." },
+        { "title": "Agentes especializados", "desc": "Construir subagents e skills que automatizam tarefas repetíveis." },
+        { "title": "Automação auditável", "desc": "Pipelines headless com logs, idempotência e rollback." }
+      ]
+    },
+    "curriculum": {
+      "heading": "A jornada",
+      "modules": [
+        { "title": "Fundamentos", "desc": "Como Claude Code pensa, e como dar contexto que rende." },
+        { "title": "Engenharia de agentes", "desc": "Skills, subagents e orquestração determinística." },
+        { "title": "Produção", "desc": "Deploy, observabilidade e segurança de fluxos com IA." }
+      ]
+    },
+    "proof": {
+      "heading": "Quem já está construindo",
+      "testimonials": [
+        { "quote": "Parei de brigar com a IA e comecei a entregar. O método mudou meu fluxo inteiro.", "author": "Dev sênior, fintech" },
+        { "quote": "Automatizei tarefas que eu adiava há meses. Em uma semana já tinha ROI.", "author": "Tech lead, SaaS" }
+      ]
+    }
+  },
+  "offer": {
+    "heading": "Entre para o Claude Code Architect",
+    "priceLabel": "R$ 1.497",
+    "anchor": "",
+    "bonuses": [
+      "Acesso à comunidade de arquitetos",
+      "Templates de skills e subagents prontos"
+    ],
+    "guarantee": "7 dias de garantia incondicional.",
+    "ctaLabel": "Garantir minha vaga"
+  },
+  "faq": [
+    { "q": "Preciso já saber usar IA?", "a": "Não. Começamos do método e evoluímos até fluxos avançados de engenharia." },
+    { "q": "Serve para qualquer linguagem?", "a": "Sim. O método é agnóstico de stack — os exemplos cobrem TypeScript, Python e mais." },
+    { "q": "Tem garantia?", "a": "Sim, 7 dias incondicionais. Se não for para você, devolvemos." },
+    { "q": "Como recebo o acesso?", "a": "Logo após a compra, por e-mail, com acesso imediato à plataforma." }
+  ],
+  "finalCta": {
+    "headline": "Pronto para usar IA como engenheiro?",
+    "ctaLabel": "Quero entrar agora"
+  },
+  "cartClosed": {
+    "headline": "As inscrições estão fechadas no momento",
+    "subhead": "Entre na lista de espera e seja avisado em primeira mão na próxima turma.",
+    "waitlistCtaLabel": "Entrar na lista"
+  },
+  "footer": {
+    "legal": "© B2 Tech. Todos os direitos reservados.",
+    "links": [
+      { "label": "Termos", "href": "#" },
+      { "label": "Privacidade", "href": "#" }
+    ]
+  }
+}
