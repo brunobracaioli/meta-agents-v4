@@ -95,6 +95,30 @@ def _classify(event: dict) -> dict | None:
             }
         return None
 
+    # Landing-page build + deploy run through Bash (next build / wrangler). Surface the
+    # meaningful steps so the dashboard shows "buildando"/"publicando" instead of nothing.
+    if tool_name == "Bash":
+        command = str(tool_input.get("command") or "")
+        if "wrangler pages deploy" in command or "pages/projects" in command:
+            return {
+                "run_id": session,
+                "agent_name": "Cloudflare",
+                "agent_type": "tool",
+                "event_type": "step",
+                "tool_name": tool_name,
+                "summary": "publicando a landing page no Cloudflare Pages",
+            }
+        if "next build" in command:
+            return {
+                "run_id": session,
+                "agent_name": "build",
+                "agent_type": "tool",
+                "event_type": "step",
+                "tool_name": tool_name,
+                "summary": "buildando a landing page",
+            }
+        return None
+
     for suffix, (agent_name, agent_type, summary) in _TOOL_MAP:
         if tool_name.endswith(suffix) or suffix in tool_name:
             return {

@@ -95,3 +95,10 @@ public/sprites/**/*.gif
 web/node_modules
 web/.next
 web/.vercel
+
+# Landing pages (Next.js static export) — commit source, not build artifacts
+landing-pages/**/node_modules/
+landing-pages/**/.next/
+landing-pages/**/out/
+landing-pages/**/next-env.d.ts
+landing-pages/**/*.tsbuildinfo

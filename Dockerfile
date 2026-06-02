@@ -12,6 +12,8 @@ FROM node:22-bookworm-slim
 ARG SUPERCRONIC_VERSION=0.2.30
 ARG SUPERCRONIC_SHA1SUM=9f27ad28c5c57cd133325b2a66bba69ba2235799
 ARG CLAUDE_CODE_VERSION=latest
+# Cloudflare Pages deploy CLI for the create-landing-page-* skill (ADR 0012). Pinned.
+ARG WRANGLER_VERSION=4.97.0
 
 ENV TZ=America/Sao_Paulo \
     DEBIAN_FRONTEND=noninteractive \
@@ -31,7 +33,7 @@ RUN curl -fsSLo /usr/local/bin/supercronic \
  && echo "${SUPERCRONIC_SHA1SUM}  /usr/local/bin/supercronic" | sha1sum -c - \
  && chmod +x /usr/local/bin/supercronic
 
-RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" "wrangler@${WRANGLER_VERSION}" \
  && npm cache clean --force
 
 RUN useradd -m -u 1001 -s /bin/bash runner \
@@ -46,10 +48,20 @@ COPY --chown=runner:runner CLAUDE.md /app/CLAUDE.md
 COPY --chown=runner:runner .mcp.json /app/.mcp.json
 COPY --chown=runner:runner scripts /app/scripts
 COPY --chown=runner:runner crontab /app/crontab
+# Landing-page template + any committed generated LPs. node_modules/out/.next are
+# excluded via .dockerignore; deps are pre-baked below so the skill skips install at run.
+COPY --chown=runner:runner landing-pages /app/landing-pages
 
 RUN chmod +x /app/scripts/*.sh
 
 USER runner
+
+# Pre-bake the template's node_modules (incl. devDeps — next build + tsc need them even
+# under NODE_ENV=production) so the skill copies them per LP instead of running a slow,
+# flaky `npm ci` inside the 1500s job timeout. See ADR 0012 / SPEC-011.
+RUN cd /app/landing-pages/_template \
+ && npm ci --include=dev \
+ && npm cache clean --force
 
 VOLUME ["/home/runner/.claude"]
 

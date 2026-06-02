@@ -25,6 +25,11 @@ tentativas-geracao-de-campanhas/
 .claude/materiais-das-empresas/*/generated-ads/
 .claude/materiais-das-empresas/*/imagens-geradas/
 
+# Landing-page build artifacts (rebuilt at run; _template deps pre-baked in image)
+landing-pages/**/out/
+landing-pages/**/.next/
+landing-pages/**/.gen/
+
 # Plan / scratch artifacts
 docs/spec-driven/
 
