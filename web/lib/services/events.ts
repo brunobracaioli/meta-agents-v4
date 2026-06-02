@@ -176,6 +176,7 @@ function payloadString(payload: Json | null, key: string): string | null {
 }
 
 function inferKind(skill: string): string | null {
+  if (skill.startsWith("create-landing-page")) return "landing";
   if (skill.startsWith("create-")) return "create";
   if (skill.startsWith("activate-")) return "activate";
   if (skill.startsWith("analyze-")) return "analyze";

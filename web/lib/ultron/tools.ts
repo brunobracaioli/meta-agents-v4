@@ -44,6 +44,15 @@ const CREATE_SKILL_BY_SLUG: Record<string, string> = {
 const ACTIVATE_SKILL_BY_SLUG: Record<string, string> = {
   brunobracaioli: "activate-campaign-brunobracaioli",
 };
+const LANDING_SKILL_BY_SLUG: Record<string, string> = {
+  brunobracaioli: "create-landing-page-brunobracaioli",
+};
+
+// `nome` becomes the subdomain (<nome>.b2tech.io) AND the Cloudflare project suffix
+// (b2tech-<nome>) AND a runner arg — so it must satisfy the poller's args charset and
+// CF naming. Lowercase letters, digits, hyphens; 2-40 chars. Validated server-side so a
+// misheard voice command can't inject anything into the deploy.
+const NOME_RE = /^[a-z0-9-]{2,40}$/;
 
 function str(input: Record<string, unknown>, key: string): string | undefined {
   const v = input[key];
@@ -410,6 +419,85 @@ const tools: Record<string, ToolDef> = {
         client_slug: slug,
         queued_at: new Date().toISOString(),
         message: "Pedido de ativação enfileirado. A campanha vai ao ar em instantes.",
+      };
+    },
+  },
+
+  request_landing_page_creation: {
+    spec: {
+      name: "request_landing_page_creation",
+      description:
+        "Enfileira a CRIAÇÃO de uma landing page profissional para um cliente (os agents rodam na VM, fazem deploy no Cloudflare Pages sob <nome>.b2tech.io). A página nasce em PREVIEW (noindex, não indexável) — NÃO gasta verba de anúncio. FLUXO OBRIGATÓRIO: chame primeiro com confirm=false para obter os detalhes, leia-os ao operador e peça confirmação; só chame com confirm=true após um 'sim' explícito.",
+      input_schema: {
+        type: "object",
+        properties: {
+          client_slug: { type: "string", description: "slug do cliente, ex.: brunobracaioli" },
+          nome: {
+            type: "string",
+            description:
+              "rótulo do subdomínio (vira <nome>.b2tech.io), só minúsculas, números e hífen, 2-40 chars. Ex.: 'cca'. Opcional — padrão 'cca'.",
+          },
+          confirm: {
+            type: "boolean",
+            description: "false = apenas devolve os detalhes para confirmar; true = enfileira de fato (use só após o operador confirmar)",
+          },
+        },
+        required: ["client_slug", "confirm"],
+      },
+    },
+    handler: async (input) => {
+      const slug = str(input, "client_slug");
+      const confirm = input.confirm === true;
+      const nome = (str(input, "nome") ?? "cca").toLowerCase();
+      if (!slug) return { error: "client_slug é obrigatório" };
+      if (!NOME_RE.test(nome)) {
+        return { error: `nome '${nome}' inválido; use só minúsculas, números e hífen (2-40 chars)` };
+      }
+      const client = await resolveClientId(slug);
+      if (!client) return { error: `cliente '${slug}' não encontrado` };
+      const skill = LANDING_SKILL_BY_SLUG[slug];
+      if (!skill) return { error: `cliente '${slug}' não está habilitado para criação automática de landing page` };
+
+      if (!confirm) {
+        return {
+          confirmation_required: true,
+          action: "criar landing page",
+          client: client.name,
+          client_slug: slug,
+          subdomain: `${nome}.b2tech.io`,
+          note: "A página nasce em PREVIEW (noindex, não indexável) e NÃO gasta verba de anúncio. O go-live (tornar indexável) é um passo manual depois. Confirme com o operador antes de chamar com confirm=true.",
+        };
+      }
+
+      const { allowed } = await enforceLimit(rateLimiters.landingCreation(), slug, "landing-creation");
+      if (!allowed) return { error: "muitos pedidos de landing page para este cliente agora; tente de novo daqui a pouco" };
+
+      const { data, error } = await db()
+        .from("agent_jobs")
+        .insert({
+          client_id: client.id,
+          skill,
+          kind: "landing",
+          args: { nome, "cart-state": "open", noindex: 1 },
+          requested_by: "ultron",
+        })
+        .select("id")
+        .single();
+      if (error) {
+        if (isUniqueViolation(error)) {
+          return { enqueued: false, reason: "já existe um pedido de landing page em andamento para este cliente" };
+        }
+        throw error;
+      }
+      return {
+        enqueued: true,
+        job_id: data.id,
+        skill,
+        kind: "landing",
+        client_slug: slug,
+        subdomain: `${nome}.b2tech.io`,
+        queued_at: new Date().toISOString(),
+        message: "Pedido de landing page enfileirado. Os agents começam em até um minuto; a página vai nascer em preview (noindex).",
       };
     },
   },

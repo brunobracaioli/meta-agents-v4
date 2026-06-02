@@ -31,7 +31,7 @@ function query(table: string) {
 
 vi.mock("@/lib/db/client", () => ({ db: () => ({ from: (t: string) => query(t) }) }));
 vi.mock("@/lib/ratelimit", () => ({
-  rateLimiters: { campaignCreation: () => ({}), campaignActivation: () => ({}) },
+  rateLimiters: { campaignCreation: () => ({}), campaignActivation: () => ({}), landingCreation: () => ({}) },
   enforceLimit: vi.fn(async () => ({ allowed: true })),
 }));
 
@@ -151,5 +151,68 @@ describe("request_campaign_activation", () => {
     expect(state.inserts).toHaveLength(1);
     expect((state.inserts[0]!.row as Record<string, unknown>).kind).toBe("activate");
     expect((state.inserts[0]!.row as Record<string, unknown>).args).toEqual({ campaign_meta_id: "120" });
+  });
+});
+
+describe("request_landing_page_creation", () => {
+  it("with confirm=false asks for confirmation (preview/noindex) and does NOT enqueue", async () => {
+    state.clients = { data: KNOWN_CLIENT, error: null };
+    const out = (await runTool("request_landing_page_creation", {
+      client_slug: "brunobracaioli",
+      nome: "cca",
+      confirm: false,
+    })) as Record<string, unknown>;
+    expect(out.confirmation_required).toBe(true);
+    expect(out.subdomain).toBe("cca.b2tech.io");
+    expect(state.inserts).toHaveLength(0);
+  });
+
+  it("rejects an invalid nome (charset/length) and does NOT enqueue", async () => {
+    state.clients = { data: KNOWN_CLIENT, error: null };
+    const out = (await runTool("request_landing_page_creation", {
+      client_slug: "brunobracaioli",
+      nome: "Invalid Name!",
+      confirm: true,
+    })) as Record<string, unknown>;
+    expect(out.error).toBeDefined();
+    expect(state.inserts).toHaveLength(0);
+  });
+
+  it("rejects a client missing from the landing allowlist", async () => {
+    state.clients = { data: { ...KNOWN_CLIENT }, error: null };
+    const out = (await runTool("request_landing_page_creation", {
+      client_slug: "outro",
+      confirm: true,
+    })) as Record<string, unknown>;
+    expect(out.error).toBeDefined();
+    expect(state.inserts).toHaveLength(0);
+  });
+
+  it("with confirm=true enqueues a landing job with the right args (default nome=cca)", async () => {
+    state.clients = { data: KNOWN_CLIENT, error: null };
+    const out = (await runTool("request_landing_page_creation", {
+      client_slug: "brunobracaioli",
+      confirm: true,
+    })) as Record<string, unknown>;
+    expect(out.enqueued).toBe(true);
+    expect(out.job_id).toBe("job-1");
+    expect(out.kind).toBe("landing");
+    expect(out.skill).toBe("create-landing-page-brunobracaioli");
+    expect(out.subdomain).toBe("cca.b2tech.io");
+    expect(state.inserts).toHaveLength(1);
+    const row = state.inserts[0]!.row as Record<string, unknown>;
+    expect(row.kind).toBe("landing");
+    expect(row.args).toEqual({ nome: "cca", "cart-state": "open", noindex: 1 });
+  });
+
+  it("surfaces an in-flight duplicate (unique violation) instead of throwing", async () => {
+    state.clients = { data: KNOWN_CLIENT, error: null };
+    state.jobInsert = { data: null, error: { code: "23505" } };
+    const out = (await runTool("request_landing_page_creation", {
+      client_slug: "brunobracaioli",
+      confirm: true,
+    })) as Record<string, unknown>;
+    expect(out.enqueued).toBe(false);
+    expect(out.reason).toContain("andamento");
   });
 });
