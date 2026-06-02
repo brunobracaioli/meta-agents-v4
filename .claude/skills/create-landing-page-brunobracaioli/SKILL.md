@@ -1,7 +1,7 @@
 ---
 name: create-landing-page-brunobracaioli
 description: Cria de forma 100% autônoma e headless uma landing page profissional de alta conversão para o cliente brunobracaioli (produto Claude Code Architect) e faz deploy no Cloudflare Pages sob <nome>.b2tech.io — scrape de referência → arquitetura de conversão → copy long-form pt-BR → hero/OG → build Next.js static export → deploy → persistência no Supabase e manifest. Use quando pedirem "criar landing page para brunobracaioli/CCA", ou quando disparada via Ultron/headless (`claude -p --dangerously-skip-permissions ".claude/skills/create-landing-page-brunobracaioli nome=cca"`). NÃO cria campanha Meta — só landing page.
-argument-hint: "[nome=cca] [ref-url=https://cca.b2tech.io] [checkout-url=https://pay.hub.la/KiIZ2UcpwcbOps224hbI] [cart-state=open] [noindex=1] [deploy=true]"
+argument-hint: "nome=<subdominio> [ref-url=https://cca.b2tech.io] [checkout-url=https://pay.hub.la/KiIZ2UcpwcbOps224hbI] [cart-state=open] [noindex=1] [deploy=true] [overwrite=false]"
 allowed-tools: Read, Bash, Glob, Write, Agent, Skill, mcp__supabase__execute_sql, mcp__supabase__list_tables
 ---
 
@@ -70,7 +70,8 @@ tráfego de agentes IA)."
 
 | Decisão | Valor | Por quê |
 |---|---|---|
-| `nome` (subdomínio) | `cca` | Vira `cca.b2tech.io` + projeto CF `b2tech-cca` |
+| `nome` (subdomínio) | **obrigatório (sem default)** | Vira `<nome>.b2tech.io` + projeto CF `b2tech-<nome>`. Sem `nome` → aborta. **Nunca** assuma `cca` (é uma página de produção). |
+| `overwrite` | `false` | Se `true`, permite redeploy por cima de um projeto CF já existente com deploy. Default `false` = recusa sobrescrever página viva. **O Ultron nunca envia `overwrite`** (voz não sobrescreve produção). |
 | Stack | Next.js 15 **static export** (`out/` flat) | ADR 0012 |
 | Template | `landing-pages/_template/` → `landing-pages/<nome>/` | Clonável |
 | Seções | enum: hero·problem·solution·features·curriculum·proof·offer·faq·finalCta·footer | Template |
@@ -82,8 +83,9 @@ tráfego de agentes IA)."
 **Validação de `nome`:** `^[a-z0-9-]{2,40}$` (vira subdomínio + nome de projeto CF). Se
 inválido → manifest `verified:false` e sair.
 
-**Overrides** via `$ARGUMENTS` (`key=value`): `nome`, `ref-url`, `checkout-url`,
-`cart-state`, `noindex`, `deploy`. Sem argumentos → defaults acima.
+**Args** via `$ARGUMENTS` (`key=value`): `nome` (**obrigatório**), `ref-url`,
+`checkout-url`, `cart-state`, `noindex`, `deploy`, `overwrite`. Sem `nome` → aborta
+(manifest `verified:false`). Nunca use `cca` como fallback.
 
 ---
 
@@ -96,7 +98,9 @@ Em uma chamada Bash:
   `OPENAI_API_KEY` para o `image-generate`; para deploy `CLOUDFLARE_API_TOKEN` +
   `CLOUDFLARE_ACCOUNT_ID`). **Persistência é via MCP do Supabase** — não precisa de chave
   Supabase no env (o MCP usa `service_role` e bypassa RLS).
-- Parse de overrides; aplicar defaults da §3; **validar `nome`** (`^[a-z0-9-]{2,40}$`).
+- Parse dos args; aplicar defaults da §3 (`overwrite=false`). **`nome` é obrigatório**:
+  se ausente → manifest `verified:false` (`errors:["nome obrigatório"]`) e sair. Validar
+  `nome =~ ^[a-z0-9-]{2,40}$`. **Nunca** assumir `cca`.
 - Paths: `LP_DIR=landing-pages/${nome}`, `TRY_DIR=tentativas-geracao-de-campanhas`,
   `MAT=.claude/materiais-das-empresas/brunobracaioli`. `mkdir -p ${TRY_DIR}`.
 - **Higiene de segredo:** strip de espaços/CR no token: `CF_TOKEN=$(printf %s "$CLOUDFLARE_API_TOKEN" | tr -d '[:space:]')`.
@@ -173,6 +177,18 @@ Em `${LP_DIR}`:
 
 ### Passo 9 — Deploy no Cloudflare Pages (se `deploy=true`)
 Usar `CF_TOKEN` (limpo) + `CLOUDFLARE_ACCOUNT_ID`. Em `${LP_DIR}`:
+
+0. **Guard anti-sobrescrita (defesa de produção).** Antes de criar/deployar, cheque se o
+   projeto `b2tech-${nome}` já existe e **já tem deploy** (= página viva):
+   ```bash
+   LAST=$(curl -sS "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/b2tech-${nome}" \
+     -H "Authorization: Bearer ${CF_TOKEN}" | jq -r '(try .result.latest_deployment.id) // empty')
+   ```
+   - `LAST` vazio (projeto não existe, ou existe sem nenhum deploy) → **siga** (passo 1).
+   - `LAST` não-vazio **e** `overwrite != true` → **ABORTE**: não crie/deploye nada; grave
+     manifest `verified:false`, `errors:["b2tech-${nome} já está no ar (deploy ${LAST}); recusando sobrescrever sem overwrite=true"]`, e encerre com mensagem clara. (Protege `cca`, `cca-test` e qualquer LP viva.)
+   - `LAST` não-vazio **e** `overwrite=true` → redeploy intencional; siga.
+
 1. **Criar projeto** (idempotente — se já existe, wrangler erra; trate como "existe", siga):
    ```bash
    CLOUDFLARE_API_TOKEN="$CF_TOKEN" CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID" \
@@ -273,6 +289,8 @@ URL (`https://${nome}.b2tech.io`), projeto CF, status SSL, estado `noindex`, e a
 - ❌ Pixel/GA4 fora do gate de consentimento (nunca hardcode no `layout.tsx`).
 - ❌ Features de servidor (API routes, server actions, ISR) — quebram `output:'export'`.
 - ❌ Flip de `noindex` sem rebuild+redeploy.
+- ❌ Assumir `nome=cca` (ou qualquer default) — `nome` é obrigatório; sem ele, aborte.
+- ❌ Deployar por cima de um projeto CF que já tem deploy sem `overwrite=true` (Passo 9.0).
 - ❌ Confiar que o bind auto-cria o CNAME (não cria — sempre crie explicitamente, Passo 9.4).
 - ❌ Concluir `ssl:"error"` por `Could not resolve host` de resolver local sem checar `*.pages.dev`.
 - ❌ Criar a LP na CF sem persistir no Supabase + `operation_logs`.

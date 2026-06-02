@@ -155,15 +155,26 @@ describe("request_campaign_activation", () => {
 });
 
 describe("request_landing_page_creation", () => {
-  it("with confirm=false asks for confirmation (preview/noindex) and does NOT enqueue", async () => {
+  it("with a missing nome returns needs_input (no default) and does NOT enqueue", async () => {
     state.clients = { data: KNOWN_CLIENT, error: null };
     const out = (await runTool("request_landing_page_creation", {
       client_slug: "brunobracaioli",
-      nome: "cca",
+      confirm: true,
+    })) as Record<string, unknown>;
+    expect(out.needs_input).toBe(true);
+    expect(out.field).toBe("nome");
+    expect(state.inserts).toHaveLength(0);
+  });
+
+  it("with confirm=false and a nome asks for confirmation (preview/noindex) and does NOT enqueue", async () => {
+    state.clients = { data: KNOWN_CLIENT, error: null };
+    const out = (await runTool("request_landing_page_creation", {
+      client_slug: "brunobracaioli",
+      nome: "promo",
       confirm: false,
     })) as Record<string, unknown>;
     expect(out.confirmation_required).toBe(true);
-    expect(out.subdomain).toBe("cca.b2tech.io");
+    expect(out.subdomain).toBe("promo.b2tech.io");
     expect(state.inserts).toHaveLength(0);
   });
 
@@ -182,27 +193,29 @@ describe("request_landing_page_creation", () => {
     state.clients = { data: { ...KNOWN_CLIENT }, error: null };
     const out = (await runTool("request_landing_page_creation", {
       client_slug: "outro",
+      nome: "promo",
       confirm: true,
     })) as Record<string, unknown>;
     expect(out.error).toBeDefined();
     expect(state.inserts).toHaveLength(0);
   });
 
-  it("with confirm=true enqueues a landing job with the right args (default nome=cca)", async () => {
+  it("with confirm=true and a nome enqueues a landing job with the right args", async () => {
     state.clients = { data: KNOWN_CLIENT, error: null };
     const out = (await runTool("request_landing_page_creation", {
       client_slug: "brunobracaioli",
+      nome: "promo",
       confirm: true,
     })) as Record<string, unknown>;
     expect(out.enqueued).toBe(true);
     expect(out.job_id).toBe("job-1");
     expect(out.kind).toBe("landing");
     expect(out.skill).toBe("create-landing-page-brunobracaioli");
-    expect(out.subdomain).toBe("cca.b2tech.io");
+    expect(out.subdomain).toBe("promo.b2tech.io");
     expect(state.inserts).toHaveLength(1);
     const row = state.inserts[0]!.row as Record<string, unknown>;
     expect(row.kind).toBe("landing");
-    expect(row.args).toEqual({ nome: "cca", "cart-state": "open", noindex: 1 });
+    expect(row.args).toEqual({ nome: "promo", "cart-state": "open", noindex: 1 });
   });
 
   it("surfaces an in-flight duplicate (unique violation) instead of throwing", async () => {
@@ -210,6 +223,7 @@ describe("request_landing_page_creation", () => {
     state.jobInsert = { data: null, error: { code: "23505" } };
     const out = (await runTool("request_landing_page_creation", {
       client_slug: "brunobracaioli",
+      nome: "promo",
       confirm: true,
     })) as Record<string, unknown>;
     expect(out.enqueued).toBe(false);

@@ -435,7 +435,7 @@ const tools: Record<string, ToolDef> = {
           nome: {
             type: "string",
             description:
-              "rótulo do subdomínio (vira <nome>.b2tech.io), só minúsculas, números e hífen, 2-40 chars. Ex.: 'cca'. Opcional — padrão 'cca'.",
+              "rótulo do subdomínio (vira <nome>.b2tech.io), só minúsculas, números e hífen, 2-40 chars, ex.: 'promo'. OBRIGATÓRIO: se o operador não informou, PERGUNTE qual subdomínio usar antes de chamar — nunca invente nem reutilize o de uma página existente.",
           },
           confirm: {
             type: "boolean",
@@ -448,10 +448,21 @@ const tools: Record<string, ToolDef> = {
     handler: async (input) => {
       const slug = str(input, "client_slug");
       const confirm = input.confirm === true;
-      const nome = (str(input, "nome") ?? "cca").toLowerCase();
+      const nomeRaw = str(input, "nome");
       if (!slug) return { error: "client_slug é obrigatório" };
+      // No silent default: a missing subdomain must come back to the operator, never be
+      // guessed — guessing could target a live page (e.g. cca.b2tech.io). See ADR 0012.
+      if (!nomeRaw) {
+        return {
+          needs_input: true,
+          field: "nome",
+          message:
+            "Preciso do nome do subdomínio para a landing page (ex.: 'promo' vira promo.b2tech.io). Pergunte ao operador qual usar — não invente um nome nem reutilize o de uma página existente.",
+        };
+      }
+      const nome = nomeRaw.toLowerCase();
       if (!NOME_RE.test(nome)) {
-        return { error: `nome '${nome}' inválido; use só minúsculas, números e hífen (2-40 chars)` };
+        return { error: `nome '${nome}' inválido; só minúsculas, números e hífen (2-40 chars). Peça um subdomínio válido ao operador.` };
       }
       const client = await resolveClientId(slug);
       if (!client) return { error: `cliente '${slug}' não encontrado` };
