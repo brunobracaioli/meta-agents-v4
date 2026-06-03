@@ -267,3 +267,13 @@ Fecha a superfície nova com as regras globais (security by design, observabilid
   `docs/how-to/edit-and-publish-a-landing-page.md`.
 - **Testes:** `web/lib/landing/section-schemas.test.ts` (13 — inclui as 17 shapes reais da
   fixture + whitelist/href/CompareCell). Suite web **89/89**.
+
+### 9.5 Índice global de landing pages (UX, pós-waves)
+
+Aba **"Landing pages"** no nav do topo do dashboard (`/dashboard/landing-pages`) — lista TODAS as
+LPs de todos os clientes/produtos num lugar só (antes só dava p/ navegar cliente→produto→LP).
+Read-only, atrás do gate de sessão. Serviço `getAllLandingPages()`
+(`web/lib/services/landing-page.ts`): SELECT em `landing_pages` (newest-first) + 2 lookups bulk
+(clients, products) — sem N+1. Cada linha mostra cliente · produto · subdomínio · `draft_status` ·
+estado de deploy · pill preview/no-ar (`noindex`) + ações **Editar** (só se a LP tiver produto;
+`product_id` pode ser null = LP órfã → "sem editor") e **Ver no ar ↗** (link externo se `deployed`).

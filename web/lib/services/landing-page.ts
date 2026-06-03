@@ -206,6 +206,59 @@ export async function getClientProducts(slug: string): Promise<ProductSummary[] 
 
 export type LandingPageListItem = LandingPageMeta;
 
+/** A landing page enriched with its client + product labels, for the global index view. */
+export type LandingPageListRow = LandingPageMeta & {
+  clientSlug: string;
+  clientName: string;
+  productSlug: string | null;
+  productName: string | null;
+};
+
+/**
+ * Every landing page across all clients/products, newest first — feeds the top-level
+ * "Landing pages" dashboard tab. Joins client + product in two bulk lookups (no N+1).
+ * `product_id` may be null (orphan LP) → productSlug/productName come back null and the row
+ * has no editor route (the editor lives under /clients/<slug>/<product>/…). Read-only.
+ */
+export async function getAllLandingPages(): Promise<LandingPageListRow[]> {
+  const supabase = db();
+  const lpRes = await supabase
+    .from("landing_pages")
+    .select(
+      "id, client_id, product_id, name, subdomain, url, status, draft_status, noindex, published_at, updated_at",
+    )
+    .order("updated_at", { ascending: false });
+  if (lpRes.error) throw lpRes.error;
+  const rows = lpRes.data ?? [];
+  if (rows.length === 0) return [];
+
+  const clientIds = [...new Set(rows.map((r) => r.client_id))];
+  const productIds = [...new Set(rows.map((r) => r.product_id).filter((x): x is string => Boolean(x)))];
+
+  const clientsRes = await supabase.from("clients").select("id, slug, name").in("id", clientIds);
+  if (clientsRes.error) throw clientsRes.error;
+  const clientMap = new Map((clientsRes.data ?? []).map((c) => [c.id, c]));
+
+  const productMap = new Map<string, { id: string; slug: string; name: string }>();
+  if (productIds.length > 0) {
+    const productsRes = await supabase.from("products").select("id, slug, name").in("id", productIds);
+    if (productsRes.error) throw productsRes.error;
+    for (const p of productsRes.data ?? []) productMap.set(p.id, p);
+  }
+
+  return rows.map((r) => {
+    const c = clientMap.get(r.client_id);
+    const p = r.product_id ? productMap.get(r.product_id) : undefined;
+    return {
+      ...metaFromRow(r),
+      clientSlug: c?.slug ?? "",
+      clientName: c?.name ?? "—",
+      productSlug: p?.slug ?? null,
+      productName: p?.name ?? null,
+    };
+  });
+}
+
 /** A product (by client slug + product slug) and its landing pages. Null if not found. */
 export async function getProductWithLandingPages(
   clientSlug: string,

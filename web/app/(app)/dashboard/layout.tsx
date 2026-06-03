@@ -28,6 +28,12 @@ export default function DashboardLayout({
               Visão geral
             </Link>
             <Link
+              href="/dashboard/landing-pages"
+              className="rounded-md border border-transparent px-3 py-2 transition hover:border-cyan-200/20 hover:bg-white/[0.03] hover:text-white"
+            >
+              Landing pages
+            </Link>
+            <Link
               href="/dashboard/live"
               className="rounded-md border border-transparent px-3 py-2 transition hover:border-cyan-200/20 hover:bg-white/[0.03] hover:text-white"
             >
