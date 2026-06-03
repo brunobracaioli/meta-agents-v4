@@ -29,6 +29,10 @@ tentativas-geracao-de-campanhas/
 landing-pages/**/out/
 landing-pages/**/.next/
 landing-pages/**/.gen/
+# Never bake generated per-LP clones (incl. fixtures like cca-e2e) into the runner image —
+# the skills scaffold them at run time from _template. Only _template ships in the image.
+landing-pages/*
+!landing-pages/_template
 
 # Plan / scratch artifacts
 docs/spec-driven/

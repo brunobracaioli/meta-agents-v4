@@ -102,3 +102,7 @@ landing-pages/**/.next/
 landing-pages/**/out/
 landing-pages/**/next-env.d.ts
 landing-pages/**/*.tsbuildinfo
+# Generated per-LP clones are scratch (truth lives in Supabase + Cloudflare); only the
+# _template scaffold is versioned. Keeps cca-e2e/cca-test/... from being committed by accident.
+landing-pages/*/
+!landing-pages/_template/
