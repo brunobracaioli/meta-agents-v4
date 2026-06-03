@@ -1,0 +1,31 @@
+{
+  "name": "@b2tech/lp-render",
+  "version": "0.1.0",
+  "description": "Shared landing-page rendering: section components, content types, and the ContentDoc → build-files serializer. Consumed by landing-pages/_template (static export) and web (live preview).",
+  "type": "module",
+  "private": true,
+  "sideEffects": ["*.css"],
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./serialize": "./src/serialize.ts",
+    "./content-doc": "./src/content-doc.ts",
+    "./content-types": "./src/content-types.ts",
+    "./globals.css": "./src/globals.css"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "react-dom": { "optional": true }
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "@types/react": "19.0.2",
+    "@types/react-dom": "19.0.2"
+  }
+}

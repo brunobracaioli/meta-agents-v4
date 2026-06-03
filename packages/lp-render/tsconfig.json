@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src", "serialize-cli.ts"],
+  // Tests import `vitest`, which is installed in web/ (where the suite runs:
+  // `cd web && npx vitest run --root ../packages/lp-render`) — not in this package. The
+  // standalone `type-check` script validates the shipped source; vitest type-checks the tests.
+  "exclude": ["node_modules", "src/**/*.test.ts"]
+}

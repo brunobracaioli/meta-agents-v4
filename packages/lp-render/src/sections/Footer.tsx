@@ -1,6 +1,9 @@
-import { messages } from "@/lib/content";
+"use client";
+
+import { useContent } from "../content";
 
 export function Footer() {
+  const { messages } = useContent();
   return (
     <footer>
       <div className="container">

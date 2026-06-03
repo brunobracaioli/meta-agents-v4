@@ -1,4 +1,4 @@
-import { getUtms } from "@/lib/utm";
+import { getUtms } from "./utm";
 
 // Builds the destination for the primary CTA. In open-cart mode it points at the
 // Hubla checkout with captured UTMs appended; in closed-cart mode it points at the

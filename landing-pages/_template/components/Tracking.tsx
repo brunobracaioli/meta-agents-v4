@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Script from "next/script";
 import { contentSpec } from "@/lib/content";
-import { captureUtms } from "@/lib/utm";
+import { captureUtms } from "@b2tech/lp-render";
 import { CONSENT_EVENT, getConsent, type ConsentRecord } from "@/lib/consent";
 
 // Injects FB Pixel + GA4 ONLY after consent is granted. Nothing tracking-related is

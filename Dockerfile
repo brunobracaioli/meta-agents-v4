@@ -48,6 +48,9 @@ COPY --chown=runner:runner CLAUDE.md /app/CLAUDE.md
 COPY --chown=runner:runner .mcp.json /app/.mcp.json
 COPY --chown=runner:runner scripts /app/scripts
 COPY --chown=runner:runner crontab /app/crontab
+# Shared landing-page render package — the template depends on it via a file: path
+# (../../packages/lp-render), so it must be present before the prebake npm ci. See ADR 0017.
+COPY --chown=runner:runner packages /app/packages
 # Landing-page template + any committed generated LPs. node_modules/out/.next are
 # excluded via .dockerignore; deps are pre-baked below so the skill skips install at run.
 COPY --chown=runner:runner landing-pages /app/landing-pages

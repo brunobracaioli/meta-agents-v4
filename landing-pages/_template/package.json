@@ -10,6 +10,9 @@
     "preview": "npx serve out"
   },
   "dependencies": {
+    "@b2tech/lp-render": "file:../../packages/lp-render",
+    "@fontsource/dm-sans": "^5.2.8",
+    "@fontsource/inter": "^5.2.8",
     "next": "15.5.19",
     "react": "19.0.0",
     "react-dom": "19.0.0"
@@ -18,6 +21,7 @@
     "@types/node": "22.10.2",
     "@types/react": "19.0.2",
     "@types/react-dom": "19.0.2",
+    "tsx": "4.19.2",
     "typescript": "5.6.3"
   }
 }
