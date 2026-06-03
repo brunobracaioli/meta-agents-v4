@@ -144,7 +144,8 @@ Waves 4/5; a skill + serializer (esta wave) já publicam dado um ContentDoc no S
 
 1. `contentDocToFiles` reproduz `messages`/`content-spec` corretos (teste round-trip — ✅ Wave 0).
 2. Rebuild do `cca` pelo template refatorado gera `out/` equivalente ao baseline (Wave 1).
-3. Criar LP popula `products`+`landing_pages`+`landing_page_sections` e publica preview (Wave 3).
+3. Criar LP popula `products`+`landing_pages`+`landing_page_sections` e enfileira o publish
+   (Wave 3 — ✅; round-trip rows→serializer validado).
 4. Editor: editar um campo salva e reflete no iframe; toggle mobile/desktop (Wave 4).
 5. Ultron: "modifique o headline da hero da LP X" pergunta o que faltar, confirma, aplica;
    "publica a LP X" enfileira `landing_publish` (Wave 5).
@@ -153,10 +154,28 @@ Waves 4/5; a skill + serializer (esta wave) já publicam dado um ContentDoc no S
 
 ## 9. Waves
 
-0. Fundações (spec, ADRs, migrations, serializer) — **este documento**.
-1. Pacote `@b2tech/lp-render` + refactor do template (sem regressão).
-2. Pipeline de publicação (snapshot → build → Cloudflare).
-3. Geração escreve no Supabase ao vivo.
+0. Fundações (spec, ADRs, migrations, serializer) — ✅ **este documento**.
+1. Pacote `@b2tech/lp-render` + refactor do template (sem regressão) — ✅.
+2. Pipeline de publicação (snapshot → build → Cloudflare) — ✅.
+3. Geração escreve no Supabase ao vivo — ✅.
 4. Editor WYSIWYG no dashboard.
 5. Edição por voz (Ultron).
 6. Hardening (segurança, RLS, testes, docs).
+
+### 9.1 Geração — `create-landing-page-*` reescrita (Wave 3)
+
+A skill de geração deixou de escrever arquivos/buildar/deployar. Agora popula o **rascunho no
+Supabase** e enfileira o publish (REST/curl + `SUPABASE_SECRET_KEY`; o MCP é OAuth-gated headless):
+
+1. **Upsert `products`** (`on_conflict=client_id,slug`) + **`landing_pages`**
+   (`on_conflict=subdomain`, `draft_status='generating'`, `theme` do `brief.brand`, `settings`
+   parcial, `product_id`).
+2. **architect → INSERT `landing_page_sections`** (uma por seção, `position=order-1`,
+   `enabled=true`; payload **sem** `fields` → INSERT usa default `'{}'`, conflito preserva a copy).
+3. **copywriter → PATCH `fields` por `type`** (mapeamento inverso do serializer:
+   `hero/offer/finalCta/footer` direto, `faq`→`{items}`, middle→`sections.<type>`) + **PATCH
+   `settings` completo** (incl. `seo`, `cartClosed`).
+4. Gera imagens em `LP_DIR/public` + scaffold do `_template` (o job publish, na mesma máquina,
+   reusa e pula `npm ci`).
+5. `draft_status='ready'` → **enfileira `landing_publish`** (`agent_jobs`, dedup per-LP) + 1
+   `operation_logs` (`action='create'`). O build/deploy é do job `landing_publish` (§6.1).
