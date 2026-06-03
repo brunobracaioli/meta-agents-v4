@@ -14,6 +14,11 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
+    // Resolve @b2tech/lp-render's imports (react, etc.) through the symlink path
+    // (web/node_modules) instead of the package's realpath. The package ships .tsx consumed
+    // via transpilePackages and is a file: dep; on a clean install (Vercel) its own
+    // node_modules doesn't exist, so the realpath can't resolve react. See ADR 0017.
+    "preserveSymlinks": true,
     "incremental": true,
     "verbatimModuleSyntax": false,
     "plugins": [{ "name": "next" }],
