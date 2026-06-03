@@ -1,7 +1,7 @@
 ---
 name: create-landing-page-brunobracaioli
-description: Cria de forma 100% autônoma e headless uma landing page profissional de alta conversão para o cliente brunobracaioli (produto Claude Code Architect) e faz deploy no Cloudflare Pages sob <nome>.b2tech.io — scrape de referência → arquitetura de conversão → copy long-form pt-BR → hero/OG → build Next.js static export → deploy → persistência no Supabase e manifest. Use quando pedirem "criar landing page para brunobracaioli/CCA", ou quando disparada via Ultron/headless (`claude -p --dangerously-skip-permissions ".claude/skills/create-landing-page-brunobracaioli nome=cca"`). NÃO cria campanha Meta — só landing page.
-argument-hint: "nome=<subdominio> [ref-url=https://cca.b2tech.io] [checkout-url=https://pay.hub.la/KiIZ2UcpwcbOps224hbI] [cart-state=open] [noindex=1] [deploy=true] [overwrite=false]"
+description: Cria de forma 100% autônoma e headless uma landing page profissional de alta conversão para um PRODUTO do cliente brunobracaioli (catálogo em lista-de-produtos) e faz deploy no Cloudflare Pages sob <nome>.b2tech.io — brief do produto (catálogo) → arquitetura de conversão → copy long-form pt-BR → hero/OG → build Next.js static export → deploy → persistência no Supabase e manifest. Use quando pedirem "criar landing page para brunobracaioli" (ex.: produto cca ou imersao-agencia), ou quando disparada via Ultron/headless (`claude -p --dangerously-skip-permissions ".claude/skills/create-landing-page-brunobracaioli product=cca nome=cca"`). NÃO cria campanha Meta — só landing page.
+argument-hint: "product=<slug> nome=<subdominio> [ref-url=...] [cart-state=open] [noindex=1] [deploy=true] [overwrite=false]"
 allowed-tools: Read, Bash, Glob, Write, Agent, Skill, mcp__supabase__execute_sql, mcp__supabase__list_tables
 ---
 
@@ -41,28 +41,30 @@ Roda em **headless** (`claude -p`). Regras inegociáveis:
 
 ---
 
-## 2. Constantes do cliente
+## 2. Constantes do cliente + produto (catálogo)
 
-Fonte de verdade: `.claude/skills/lista-de-clientes/SKILL.md`. No início, faça lookup de
-`clients WHERE slug='brunobracaioli'` no Supabase para o `client_id` (uuid) — **não hardcode**.
+**Cliente** — fonte de verdade: `.claude/skills/lista-de-clientes/SKILL.md`. No início, faça
+lookup de `clients WHERE slug='brunobracaioli'` no Supabase para o `client_id` (uuid) —
+**não hardcode**.
 
 | Campo | Valor |
 |---|---|
 | slug | `brunobracaioli` |
-| Produto | Claude Code Architect (CCA) — curso pt-BR, vibe tech/hacker |
-| Preço | R$ 1.497,00 (`price_cents=149700`) |
-| Checkout (Hubla) | `https://pay.hub.la/KiIZ2UcpwcbOps224hbI` |
-| Landing ref (scrape) | `https://cca.b2tech.io` |
 | Domínio | `<nome>.b2tech.io` (zona `b2tech.io` na conta CF) |
-| Materiais | `.claude/materiais-das-empresas/brunobracaioli/` (logo, mascote, exemplo-de-ads) |
+| Materiais | `.claude/materiais-das-empresas/brunobracaioli/` (logo, mascote, exemplo-de-ads, **produtos/**) |
 | Marca | navy `#0A0F1A`→`#0E1422`, laranja `#FF6B1A` |
 | Tracking | FB Pixel `653995666521954` + GA4 `G-Z60CJ7W2Z8` (consent-gated) |
 
-**Descrição do produto** (para o brief dos subagentes): "Treinamento focado em Claude Code,
-desenvolvimento agêntico e arquitetura de software. Do zero ao avançado: vídeo-aulas + 12
-apostilas técnicas (CLAUDE.md, Skills, Hooks, Agents, MCP, Spec-Driven Development, stacks e
-arquiteturas), multi-times de agentes 24/7, 5 projetos práticos baixáveis (incl. agência de
-tráfego de agentes IA)."
+**Produto — NÃO é mais hardcoded.** Vem do **catálogo** (skill `lista-de-produtos`, ADR 0014):
+o brief estruturado fica em `${MAT}/produtos/${product}.json` e é lido via `Read` (headless-safe;
+o `.claude/` é COPY-ado para a imagem Fly). O arg `product=<slug>` seleciona qual (default `cca`).
+
+O brief traz tudo que os subagents precisam: `name`, `shortCode`, `tagline`, `positioning`,
+`tone`, `offer` (priceCents, anchorPriceCents, checkoutUrl, waitlistUrl, cartState, deadline,
+payments, guarantee, scarcity), e o conteúdo de copy (`dores`, `mecanismo`, `stack`, `prereqs`,
+`agenda`, `entregaveis`, `persona`, `comparison`, `autoridade`, `numeros`, `faqHints`), `seo`,
+`assets` (logo/foto do instrutor) e `brand`. **Nunca invente** dados de produto — use o brief.
+Produtos atuais: `cca` (Claude Code Architect) e `imersao-agencia` (Imersão AgêncIA Tráfego Pago).
 
 ---
 
@@ -70,11 +72,13 @@ tráfego de agentes IA)."
 
 | Decisão | Valor | Por quê |
 |---|---|---|
-| `nome` (subdomínio) | **obrigatório (sem default)** | Vira `<nome>.b2tech.io` + projeto CF `b2tech-<nome>`. Sem `nome` → aborta. **Nunca** assuma `cca` (é uma página de produção). |
+| `product` (slug do catálogo) | `cca` (default) | Seleciona o brief `${MAT}/produtos/${product}.json`. Ex.: `cca`, `imersao-agencia`. Se o arquivo não existir → aborta (`verified:false`). |
+| `nome` (subdomínio) | **obrigatório (sem default)** | Vira `<nome>.b2tech.io` + projeto CF `b2tech-<nome>`. Sem `nome` → aborta. **Nunca** assuma `cca` (é uma página de produção). Dica: o brief tem `defaultSubdomain`, mas `nome` ainda precisa ser passado explicitamente. |
 | `overwrite` | `false` | Se `true`, permite redeploy por cima de um projeto CF já existente com deploy. Default `false` = recusa sobrescrever página viva. **O Ultron nunca envia `overwrite`** (voz não sobrescreve produção). |
 | Stack | Next.js 15 **static export** (`out/` flat) | ADR 0012 |
 | Template | `landing-pages/_template/` → `landing-pages/<nome>/` | Clonável |
-| Seções | enum: hero·problem·solution·features·curriculum·proof·offer·faq·finalCta·footer | Template |
+| Seções | enum: hero·urgency·problem·comparison·solution·features·curriculum·stats·proof·logos·persona·authority·offer·guarantee·faq·finalCta·footer | Template (ADR 0013) |
+| Design system | claro + blocos escuros, Inter/DM Sans (@fontsource), accent laranja + funcionais, motion leve | ADR 0013 |
 | `cart-state` | `open` | `closed` → CTA waitlist WhatsApp |
 | `noindex` | `1` (preview) | Go-live exige rebuild com `0` |
 | `deploy` | `true` | `false` = só build local |
@@ -83,9 +87,10 @@ tráfego de agentes IA)."
 **Validação de `nome`:** `^[a-z0-9-]{2,40}$` (vira subdomínio + nome de projeto CF). Se
 inválido → manifest `verified:false` e sair.
 
-**Args** via `$ARGUMENTS` (`key=value`): `nome` (**obrigatório**), `ref-url`,
-`checkout-url`, `cart-state`, `noindex`, `deploy`, `overwrite`. Sem `nome` → aborta
-(manifest `verified:false`). Nunca use `cca` como fallback.
+**Args** via `$ARGUMENTS` (`key=value`): `nome` (**obrigatório**), `product` (default `cca`),
+`ref-url` (opcional), `cart-state`, `noindex`, `deploy`, `overwrite`. Sem `nome` → aborta
+(manifest `verified:false`). Nunca use `cca` como fallback de `nome`. `checkout-url`/`cart-state`/
+`deadline` vêm do brief do produto (catálogo); um arg explícito, se passado, sobrescreve o brief.
 
 ---
 
@@ -98,11 +103,18 @@ Em uma chamada Bash:
   `OPENAI_API_KEY` para o `image-generate`; para deploy `CLOUDFLARE_API_TOKEN` +
   `CLOUDFLARE_ACCOUNT_ID`). **Persistência é via MCP do Supabase** — não precisa de chave
   Supabase no env (o MCP usa `service_role` e bypassa RLS).
-- Parse dos args; aplicar defaults da §3 (`overwrite=false`). **`nome` é obrigatório**:
-  se ausente → manifest `verified:false` (`errors:["nome obrigatório"]`) e sair. Validar
-  `nome =~ ^[a-z0-9-]{2,40}$`. **Nunca** assumir `cca`.
+- Parse dos args; aplicar defaults da §3 (`product=cca`, `overwrite=false`). **`nome` é
+  obrigatório**: se ausente → manifest `verified:false` (`errors:["nome obrigatório"]`) e
+  sair. Validar `nome =~ ^[a-z0-9-]{2,40}$` e `product =~ ^[a-z0-9-]{2,40}$`. **Nunca** assumir `cca` como `nome`.
 - Paths: `LP_DIR=landing-pages/${nome}`, `TRY_DIR=tentativas-geracao-de-campanhas`,
   `MAT=.claude/materiais-das-empresas/brunobracaioli`. `mkdir -p ${TRY_DIR}`.
+- **Carregar o brief do produto (catálogo, ADR 0014):** `Read` `${MAT}/produtos/${product}.json`
+  → objeto `PRODUCT`. Se o arquivo não existir → manifest `verified:false`
+  (`errors:["produto '${product}' não está no catálogo (${MAT}/produtos/)"]`) e sair. Derivar:
+  `PROD_NAME=PRODUCT.name`, `SHORT=PRODUCT.shortCode`, `PRICE_CENTS=PRODUCT.offer.priceCents`,
+  `CHECKOUT_URL=PRODUCT.offer.checkoutUrl`, `WAITLIST_URL=PRODUCT.offer.waitlistUrl`,
+  `CART=PRODUCT.offer.cartState` (arg `cart-state` sobrescreve se passado),
+  `DEADLINE=PRODUCT.offer.deadline`. O `PRODUCT` inteiro alimenta os subagents (Passos 3/4).
 - **Higiene de segredo:** strip de espaços/CR no token: `CF_TOKEN=$(printf %s "$CLOUDFLARE_API_TOKEN" | tr -d '[:space:]')`.
 
 ### Passo 1 — Client lookup
@@ -111,34 +123,52 @@ Em uma chamada Bash:
 - `mcp__supabase__list_tables` (uma vez) para confirmar que `landing_pages` existe (migration
   `20260530000008`). Se não existir → manifest `verified:false` com instrução de aplicar a migration, sair.
 
-### Passo 2 — Scrape da referência (idempotente)
+### Passo 2 — Scrape da referência (OPCIONAL, idempotente)
 **Idempotência:** se `${LP_DIR}/content-spec.json` existe e é de hoje → reuse e pule para o
-Passo 7 (build/deploy). Senão:
-- `Agent(subagent_type="scrape-extractor")` com `ref-url` → `scrape.json` (tema, value prop,
-  CTA, tom, USPs, paleta). Salve em `${LP_DIR}/.gen/scrape.json` (criar `.gen/` com `mkdir -p`).
+Passo 7 (build/deploy). Senão: o **brief do catálogo (`PRODUCT`) é a fonte primária** — não
+precisa de scrape. Só rode scrape se `ref-url` for passado (para suplementar tom/visual de uma
+referência externa):
+- `Agent(subagent_type="scrape-extractor")` com `ref-url` → `scrape.json`. Salve em
+  `${LP_DIR}/.gen/scrape.json` (criar `.gen/` com `mkdir -p`). Sem `ref-url` → `scrape=null`.
 
 ### Passo 3 — Arquitetura de conversão
-- `Agent(subagent_type="landing-page-architect")` com:
+- `Agent(subagent_type="landing-page-architect")` passando o **brief do produto** (catálogo).
+  Mapeie `PRODUCT` para o contrato `product` (estendido) + `scrape` opcional:
   ```jsonc
-  { "scrape": <scrape.json>,
-    "product": {"name":"Claude Code Architect","priceCents":149700,
-      "checkoutUrl":"<checkout-url>","cartState":"<cart-state>",
-      "offerDetails":"<descrição §2>","modules":["Fundamentos","Skills/Hooks/Agents/MCP","Arquitetura/Spec-Driven","Multi-times de agentes","Projetos práticos"]},
-    "constraints": {"language":"pt-BR","style":"tech-hacker","maxSections":10} }
+  { "scrape": <scrape.json ou null>,
+    "product": {
+      "name": "<PROD_NAME>", "shortCode": "<SHORT>",
+      "priceCents": <PRICE_CENTS>, "anchorPriceCents": <PRODUCT.offer.anchorPriceCents>,
+      "checkoutUrl": "<CHECKOUT_URL>", "cartState": "<CART>", "deadline": "<DEADLINE>",
+      "tagline": "<PRODUCT.tagline>", "positioning": "<PRODUCT.positioning>",
+      "offerDetails": "<PRODUCT.whatItIs>",
+      // campos ricos: o subagent escolhe seções conforme o que existir
+      "dores": <PRODUCT.dores>, "mecanismo": <PRODUCT.mecanismo>, "stack": <PRODUCT.stack>,
+      "prereqs": <PRODUCT.prereqs>, "agenda": <PRODUCT.agenda>, "entregaveis": <PRODUCT.entregaveis>,
+      "persona": <PRODUCT.persona>, "comparison": <PRODUCT.comparison>,
+      "autoridade": <PRODUCT.autoridade>, "numeros": <PRODUCT.numeros>,
+      "scarcity": "<PRODUCT.offer.scarcity>", "guarantee": "<PRODUCT.offer.guarantee>"
+    },
+    "constraints": {"language": "<PRODUCT.language>", "style": "<PRODUCT.tone>", "maxSections": 17} }
   ```
   → `architecture.json` (seções, ordem, ângulos, CTA, SEO). Salve em `${LP_DIR}/.gen/`.
 
 ### Passo 4 — Copy long-form
-- `Agent(subagent_type="lp-copywriter")` com `{architecture, product, scrape, tone:"tech-hacker", language:"pt-BR"}`
-  → copy JSON no shape de `messages/pt.json` (inclui `cartClosed`). Salve em `${LP_DIR}/.gen/copy.json`.
+- `Agent(subagent_type="lp-copywriter")` com `{architecture, product:<mesmo objeto do Passo 3>,
+  scrape:<ou null>, tone:"<PRODUCT.tone>", language:"<PRODUCT.language>"}` → copy JSON no shape
+  de `messages/pt.json` (inclui `cartClosed` e as seções novas que a `architecture` referenciou).
+  Salve em `${LP_DIR}/.gen/copy.json`. **A copy deve sair do brief — não inventar dados.**
 
 ### Passo 5 — Visual hero + OG (idempotente)
 **Reuse** se já existirem `${LP_DIR}/public/hero.png` e `og.png` do dia. Senão:
 - `Agent(subagent_type="image-prompt-generator")` (variant A) com:
-  `{scrape, aspectRatio:"1920x1080", referenceImagePaths:[ ${MAT}/logo/logo.png,
-  ${MAT}/mascote/claude-lendo.png, ${MAT}/exemplo-de-ads/*.png ],
-  configHints:{brandName:"Claude Code Architect"}}` → prompt do hero. (O agente já tem o
-  preset de marca brunobracaioli e **valida os refs via Bash antes de ler** — siga o contrato dele.)
+  `{scrape, brief:<PRODUCT (tagline/positioning/numeros)>, aspectRatio:"1920x1080",
+  referenceImagePaths:[ ${MAT}/logo/logo.png, ${MAT}/mascote/claude-lendo.png,
+  ${MAT}/exemplo-de-ads/*.png ], configHints:{brandName:"<PROD_NAME>"}}` → prompt do hero.
+  (O agente já tem o preset de marca brunobracaioli e **valida os refs via Bash antes de ler** — siga o contrato dele.)
+- **Foto do instrutor (seção authority):** se o brief tem `autoridade.image` (ex.: `/instrutor.jpg`),
+  copie `${MAT}/logo/foto-do-infoprodutor/bruno-bracaioli.jpg` para `${LP_DIR}/public/instrutor.jpg`
+  (a seção `authority` referencia `/instrutor.jpg`). Se não houver foto, o template degrada para painel só-texto.
 - `Skill(skill="image-generate", args="prompt-file=<prompt> aspect=1.91:1 out-dir=${LP_DIR}/public out-name=hero")`
   → `hero.png`. Copie/derive `og.png` (1200×630) do hero (ou gere um segundo com aspect 1.91:1
   e renomeie para `og.png`). Registre o custo estimado (manifest do `image-generate`).
@@ -153,16 +183,22 @@ Passo 7 (build/deploy). Senão:
   `node_modules` (gitignored) — aí instala no Passo 8. Remova `out/`/`.next/` se vierem no cp.
 
 ### Passo 7 — Preencher conteúdo
-- Escrever `${LP_DIR}/messages/pt.json` a partir de `copy.json` (Passo 4).
-- Escrever `${LP_DIR}/content-spec.json`:
+- Escrever `${LP_DIR}/messages/pt.json` a partir de `copy.json` (Passo 4). O shape é o
+  **expandido** (ADR 0013): além de hero/problem/solution/features/curriculum/proof/offer/
+  faq/finalCta/footer, pode conter `sections.urgency/comparison/stats/logos/persona/
+  authority/guarantee` e `offer.installments/payments/secure`. Inclua só as seções que a
+  `architecture` (Passo 3) referenciou; o template ignora seções sem copy. Ver o
+  `_template/messages/pt.json` como referência de shape.
+- Escrever `${LP_DIR}/content-spec.json` — **todos os campos de produto vêm do brief `PRODUCT`**:
   ```jsonc
-  { "subdomain":"<nome>", "name":"<NOME-UPPER>", "product":"Claude Code Architect",
-    "price_cents":149700, "checkout_url":"<checkout-url>",
-    "waitlist_url":"https://wa.me/<num>?text=...", "cart_state":"<cart-state>",
+  { "subdomain":"<nome>", "name":"<SHORT>", "product":"<PROD_NAME>",
+    "price_cents":<PRICE_CENTS>, "checkout_url":"<CHECKOUT_URL>",
+    "waitlist_url":"<WAITLIST_URL>", "cart_state":"<CART>",
     "noindex":<true|false>, "site_url":"https://<nome>.b2tech.io",
+    "deadline":"<DEADLINE — omita se vazio/null>",
     "sections":[<ordem da architecture>],
     "tracking":{"fb_pixel_id":"653995666521954","ga4_id":"G-Z60CJ7W2Z8","consent_key":"b2tech_consent_v1"},
-    "seo":{"title":"<≤60>","description":"<≤155>"} }
+    "seo": <PRODUCT.seo (ou o seo da copy, ≤60/≤155)> }
   ```
 
 ### Passo 8 — Build local
@@ -237,7 +273,7 @@ Via `mcp__supabase__execute_sql`, upsert `ON CONFLICT (subdomain) DO UPDATE`:
 - `landing_pages`: `client_id, name, subdomain='<nome>', fqdn='<nome>.b2tech.io',
   url='https://<nome>.b2tech.io', cloudflare_project_id='b2tech-<nome>',
   repo_path='landing-pages/<nome>', content_spec (jsonb do content-spec.json),
-  tracking (jsonb), checkout_url, price_cents=149700, cart_state, noindex,
+  tracking (jsonb), checkout_url=<CHECKOUT_URL>, price_cents=<PRICE_CENTS>, cart_state, noindex,
   ssl_status ('active'|'pending'|'error'), status ('deployed'|'building'|'failed'),
   deployed_at=now() (se deployado), last_deploy_id, raw_spec`.
 - `operation_logs`: **uma linha** — `client_id, entity_type='landing_page',
@@ -317,6 +353,12 @@ propagado — confirme via `*.pages.dev` ou `curl --resolve`, não conclua `erro
 `landing-pages/_template/node_modules`; o scaffold copia `node_modules` do `_template` para
 `${LP_DIR}` para evitar install na run (Fase 2). Localmente, `npm install` normal.
 
+**Fontes via `@fontsource` (ADR 0013)** — Inter + DM Sans vêm de `@fontsource/inter` e
+`@fontsource/dm-sans` (npm self-hosted), importados em `app/layout.tsx`. NÃO use
+`next/font/google`: ele baixaria as fontes na rede durante `next build`, o que falha no
+runner headless offline. As fontes já estão no `_template/node_modules` pré-bakeado; o
+`out/` carrega `~54` arquivos `woff2` (subset latin) — peso leve, esperado.
+
 **`NEXT_PUBLIC_NOINDEX` é build-time** — está embutido no HTML/robots. Flip exige
 rebuild+redeploy. Default `1` (seguro). Go-live = `noindex=0`.
 
@@ -330,6 +372,8 @@ destrava writes. Confiamos no contrato deste markdown (por isso noindex default 
 - `.env.local` na raiz: `OPENAI_API_KEY` e (para deploy) `CLOUDFLARE_API_TOKEN`,
   `CLOUDFLARE_ACCOUNT_ID`. Persistência via MCP do Supabase (sem chave no env).
 - Migration `landing_pages` aplicada (`supabase/migrations/20260530000008_add_landing_pages.sql`).
+- **Brief do produto no catálogo**: `${MAT}/produtos/${product}.json` (skill `lista-de-produtos`,
+  ADR 0014). Sem ele, a skill aborta. Produtos atuais: `cca`, `imersao-agencia`.
 - `landing-pages/_template/` presente (com `node_modules` no runner Fly — Fase 2).
 - MCP do Supabase autenticado. Skill `image-generate` e subagents disponíveis.
 - Pasta `tentativas-geracao-de-campanhas/` (criada se faltar).

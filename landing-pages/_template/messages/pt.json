@@ -5,11 +5,16 @@
     "ogAlt": "Claude Code Architect"
   },
   "hero": {
+    "badge": "🔥 Turma com vagas limitadas",
     "headline": "Construa software de verdade com Claude Code",
     "subhead": "Do prompt à arquitetura: o método para devs que querem usar IA como ferramenta de engenharia, não como gambiarra.",
     "ctaLabel": "Quero participar"
   },
   "sections": {
+    "urgency": {
+      "label": "Inscrições encerram em",
+      "scarcity": "Últimas vagas desta turma"
+    },
     "problem": {
       "heading": "IA virou ruído na sua rotina de dev",
       "body": "Você testou copiloto, colou prompt no chat e mesmo assim continua refazendo trabalho. O problema não é a ferramenta — é a ausência de método para integrar IA ao ciclo de engenharia.",
@@ -19,43 +24,97 @@
         "Zero arquitetura: tudo vira script descartável"
       ]
     },
+    "comparison": {
+      "heading": "Tutorial de YouTube não te leva a produção",
+      "subhead": "A diferença entre brincar com IA e engenheirar com IA.",
+      "ours": "Claude Code Architect",
+      "theirs": "Cursos genéricos",
+      "rows": [
+        { "label": "Método repetível do design ao deploy", "ours": true, "theirs": false },
+        { "label": "Agentes e skills de verdade", "ours": true, "theirs": false },
+        { "label": "Foco em arquitetura, não em truque de prompt", "ours": true, "theirs": false },
+        { "label": "Exemplos que rodam em produção", "ours": true, "theirs": "Só demos" },
+        { "label": "Atualizado pra Claude Code atual", "ours": true, "theirs": false }
+      ]
+    },
     "solution": {
       "heading": "Um método, não um truque",
       "body": "O Claude Code Architect ensina a tratar IA como parte do sistema: contratos claros, agentes especializados, automação auditável. Você sai com um fluxo repetível, do design ao deploy."
     },
     "features": {
       "heading": "O que você domina",
+      "subhead": "Três pilares que transformam IA em engenharia previsível.",
       "items": [
-        { "title": "Arquitetura com IA", "desc": "Modelar features com spec antes de codar — IA respeitando boundaries." },
-        { "title": "Agentes especializados", "desc": "Construir subagents e skills que automatizam tarefas repetíveis." },
-        { "title": "Automação auditável", "desc": "Pipelines headless com logs, idempotência e rollback." }
+        { "icon": "🧱", "title": "Arquitetura com IA", "desc": "Modelar features com spec antes de codar — IA respeitando boundaries." },
+        { "icon": "🤖", "title": "Agentes especializados", "desc": "Construir subagents e skills que automatizam tarefas repetíveis." },
+        { "icon": "🛡️", "title": "Automação auditável", "desc": "Pipelines headless com logs, idempotência e rollback." }
       ]
     },
     "curriculum": {
       "heading": "A jornada",
+      "subhead": "Da base à produção, sem pular etapa.",
       "modules": [
         { "title": "Fundamentos", "desc": "Como Claude Code pensa, e como dar contexto que rende." },
         { "title": "Engenharia de agentes", "desc": "Skills, subagents e orquestração determinística." },
         { "title": "Produção", "desc": "Deploy, observabilidade e segurança de fluxos com IA." }
       ]
     },
+    "stats": {
+      "items": [
+        { "value": "+2.000", "label": "devs treinados" },
+        { "value": "4.9★", "label": "avaliação média" },
+        { "value": "12h", "label": "de conteúdo prático" },
+        { "value": "7 dias", "label": "de garantia" }
+      ]
+    },
     "proof": {
       "heading": "Quem já está construindo",
+      "subhead": "Resultados reais de quem aplicou o método.",
       "testimonials": [
         { "quote": "Parei de brigar com a IA e comecei a entregar. O método mudou meu fluxo inteiro.", "author": "Dev sênior, fintech" },
-        { "quote": "Automatizei tarefas que eu adiava há meses. Em uma semana já tinha ROI.", "author": "Tech lead, SaaS" }
+        { "quote": "Automatizei tarefas que eu adiava há meses. Em uma semana já tinha ROI.", "author": "Tech lead, SaaS" },
+        { "quote": "Finalmente entendi como dar contexto pra IA sem virar bagunça.", "author": "Engenheiro, e-commerce" },
+        { "quote": "Os agentes que montei no curso já estão em produção.", "author": "Fundador, startup B2B" }
       ]
+    },
+    "logos": {
+      "heading": "Devs de times como",
+      "items": ["Nubank", "iFood", "Stone", "Mercado Livre", "Globo", "PicPay"]
+    },
+    "persona": {
+      "heading": "Pra quem é o Claude Code Architect",
+      "subhead": "Se você se reconhece aqui, esta turma é pra você.",
+      "items": [
+        { "icon": "👩‍💻", "title": "Dev que quer escalar", "desc": "Você já programa e quer multiplicar entrega usando IA com método." },
+        { "icon": "🧑‍🔧", "title": "Tech lead", "desc": "Quer levar IA pro time sem perder qualidade nem controle." },
+        { "icon": "🚀", "title": "Fundador técnico", "desc": "Constrói o próprio produto e precisa entregar mais com menos." }
+      ]
+    },
+    "authority": {
+      "eyebrow": "Seu instrutor",
+      "name": "Bruno Bracaioli",
+      "bio": "Engenheiro de software e arquiteto de soluções com mais de uma década construindo sistemas em produção. Já treinou milhares de desenvolvedores a usar IA como ferramenta de engenharia de verdade.",
+      "credentials": ["10+ anos em produção", "+2.000 devs treinados", "Especialista em IA aplicada"]
+    },
+    "guarantee": {
+      "heading": "Garantia incondicional de 7 dias",
+      "body": "Entre, assista às primeiras aulas e aplique o método. Se não for pra você, devolvemos 100% do valor — sem perguntas.",
+      "seal": "🛡️"
     }
   },
   "offer": {
     "heading": "Entre para o Claude Code Architect",
     "priceLabel": "R$ 1.497",
-    "anchor": "",
+    "anchor": "De R$ 1.997",
+    "installments": "ou 12x de R$ 149,70",
     "bonuses": [
       "Acesso à comunidade de arquitetos",
-      "Templates de skills e subagents prontos"
+      "Templates de skills e subagents prontos",
+      "Sessões de mentoria ao vivo"
     ],
     "guarantee": "7 dias de garantia incondicional.",
+    "payments": ["Pix", "Cartão de crédito", "Boleto"],
+    "secure": "🔒 Pagamento 100% seguro · Acesso imediato",
     "ctaLabel": "Garantir minha vaga"
   },
   "faq": [

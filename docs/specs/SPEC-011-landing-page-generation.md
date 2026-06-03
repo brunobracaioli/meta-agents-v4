@@ -40,24 +40,36 @@ Disparável de duas formas:
 
 | Arg | Default | Notas |
 |---|---|---|
-| `nome` | `cca` | Vira subdomínio + sufixo do projeto CF. Deve casar `^[a-z0-9-]{2,40}$`. |
-| `ref-url` | `https://cca.b2tech.io` | URL de referência para scrape. |
-| `checkout-url` | Hubla CCA | URL de checkout. |
-| `cart-state` | `open` | `open` \| `closed` (closed → modo waitlist WhatsApp). |
+| `product` | `cca` | Slug do produto no catálogo (`lista-de-produtos`, ADR 0014). Lê o brief de `.claude/materiais-das-empresas/<cliente>/produtos/<slug>.json`. |
+| `nome` | **obrigatório** | Vira subdomínio + sufixo do projeto CF. Deve casar `^[a-z0-9-]{2,40}$`. Sem default (não assumir `cca`). |
+| `ref-url` | — (opcional) | URL de referência para scrape **suplementar**. O brief do catálogo é a fonte primária; sem `ref-url` não há scrape. |
+| `cart-state` | brief | Default vem do brief (`offer.cartState`); arg sobrescreve. `closed` → modo waitlist. |
 | `noindex` | `1` | `1` = preview (Disallow:/); `0` = go-live indexável. |
 | `deploy` | `true` | `false` = só builda local, não publica. |
+| `overwrite` | `false` | `true` permite redeploy por cima de projeto CF com deploy existente. |
 
-Sem argumentos → usa os defaults acima.
+`checkout-url`, `cart-state` e `deadline` derivam do **brief do produto** (catálogo); um arg
+explícito sobrescreve. Preço, oferta, dores, mecanismo, autoridade, números e agenda **sempre**
+vêm do brief — a skill/subagents não inventam dados de produto.
 
 ## 4. Taxonomia de seções (enum fixo, implementado no template)
 
-A LP é composta destas seções, nesta ordem default. O `landing-page-architect` só pode
-referenciar `type` deste enum (nada de features de servidor):
+A LP é composta destas seções. O `landing-page-architect` só pode referenciar `type` deste
+enum (nada de features de servidor):
 
-`hero` · `problem` · `solution` · `features` · `curriculum` · `proof` · `offer` · `faq` ·
+`hero` · `urgency` · `problem` · `comparison` · `solution` · `features` · `curriculum` ·
+`stats` · `proof` · `logos` · `persona` · `authority` · `offer` · `guarantee` · `faq` ·
 `finalCta` · `footer`
 
-Cada seção tem um objetivo de conversão e campos de copy próprios (ver §5).
+Cada seção tem um objetivo de conversão e campos de copy próprios (ver §5). O **tom visual
+é fixo por tipo** (ver ADR 0013): `hero`/`urgency`/`stats`/`authority`/`offer`/`finalCta`/
+`footer` são blocos escuros; as demais ("flow") alternam striping claro/off-white
+automaticamente. O architect só define ordem e objetivo — nunca cores ou tom.
+
+**Design system** (ADR 0013): base clara + blocos escuros, accent laranja `#FF6B1A` +
+funcionais (verde ✓, vermelho ✗, âmbar ★), tipografia Inter (títulos) + DM Sans (corpo) via
+`@fontsource`, movimento leve (fade-in on scroll, marquee, pulse no CTA, hover-lift) que
+degrada sob `prefers-reduced-motion`.
 
 ## 5. Contrato de conteúdo — `messages/pt.json`
 
@@ -66,16 +78,25 @@ Shape (preenchido pelo `lp-copywriter`; o template lê via `import pt from '@/me
 ```jsonc
 {
   "seo":   { "title": "≤60", "description": "≤155", "ogAlt": "..." },
-  "hero":  { "headline": "...", "subhead": "...", "ctaLabel": "..." },
+  "hero":  { "badge": "(opcional)", "headline": "...", "subhead": "...", "ctaLabel": "..." },
   "sections": {
+    "urgency":   { "label": "...", "scarcity": "(opcional)" },
     "problem":   { "heading": "...", "body": "...", "bullets": ["..."] },
+    "comparison":{ "heading": "...", "subhead": "...", "ours": "...", "theirs": "...",
+                   "rows": [{ "label": "...", "ours": true, "theirs": false }] },
     "solution":  { "heading": "...", "body": "..." },
-    "features":  { "heading": "...", "items": [{ "title": "...", "desc": "..." }] },
-    "curriculum":{ "heading": "...", "modules": [{ "title": "...", "desc": "..." }] },
-    "proof":     { "heading": "...", "testimonials": [{ "quote": "...", "author": "..." }] }
+    "features":  { "heading": "...", "subhead": "...", "items": [{ "icon": "(opc)", "title": "...", "desc": "..." }] },
+    "curriculum":{ "heading": "...", "subhead": "...", "modules": [{ "title": "...", "desc": "..." }] },
+    "stats":     { "heading": "(opc)", "items": [{ "value": "+2.000", "label": "..." }] },
+    "proof":     { "heading": "...", "subhead": "...", "testimonials": [{ "quote": "...", "author": "..." }] },
+    "logos":     { "heading": "(opc)", "items": ["Marca", "..."] },
+    "persona":   { "heading": "...", "subhead": "...", "items": [{ "icon": "(opc)", "title": "...", "desc": "..." }] },
+    "authority": { "eyebrow": "(opc)", "name": "...", "bio": "...", "credentials": ["..."], "image": "(opc, /path.jpg)" },
+    "guarantee": { "heading": "...", "body": "...", "seal": "(opc, emoji)" }
   },
-  "offer": { "heading": "...", "priceLabel": "R$ 1.497", "anchor": "...",
-             "bonuses": ["..."], "guarantee": "...", "ctaLabel": "..." },
+  "offer": { "heading": "...", "priceLabel": "R$ 1.497", "anchor": "...", "installments": "(opc)",
+             "bonuses": ["..."], "guarantee": "...", "payments": ["Pix", "..."],
+             "secure": "(opc)", "ctaLabel": "..." },
   "faq":   [{ "q": "...", "a": "..." }],
   "finalCta": { "headline": "...", "ctaLabel": "..." },
   "cartClosed": { "headline": "...", "subhead": "...", "waitlistCtaLabel": "Entrar na lista" },
@@ -84,8 +105,9 @@ Shape (preenchido pelo `lp-copywriter`; o template lê via `import pt from '@/me
 ```
 
 `content-spec.json` (spec de máquina, separado da copy): `{ subdomain, name, product,
-price_cents, checkout_url, cart_state, noindex, sections[] (ordem), tracking: { fb_pixel_id,
-ga4_id, consent_key:"b2tech_consent_v1" }, seo }`.
+price_cents, checkout_url, cart_state, noindex, deadline (ISO, opcional — countdown do
+`urgency`), sections[] (ordem), tracking: { fb_pixel_id, ga4_id,
+consent_key:"b2tech_consent_v1" }, seo }`.
 
 ## 6. Tracking & consent (LGPD)
 
@@ -100,11 +122,12 @@ ga4_id, consent_key:"b2tech_consent_v1" }, seo }`.
 
 ## 7. Etapas (resumo — detalhe no SKILL.md, Passos P0–P12)
 
-1. Setup (stamp BRT, env, parse args, validação de `nome`).
+1. Setup (stamp BRT, env, parse args, validação de `nome`/`product`, **`Read` do brief
+   `${MAT}/produtos/${product}.json`** — catálogo, ADR 0014).
 2. Client lookup (`clients WHERE slug='brunobracaioli'`).
-3. Scrape ref (`scrape-extractor`).
-4. Arquitetura de conversão (`landing-page-architect`).
-5. Copy long-form (`lp-copywriter`, open + cartClosed).
+3. Scrape ref (`scrape-extractor`) — **opcional**, só se `ref-url` (brief do catálogo é primário).
+4. Arquitetura de conversão (`landing-page-architect`, recebe o brief do produto).
+5. Copy long-form (`lp-copywriter`, escreve a partir do brief; open + cartClosed).
 6. Visual hero/OG (`image-prompt-generator` + skill `image-generate`).
 7. Scaffold do `_template` → `landing-pages/<nome>/`.
 8. Preencher `messages/pt.json` + `content-spec.json`.

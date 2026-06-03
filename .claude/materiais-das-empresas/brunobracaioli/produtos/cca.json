@@ -1,0 +1,108 @@
+{
+  "slug": "cca",
+  "client": "brunobracaioli",
+  "name": "Claude Code Architect",
+  "shortCode": "CCA",
+  "status": "active",
+  "tagline": "Construa software de verdade com Claude Code.",
+  "positioning": "Do prompt à arquitetura: o método para devs que querem usar IA como ferramenta de engenharia, não como gambiarra.",
+  "tone": "tech-hacker",
+  "language": "pt-BR",
+  "defaultSubdomain": "cca",
+  "format": "Curso pt-BR — vídeo-aulas + apostilas técnicas, do zero ao avançado",
+  "offer": {
+    "priceCents": 149700,
+    "anchorPriceCents": 199700,
+    "priceNote": "à vista",
+    "checkoutUrl": "https://pay.hub.la/KiIZ2UcpwcbOps224hbI",
+    "waitlistUrl": "https://wa.me/5500000000000?text=Quero%20entrar%20na%20lista%20do%20Claude%20Code%20Architect",
+    "cartState": "open",
+    "payments": ["Pix", "Cartão", "Boleto"],
+    "guarantee": "7 dias de garantia incondicional.",
+    "scarcity": ""
+  },
+  "whatItIs": "Treinamento focado em Claude Code, desenvolvimento agêntico e arquitetura de software. Do zero ao avançado: vídeo-aulas + 12 apostilas técnicas (CLAUDE.md, Skills, Hooks, Agents, MCP, Spec-Driven Development, stacks e arquiteturas), multi-times de agentes 24/7, 5 projetos práticos baixáveis (incl. agência de tráfego de agentes IA).",
+  "dores": [
+    { "title": "IA virou ruído", "body": "Você testou copiloto, colou prompt no chat e mesmo assim continua refazendo trabalho." },
+    { "title": "Prompt frágil", "body": "Prompts que funcionam uma vez e quebram na próxima — sem método, vira loteria." },
+    { "title": "Zero arquitetura", "body": "Tudo vira script descartável; nada que escale ou que outro humano consiga manter." }
+  ],
+  "mecanismo": {
+    "loop": "spec · agentes · automação auditável",
+    "intro": "Tratar IA como parte do sistema: contratos claros, agentes especializados, automação auditável.",
+    "times": [
+      { "name": "Arquitetura com IA", "desc": "Modelar features com spec antes de codar — IA respeitando boundaries." },
+      { "name": "Agentes especializados", "desc": "Construir subagents e skills que automatizam tarefas repetíveis." },
+      { "name": "Automação auditável", "desc": "Pipelines headless com logs, idempotência e rollback." }
+    ],
+    "subtimes": ["Skills", "Hooks", "Agents", "MCP"],
+    "loop247": ""
+  },
+  "stack": {
+    "cerebro": ["Claude Code", "MCP", "GitHub"],
+    "infra": ["Fly.io", "Supabase", "Upstash"],
+    "custoArgumento": "Stack moderna, open-source e de baixo custo."
+  },
+  "prereqs": [
+    "Não precisa já saber usar IA — começamos do método",
+    "Agnóstico de stack (exemplos em TypeScript, Python e mais)"
+  ],
+  "agenda": [
+    { "bloco": "Fundamentos", "desc": "Como Claude Code pensa, e como dar contexto que rende." },
+    { "bloco": "Engenharia de agentes", "desc": "Skills, subagents e orquestração determinística." },
+    { "bloco": "Produção", "desc": "Deploy, observabilidade e segurança de fluxos com IA." }
+  ],
+  "entregaveis": [
+    "Acesso à comunidade de arquitetos",
+    "Templates de skills e subagents prontos"
+  ],
+  "persona": [
+    { "icon": "👩‍💻", "title": "Dev que quer escalar", "desc": "Já programa e quer multiplicar entrega usando IA com método." },
+    { "icon": "🧑‍🔧", "title": "Tech lead", "desc": "Quer levar IA pro time sem perder qualidade nem controle." },
+    { "icon": "🚀", "title": "Fundador técnico", "desc": "Constrói o próprio produto e precisa entregar mais com menos." }
+  ],
+  "comparison": {
+    "ours": "Claude Code Architect",
+    "theirs": "Cursos genéricos",
+    "rows": [
+      { "label": "Método repetível do design ao deploy", "ours": true, "theirs": false },
+      { "label": "Agentes e skills de verdade", "ours": true, "theirs": false },
+      { "label": "Foco em arquitetura, não em truque de prompt", "ours": true, "theirs": false },
+      { "label": "Exemplos que rodam em produção", "ours": true, "theirs": "Só demos" }
+    ]
+  },
+  "autoridade": {
+    "eyebrow": "Seu instrutor",
+    "name": "Bruno Bracaioli",
+    "bio": "Engenheiro de software e arquiteto de soluções com mais de uma década construindo sistemas em produção.",
+    "image": "/instrutor.jpg",
+    "provas": ["10+ anos em produção", "+2.000 devs treinados", "Especialista em IA aplicada"]
+  },
+  "numeros": [
+    { "value": "+2.000", "label": "devs treinados" },
+    { "value": "4.9★", "label": "avaliação média" },
+    { "value": "12h", "label": "de conteúdo prático" },
+    { "value": "7 dias", "label": "de garantia" }
+  ],
+  "faqHints": [
+    { "q": "Preciso já saber usar IA?", "a": "Não. Começamos do método e evoluímos até fluxos avançados de engenharia." },
+    { "q": "Serve para qualquer linguagem?", "a": "Sim. O método é agnóstico de stack — os exemplos cobrem TypeScript, Python e mais." },
+    { "q": "Tem garantia?", "a": "Sim, 7 dias incondicionais. Se não for para você, devolvemos." },
+    { "q": "Como recebo o acesso?", "a": "Logo após a compra, por e-mail, com acesso imediato à plataforma." }
+  ],
+  "seo": {
+    "title": "Claude Code Architect — domine engenharia com IA",
+    "description": "Aprenda a construir software de verdade com Claude Code: arquitetura, agentes e automação na prática."
+  },
+  "assets": {
+    "logo": ".claude/materiais-das-empresas/brunobracaioli/logo/logo.png",
+    "instructorPhoto": ".claude/materiais-das-empresas/brunobracaioli/logo/foto-do-infoprodutor/bruno-bracaioli.jpg",
+    "mascote": ".claude/materiais-das-empresas/brunobracaioli/mascote/claude-lendo.png",
+    "exampleAds": ".claude/materiais-das-empresas/brunobracaioli/exemplo-de-ads/"
+  },
+  "brand": {
+    "navy": "#0A0F1A",
+    "navyAlt": "#0E1422",
+    "orange": "#FF6B1A"
+  }
+}
