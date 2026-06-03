@@ -146,7 +146,7 @@ Waves 4/5; a skill + serializer (esta wave) já publicam dado um ContentDoc no S
 2. Rebuild do `cca` pelo template refatorado gera `out/` equivalente ao baseline (Wave 1).
 3. Criar LP popula `products`+`landing_pages`+`landing_page_sections` e enfileira o publish
    (Wave 3 — ✅; round-trip rows→serializer validado).
-4. Editor: editar um campo salva e reflete no iframe; toggle mobile/desktop (Wave 4).
+4. Editor: editar um campo salva e reflete no iframe; toggle mobile/desktop (Wave 4 — ✅).
 5. Ultron: "modifique o headline da hero da LP X" pergunta o que faltar, confirma, aplica;
    "publica a LP X" enfileira `landing_publish` (Wave 5).
 6. Publicar atualiza `<subdomain>.b2tech.io` e grava `published_snapshot` (Wave 2/5).
@@ -158,7 +158,7 @@ Waves 4/5; a skill + serializer (esta wave) já publicam dado um ContentDoc no S
 1. Pacote `@b2tech/lp-render` + refactor do template (sem regressão) — ✅.
 2. Pipeline de publicação (snapshot → build → Cloudflare) — ✅.
 3. Geração escreve no Supabase ao vivo — ✅.
-4. Editor WYSIWYG no dashboard.
+4. Editor WYSIWYG no dashboard — ✅.
 5. Edição por voz (Ultron).
 6. Hardening (segurança, RLS, testes, docs).
 
@@ -179,3 +179,38 @@ Supabase** e enfileira o publish (REST/curl + `SUPABASE_SECRET_KEY`; o MCP é OA
    reusa e pula `npm ci`).
 5. `draft_status='ready'` → **enfileira `landing_publish`** (`agent_jobs`, dedup per-LP) + 1
    `operation_logs` (`action='create'`). O build/deploy é do job `landing_publish` (§6.1).
+
+### 9.2 Editor WYSIWYG no dashboard (Wave 4)
+
+O `web/` passou a consumir `@b2tech/lp-render` (`file:` dep + `transpilePackages` — ADR 0017)
+e ganhou fontes self-hosted (`@fontsource/inter`,`/dm-sans`) para a fidelidade do preview.
+
+- **Isolamento de superfície (two root layouts).** O `app/` foi reorganizado em route groups:
+  `app/(app)/*` (dashboard/login, layout escuro + Tailwind) e `app/(preview)/*` (layout próprio
+  que importa **só** o design system da LP). Sem isso, a `globals.css` do dashboard (preflight
+  Tailwind + fundo escuro) vazaria no preview. O LP é **CSS puro** (sem Tailwind), então o
+  preview é autocontido com 1 import de `@b2tech/lp-render/globals.css`.
+- **Preview (`/lp-preview/[id]`).** Server component lê o ContentDoc (`getLandingPageFull`) e
+  passa pra um client island (`preview-client.tsx`) que monta
+  `<ContentProvider value={contentDocToFiles(doc)}><PageBody/></ContentProvider>` + injeta o
+  `themeCss` num `<style>` e escuta `postMessage` same-origin (`lp-preview:doc`/`scrollTo`) →
+  edição reflete **instantânea** sem reload. Renderiza **hidratado** (necessário: `.fade-in`
+  é `opacity:0` até o JS revelar). `middleware.ts`: `/lp-preview/*` é gateado por sessão **e**
+  recebe `frame-ancestors 'self'` + `X-Frame-Options: SAMEORIGIN` (todo o resto segue `'none'`/
+  `DENY`) pro editor embutir em `<iframe src>`.
+- **Editor (`.../[product]/landing-page/[id]`).** Client component segura o ContentDoc em
+  estado; o painel esquerdo edita seção/tema/config, o `<iframe>` à direita (toggle 390px/100%)
+  mostra ao vivo. Edição = update local + `postMessage` ao iframe (instantâneo) + PATCH
+  debounced (600ms). Editor de campos **genérico/recursivo** (`field-editor.tsx`) introspecta o
+  `fields` JSON (string/number/bool/array de string/array de objeto/objeto aninhado) — cobre os
+  17 shapes sem hardcode. Concorrência otimista por `version`: 409 → reconcilia com o servidor.
+  Durante `generating`/`publishing` o editor fica read-only e faz polling 2,5s pra mostrar os
+  blocos nascendo. Botão **Publicar** (+ checkbox go-live/noindex) → `POST .../publish`.
+- **APIs (Hono, `lib/api/landing-pages.ts`, montado no route handler):** `GET /:id`,
+  `PATCH /:id/sections/:type` (version otimista + guarda draft-busy 423), `PATCH /:id/theme`,
+  `PATCH /:id/settings` (merge), `POST /:id/publish` (enfileira `landing_publish`, dedup per-LP),
+  `POST /:id/assets` (Storage `landing-assets`). Validação (`lib/landing/validate.ts`): tema com
+  cor hex + fonte de allowlist + escala 0.8–1.3 (impede injeção de `</style>` no themeCss);
+  settings parcial com URL http(s); fields com limites estruturais + `href` só http(s)/relativo
+  (bloqueia `javascript:`). Rate limits `landingEdit`/`landingPublish`. Tipos do DB regenerados
+  (`lib/db/types.ts`).

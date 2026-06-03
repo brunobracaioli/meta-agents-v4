@@ -200,6 +200,7 @@ export type Database = {
           finished_at: string | null
           id: string
           kind: string
+          landing_page_id: string | null
           requested_by: string
           result: Json | null
           skill: string
@@ -218,6 +219,7 @@ export type Database = {
           finished_at?: string | null
           id?: string
           kind: string
+          landing_page_id?: string | null
           requested_by?: string
           result?: Json | null
           skill: string
@@ -236,6 +238,7 @@ export type Database = {
           finished_at?: string | null
           id?: string
           kind?: string
+          landing_page_id?: string | null
           requested_by?: string
           result?: Json | null
           skill?: string
@@ -248,6 +251,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_jobs_landing_page_id_fkey"
+            columns: ["landing_page_id"]
+            isOneToOne: false
+            referencedRelation: "landing_pages"
             referencedColumns: ["id"]
           },
         ]
@@ -665,6 +675,158 @@ export type Database = {
           },
         ]
       }
+      landing_page_sections: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          fields: Json
+          id: string
+          landing_page_id: string
+          position: number
+          type: string
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          fields?: Json
+          id?: string
+          landing_page_id: string
+          position: number
+          type: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          fields?: Json
+          id?: string
+          landing_page_id?: string
+          position?: number
+          type?: string
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "landing_page_sections_landing_page_id_fkey"
+            columns: ["landing_page_id"]
+            isOneToOne: false
+            referencedRelation: "landing_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      landing_pages: {
+        Row: {
+          cart_state: string
+          checkout_url: string | null
+          client_id: string
+          cloudflare_project_id: string | null
+          content_spec: Json
+          created_at: string
+          deployed_at: string | null
+          draft_status: string
+          fqdn: string
+          id: string
+          last_deploy_id: string | null
+          name: string
+          noindex: boolean
+          price_cents: number | null
+          product_id: string | null
+          published_at: string | null
+          published_snapshot: Json | null
+          raw_spec: Json | null
+          repo_path: string
+          settings: Json
+          ssl_status: string
+          status: string
+          subdomain: string
+          theme: Json
+          tracking: Json
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          cart_state?: string
+          checkout_url?: string | null
+          client_id: string
+          cloudflare_project_id?: string | null
+          content_spec?: Json
+          created_at?: string
+          deployed_at?: string | null
+          draft_status?: string
+          fqdn: string
+          id?: string
+          last_deploy_id?: string | null
+          name: string
+          noindex?: boolean
+          price_cents?: number | null
+          product_id?: string | null
+          published_at?: string | null
+          published_snapshot?: Json | null
+          raw_spec?: Json | null
+          repo_path: string
+          settings?: Json
+          ssl_status?: string
+          status?: string
+          subdomain: string
+          theme?: Json
+          tracking?: Json
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          cart_state?: string
+          checkout_url?: string | null
+          client_id?: string
+          cloudflare_project_id?: string | null
+          content_spec?: Json
+          created_at?: string
+          deployed_at?: string | null
+          draft_status?: string
+          fqdn?: string
+          id?: string
+          last_deploy_id?: string | null
+          name?: string
+          noindex?: boolean
+          price_cents?: number | null
+          product_id?: string | null
+          published_at?: string | null
+          published_snapshot?: Json | null
+          raw_spec?: Json | null
+          repo_path?: string
+          settings?: Json
+          ssl_status?: string
+          status?: string
+          subdomain?: string
+          theme?: Json
+          tracking?: Json
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "landing_pages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "landing_pages_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       metric_snapshots: {
         Row: {
           analysis_id: string
@@ -811,6 +973,53 @@ export type Database = {
           },
         ]
       }
+      products: {
+        Row: {
+          brief: Json
+          brief_path: string | null
+          client_id: string
+          created_at: string
+          default_subdomain: string | null
+          id: string
+          name: string
+          slug: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          brief?: Json
+          brief_path?: string | null
+          client_id: string
+          created_at?: string
+          default_subdomain?: string | null
+          id?: string
+          name: string
+          slug: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          brief?: Json
+          brief_path?: string | null
+          client_id?: string
+          created_at?: string
+          default_subdomain?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -830,6 +1039,7 @@ export type Database = {
           finished_at: string | null
           id: string
           kind: string
+          landing_page_id: string | null
           requested_by: string
           result: Json | null
           skill: string
@@ -995,3 +1205,7 @@ export type AnalysisFinding = Row<"analysis_findings">
 export type DailySummary = Row<"daily_summaries">
 export type AgentEvent = Row<"agent_events">
 export type AgentJob = Row<"agent_jobs">
+export type Product = Row<"products">
+export type LandingPage = Row<"landing_pages">
+export type LandingPageSection = Row<"landing_page_sections">
+

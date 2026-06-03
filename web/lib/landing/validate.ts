@@ -1,0 +1,140 @@
+import { z } from "zod";
+import { FONT_ALLOWLIST } from "./constants";
+
+// Validation for the landing-page editor's write boundary (SPEC-012 §7). The draft is
+// rendered both in the dashboard preview and, on publish, into a static site — so every
+// edited value is untrusted input that must be bounded and sanitized here.
+
+// ---------- Theme tokens ----------
+// Theme values become a `:root { --token: value }` stylesheet (serializer buildThemeCss).
+// Constraining colors to hex and fonts to an allowlist guarantees a value can never contain
+// "</style>" or other CSS/HTML-breaking sequences — the injection vector for the preview.
+
+const hex = z.string().regex(/^#[0-9a-fA-F]{3,8}$/, "cor inválida (use hex, ex.: #FF6B1A)");
+
+const font = z
+  .string()
+  .refine((v) => (FONT_ALLOWLIST as readonly string[]).includes(v), "fonte não permitida");
+
+export const themeSchema = z
+  .object({
+    fonts: z.object({ title: font.optional(), body: font.optional() }).strict().optional(),
+    scale: z.number().min(0.8).max(1.3).optional(),
+    colors: z
+      .object({
+        orange: hex.optional(),
+        orangeHi: hex.optional(),
+        navy900: hex.optional(),
+        navy800: hex.optional(),
+        text: hex.optional(),
+        textDim: hex.optional(),
+        bg: hex.optional(),
+        bgAlt: hex.optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+export type ThemePatch = z.infer<typeof themeSchema>;
+
+// ---------- Page settings (editable subset) ----------
+// Only fields the operator may change here; subdomain/site_url/tracking are NOT editable
+// post-generation (they define identity/deploy). Patches merge into the stored settings.
+
+const httpUrl = z
+  .string()
+  .max(2000)
+  .refine((u) => /^https?:\/\//i.test(u), "use uma URL http(s)");
+
+export const settingsPatchSchema = z
+  .object({
+    seo: z
+      .object({
+        title: z.string().max(200),
+        description: z.string().max(400),
+        ogAlt: z.string().max(200),
+      })
+      .partial()
+      .strict()
+      .optional(),
+    checkout_url: httpUrl.optional(),
+    waitlist_url: httpUrl.optional(),
+    price_cents: z.number().int().min(0).max(100_000_000).optional(),
+    cart_state: z.enum(["open", "closed"]).optional(),
+    deadline: z.string().max(40).optional(),
+    cartClosed: z
+      .object({
+        headline: z.string().max(300),
+        subhead: z.string().max(600),
+        waitlistCtaLabel: z.string().max(120),
+      })
+      .partial()
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+export type SettingsPatch = z.infer<typeof settingsPatchSchema>;
+
+// ---------- Section fields ----------
+// `fields` is a per-type copy object; rather than hardcode 17 shapes here (Wave 6 adds
+// per-type Zod), v1 enforces structural bounds + sanitizes link hrefs. React escapes text
+// on render, so the residual risk is hostile hrefs and oversized payloads.
+
+const MAX_DEPTH = 6;
+const MAX_STRING = 8000;
+const MAX_ARRAY = 200;
+const MAX_KEYS = 100;
+const MAX_NODES = 3000;
+
+/** Reject hrefs that aren't http(s), root-relative, anchor, mailto or tel — blocks
+ * `javascript:`/`data:` URIs. */
+function isSafeHref(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  if (v.startsWith("javascript:") || v.startsWith("data:") || v.startsWith("vbscript:")) return false;
+  return /^(https?:\/\/|\/|#|mailto:|tel:)/.test(v);
+}
+
+export function validateSectionFields(input: unknown): { ok: true } | { ok: false; error: string } {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    return { ok: false, error: "fields deve ser um objeto" };
+  }
+  let nodes = 0;
+  const visit = (value: unknown, depth: number, key: string | null): string | null => {
+    if (++nodes > MAX_NODES) return "conteúdo grande demais";
+    if (depth > MAX_DEPTH) return "estrutura aninhada demais";
+    if (value === null) return null;
+    switch (typeof value) {
+      case "string":
+        if (value.length > MAX_STRING) return "texto longo demais";
+        if (key === "href" && !isSafeHref(value)) return "link não permitido (use http(s))";
+        return null;
+      case "number":
+        return Number.isFinite(value) ? null : "número inválido";
+      case "boolean":
+        return null;
+      case "object": {
+        if (Array.isArray(value)) {
+          if (value.length > MAX_ARRAY) return "lista grande demais";
+          for (const item of value) {
+            const err = visit(item, depth + 1, key);
+            if (err) return err;
+          }
+          return null;
+        }
+        const entries = Object.entries(value as Record<string, unknown>);
+        if (entries.length > MAX_KEYS) return "objeto com chaves demais";
+        for (const [k, v] of entries) {
+          const err = visit(v, depth + 1, k);
+          if (err) return err;
+        }
+        return null;
+      }
+      default:
+        return "tipo de valor não suportado";
+    }
+  };
+  const err = visit(input, 1, null);
+  return err ? { ok: false, error: err } : { ok: true };
+}

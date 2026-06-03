@@ -14,6 +14,7 @@ import { transcribe } from "@/lib/ultron/stt";
 import { runChat, resumeChat } from "@/lib/ultron/chat";
 import { synthesizeStream } from "@/lib/ultron/tts";
 import { getEvents, getProcesses } from "@/lib/services/events";
+import { landingPages } from "@/lib/api/landing-pages";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -184,6 +185,9 @@ app.get("/dashboard/events", async (c) => {
   }
 });
 
+// ---------- Landing-page editor (draft CRUD + publish) ----------
+app.route("/landing-pages", landingPages);
+
 app.get("/health", (c) => c.json({ ok: true }));
 
 function errMsg(err: unknown): string {
@@ -192,3 +196,6 @@ function errMsg(err: unknown): string {
 
 export const GET = handle(app);
 export const POST = handle(app);
+// The landing-page editor uses PATCH (sections/theme/settings). Next route handlers must
+// export each HTTP method explicitly, so Hono can dispatch them.
+export const PATCH = handle(app);

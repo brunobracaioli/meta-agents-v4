@@ -1,0 +1,210 @@
+import "server-only";
+import { db } from "@/lib/db/client";
+import type { ContentDoc, Settings, Theme } from "@b2tech/lp-render/content-doc";
+import type { SectionType } from "@b2tech/lp-render/content-types";
+
+// Read/assembly layer for the editable landing-page DRAFT. The ContentDoc is built from
+// `landing_pages.settings` + `.theme` + the ordered `landing_page_sections` rows — the
+// same shape the publish runner serializes. See SPEC-012 §3 / ADR 0015.
+
+/** Editor-facing landing page metadata (deploy + draft state), separate from the ContentDoc. */
+export type LandingPageMeta = {
+  id: string;
+  client_id: string;
+  product_id: string | null;
+  name: string;
+  subdomain: string;
+  url: string;
+  status: string; // Cloudflare deploy state: draft|building|deployed|failed
+  draft_status: string; // Supabase draft state: empty|generating|ready|editing|publishing
+  noindex: boolean;
+  published_at: string | null;
+  updated_at: string;
+};
+
+export type LandingPageFull = {
+  meta: LandingPageMeta;
+  doc: ContentDoc;
+  /** Per-section optimistic-concurrency version, keyed by section type (editor uses it on PATCH). */
+  versions: Record<string, number>;
+};
+
+export type ProductSummary = {
+  id: string;
+  slug: string;
+  name: string;
+  status: string;
+  landingPageCount: number;
+};
+
+const EMPTY_SETTINGS: Settings = {
+  subdomain: "",
+  name: "",
+  product: "",
+  site_url: "",
+  seo: { title: "", description: "", ogAlt: "" },
+  tracking: { fb_pixel_id: "", ga4_id: "", consent_key: "" },
+  checkout_url: "",
+  price_cents: 0,
+  cart_state: "open",
+  noindex: true,
+  cartClosed: { headline: "", subhead: "", waitlistCtaLabel: "" },
+};
+
+/** Coerce the stored settings JSON into a complete Settings, filling any gaps so the
+ * serializer/PageBody never read undefined nested objects (a half-generated draft). */
+function coerceSettings(raw: unknown): Settings {
+  const s = (raw && typeof raw === "object" ? raw : {}) as Partial<Settings>;
+  return {
+    ...EMPTY_SETTINGS,
+    ...s,
+    seo: { ...EMPTY_SETTINGS.seo, ...(s.seo ?? {}) },
+    tracking: { ...EMPTY_SETTINGS.tracking, ...(s.tracking ?? {}) },
+    cartClosed: { ...EMPTY_SETTINGS.cartClosed, ...(s.cartClosed ?? {}) },
+  };
+}
+
+function metaFromRow(row: {
+  id: string;
+  client_id: string;
+  product_id: string | null;
+  name: string;
+  subdomain: string;
+  url: string;
+  status: string;
+  draft_status: string;
+  noindex: boolean;
+  published_at: string | null;
+  updated_at: string;
+}): LandingPageMeta {
+  return {
+    id: row.id,
+    client_id: row.client_id,
+    product_id: row.product_id,
+    name: row.name,
+    subdomain: row.subdomain,
+    url: row.url,
+    status: row.status,
+    draft_status: row.draft_status,
+    noindex: row.noindex,
+    published_at: row.published_at,
+    updated_at: row.updated_at,
+  };
+}
+
+/**
+ * Full editor read: the LP metadata + the assembled ContentDoc (settings, theme, ordered
+ * sections). Returns null if the id does not exist. Read-only.
+ */
+export async function getLandingPageFull(id: string): Promise<LandingPageFull | null> {
+  const supabase = db();
+  const pageRes = await supabase
+    .from("landing_pages")
+    .select(
+      "id, client_id, product_id, name, subdomain, url, status, draft_status, noindex, published_at, updated_at, settings, theme",
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (pageRes.error) throw pageRes.error;
+  if (!pageRes.data) return null;
+  const page = pageRes.data;
+
+  const sectionsRes = await supabase
+    .from("landing_page_sections")
+    .select("type, position, enabled, fields, version")
+    .eq("landing_page_id", id)
+    .order("position", { ascending: true });
+  if (sectionsRes.error) throw sectionsRes.error;
+
+  const rows = sectionsRes.data ?? [];
+  const versions: Record<string, number> = {};
+  for (const r of rows) versions[r.type] = r.version;
+
+  const doc: ContentDoc = {
+    settings: coerceSettings(page.settings),
+    theme: (page.theme && typeof page.theme === "object" ? page.theme : {}) as Theme,
+    sections: rows.map((r) => ({
+      type: r.type as SectionType,
+      position: r.position,
+      enabled: r.enabled,
+      fields: (r.fields && typeof r.fields === "object" ? r.fields : {}) as Record<string, unknown>,
+    })),
+  };
+
+  return { meta: metaFromRow(page), doc, versions };
+}
+
+/** Products for a client slug, each with a count of its landing pages. Null if no client. */
+export async function getClientProducts(slug: string): Promise<ProductSummary[] | null> {
+  const supabase = db();
+  const clientRes = await supabase.from("clients").select("id").eq("slug", slug).maybeSingle();
+  if (clientRes.error) throw clientRes.error;
+  if (!clientRes.data) return null;
+
+  const productsRes = await supabase
+    .from("products")
+    .select("id, slug, name, status")
+    .eq("client_id", clientRes.data.id)
+    .order("created_at", { ascending: true });
+  if (productsRes.error) throw productsRes.error;
+  const products = productsRes.data ?? [];
+  if (products.length === 0) return [];
+
+  const countsRes = await supabase
+    .from("landing_pages")
+    .select("product_id")
+    .in(
+      "product_id",
+      products.map((p) => p.id),
+    );
+  if (countsRes.error) throw countsRes.error;
+  const counts = new Map<string, number>();
+  for (const row of countsRes.data ?? []) {
+    if (row.product_id) counts.set(row.product_id, (counts.get(row.product_id) ?? 0) + 1);
+  }
+
+  return products.map((p) => ({
+    id: p.id,
+    slug: p.slug,
+    name: p.name,
+    status: p.status,
+    landingPageCount: counts.get(p.id) ?? 0,
+  }));
+}
+
+export type LandingPageListItem = LandingPageMeta;
+
+/** A product (by client slug + product slug) and its landing pages. Null if not found. */
+export async function getProductWithLandingPages(
+  clientSlug: string,
+  productSlug: string,
+): Promise<{ product: { id: string; slug: string; name: string }; landingPages: LandingPageListItem[] } | null> {
+  const supabase = db();
+  const clientRes = await supabase.from("clients").select("id").eq("slug", clientSlug).maybeSingle();
+  if (clientRes.error) throw clientRes.error;
+  if (!clientRes.data) return null;
+
+  const productRes = await supabase
+    .from("products")
+    .select("id, slug, name")
+    .eq("client_id", clientRes.data.id)
+    .eq("slug", productSlug)
+    .maybeSingle();
+  if (productRes.error) throw productRes.error;
+  if (!productRes.data) return null;
+  const product = productRes.data;
+
+  const lpRes = await supabase
+    .from("landing_pages")
+    .select(
+      "id, client_id, product_id, name, subdomain, url, status, draft_status, noindex, published_at, updated_at",
+    )
+    .eq("product_id", product.id)
+    .order("updated_at", { ascending: false });
+  if (lpRes.error) throw lpRes.error;
+
+  return {
+    product: { id: product.id, slug: product.slug, name: product.name },
+    landingPages: (lpRes.data ?? []).map(metaFromRow),
+  };
+}
