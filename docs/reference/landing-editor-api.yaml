@@ -1,0 +1,306 @@
+openapi: 3.1.0
+info:
+  title: Landing Page Editor API
+  version: 1.0.0
+  description: >
+    Editor do RASCUNHO de landing pages (SPEC-012). Todas as rotas ficam atrás do gate de
+    sessão (cookie JWT, middleware.ts) e operam sobre a fonte de verdade no Supabase
+    (`landing_page_sections` + `landing_pages.theme`/`.settings`). Edições baratas (texto,
+    tema, settings) são escritas síncronas; o publish (build+deploy) é enfileirado como job
+    `landing_publish` no runner Fly. Implementação: web/lib/api/landing-pages.ts.
+servers:
+  - url: /api
+tags:
+  - name: landing-pages
+paths:
+  /landing-pages/{id}:
+    get:
+      tags: [landing-pages]
+      summary: ContentDoc atual da LP (preview + polling)
+      operationId: getLandingPage
+      parameters:
+        - $ref: "#/components/parameters/LandingPageId"
+      responses:
+        "200":
+          description: ContentDoc + metadados + versões por seção
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LandingPageFull" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /landing-pages/{id}/sections/{type}:
+    patch:
+      tags: [landing-pages]
+      summary: Atualiza os campos de uma seção (concorrência otimista por version)
+      operationId: patchSection
+      parameters:
+        - $ref: "#/components/parameters/LandingPageId"
+        - name: type
+          in: path
+          required: true
+          description: SectionType (hero, urgency, problem, comparison, solution, features, curriculum, stats, proof, logos, persona, authority, offer, guarantee, faq, finalCta, footer)
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fields, version]
+              properties:
+                fields:
+                  type: object
+                  description: Campos da seção (shape de Messages). Validado por whitelist por tipo (section-schemas.ts) + guard estrutural.
+                version:
+                  type: integer
+                  description: Versão conhecida pelo cliente; UPDATE casa WHERE version=X.
+      responses:
+        "200":
+          description: Salvo; retorna a nova versão
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  version: { type: integer }
+        "400":
+          description: invalid_request | invalid_section_type | invalid_fields (detail explica)
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: version_conflict — outra escrita avançou a versão; corpo traz o estado atual para reconciliar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, const: version_conflict }
+                  current:
+                    type: object
+                    properties:
+                      version: { type: integer }
+                      fields: { type: object }
+        "423":
+          description: draft_busy — a LP está generating/publishing
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /landing-pages/{id}/theme:
+    patch:
+      tags: [landing-pages]
+      summary: Atualiza tokens de design (cores hex, fontes do allowlist, escala)
+      operationId: patchTheme
+      parameters:
+        - $ref: "#/components/parameters/LandingPageId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ThemePatch" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400":
+          description: invalid_theme (cor não-hex, fonte fora do allowlist, escala fora de 0.8–1.3, ou chave desconhecida)
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "423": { description: draft_busy, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /landing-pages/{id}/settings:
+    patch:
+      tags: [landing-pages]
+      summary: Atualiza o subconjunto editável de settings (merge)
+      operationId: patchSettings
+      parameters:
+        - $ref: "#/components/parameters/LandingPageId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SettingsPatch" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400":
+          description: invalid_settings (URL não-http(s), cart_state inválido, ou chave fora do subconjunto editável)
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "423": { description: draft_busy, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /landing-pages/{id}/publish:
+    post:
+      tags: [landing-pages]
+      summary: Enfileira o job de publicação (build + deploy no Cloudflare)
+      operationId: publishLandingPage
+      parameters:
+        - $ref: "#/components/parameters/LandingPageId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                noindex:
+                  type: boolean
+                  description: "Override; omitido = mantém o estado atual. false = go-live indexável."
+      responses:
+        "200":
+          description: Job enfileirado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enqueued: { type: boolean }
+                  job_id: { type: string, format: uuid }
+                  noindex: { type: integer, enum: [0, 1] }
+        "400":
+          description: publish_not_enabled (cliente sem skill de publish no allowlist)
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: já existe um publish em andamento para esta LP (dedup per-LP)
+          content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /landing-pages/{id}/assets:
+    post:
+      tags: [landing-pages]
+      summary: Upload de imagem para o bucket público landing-assets
+      operationId: uploadAsset
+      parameters:
+        - $ref: "#/components/parameters/LandingPageId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: "Imagem raster (jpeg/png/webp/avif), ≤ 5MB. SVG não é aceito."
+      responses:
+        "200":
+          description: Upload ok; URL pública
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  url: { type: string, format: uri }
+                  path: { type: string }
+        "400": { description: invalid_request, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { description: file_too_large (> 5MB), content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "415": { description: unsupported_media_type (MIME fora do allowlist raster), content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "502": { description: upload_failed, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+  parameters:
+    LandingPageId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Ok:
+      description: ok
+      content: { application/json: { schema: { type: object, properties: { ok: { type: boolean } } } } }
+    Unauthorized:
+      description: sem sessão válida
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    NotFound:
+      description: not_found
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    RateLimited:
+      description: rate_limited (Retry-After no header)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+        detail: { type: string }
+    ThemePatch:
+      type: object
+      additionalProperties: false
+      properties:
+        fonts:
+          type: object
+          additionalProperties: false
+          properties:
+            title: { type: string, description: "fonte do allowlist (Inter, DM Sans, …)" }
+            body: { type: string }
+        scale: { type: number, minimum: 0.8, maximum: 1.3 }
+        colors:
+          type: object
+          additionalProperties: false
+          properties:
+            orange: { $ref: "#/components/schemas/HexColor" }
+            orangeHi: { $ref: "#/components/schemas/HexColor" }
+            navy900: { $ref: "#/components/schemas/HexColor" }
+            navy800: { $ref: "#/components/schemas/HexColor" }
+            text: { $ref: "#/components/schemas/HexColor" }
+            textDim: { $ref: "#/components/schemas/HexColor" }
+            bg: { $ref: "#/components/schemas/HexColor" }
+            bgAlt: { $ref: "#/components/schemas/HexColor" }
+    HexColor:
+      type: string
+      pattern: "^#[0-9a-fA-F]{3,8}$"
+    SettingsPatch:
+      type: object
+      additionalProperties: false
+      description: "Subconjunto editável; subdomain/site_url/tracking NÃO são editáveis."
+      properties:
+        seo:
+          type: object
+          additionalProperties: false
+          properties:
+            title: { type: string, maxLength: 200 }
+            description: { type: string, maxLength: 400 }
+            ogAlt: { type: string, maxLength: 200 }
+        checkout_url: { type: string, format: uri, maxLength: 2000 }
+        waitlist_url: { type: string, format: uri, maxLength: 2000 }
+        price_cents: { type: integer, minimum: 0, maximum: 100000000 }
+        cart_state: { type: string, enum: [open, closed] }
+        deadline: { type: string, maxLength: 40 }
+        cartClosed:
+          type: object
+          additionalProperties: false
+          properties:
+            headline: { type: string, maxLength: 300 }
+            subhead: { type: string, maxLength: 600 }
+            waitlistCtaLabel: { type: string, maxLength: 120 }
+    LandingPageFull:
+      type: object
+      properties:
+        meta:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            subdomain: { type: string }
+            url: { type: string, format: uri }
+            status: { type: string, enum: [draft, building, deployed, failed] }
+            draft_status: { type: string, enum: [empty, generating, ready, editing, publishing] }
+            noindex: { type: boolean }
+        doc:
+          type: object
+          description: ContentDoc (settings + theme + sections[]). Ver docs/reference/content-doc.md.
+        versions:
+          type: object
+          additionalProperties: { type: integer }
+          description: "versão por seção (chave = SectionType), para concorrência otimista"
+security:
+  - sessionCookie: []

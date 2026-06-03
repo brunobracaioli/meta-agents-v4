@@ -1,0 +1,146 @@
+{
+  "slug": "imersao-agencia",
+  "client": "brunobracaioli",
+  "name": "Imersão AgêncIA Tráfego Pago",
+  "shortCode": "IMR",
+  "status": "active",
+  "tagline": "Pare de ser babá de campanha. Monte uma agência de IA que roda 24/7.",
+  "positioning": "Tire o gestor do operacional manual (abrir o Ads Manager 8x/dia) e coloque-o no comando estratégico. Human-in-the-loop, não execução braçal: você monta times de agentes de IA que operam uma agência de Meta Ads de forma autônoma.",
+  "tone": "tech-hacker",
+  "language": "pt-BR",
+  "defaultSubdomain": "imersao-agencia",
+  "format": "Workshop ao vivo no Zoom, mão na massa, com gravação disponível para quem participar",
+  "eventDate": "2026-06-20",
+  "schedule": "13h às 18h (5 horas)",
+  "duration": "5h ao vivo",
+  "offer": {
+    "priceCents": 14700,
+    "anchorPriceCents": 49700,
+    "priceNote": "1º lote, à vista",
+    "checkoutUrl": "https://pay.hub.la/YftyuP6fkiKfL2daF0o1",
+    "waitlistUrl": "mailto:bruno@b2tech.io?subject=Lista%20de%20espera%20Imers%C3%A3o%20Ag%C3%AAncIA",
+    "cartState": "open",
+    "deadline": "2026-06-20T13:00:00-03:00",
+    "payments": ["Pix", "Cartão", "Boleto"],
+    "guarantee": "7 dias de garantia — reembolso 100% via email para bruno@b2tech.io.",
+    "scarcity": "Turma ao vivo, 1º lote, vagas limitadas — fecha quando encher."
+  },
+  "whatItIs": "Workshop ao vivo onde o participante monta uma estrutura de agentes de IA que operam uma agência de Meta Ads de forma autônoma. Você sai da imersão com os primeiros times de agentes configurados e 'online', prontos para rodar no automático para múltiplos clientes simultaneamente.",
+  "dores": [
+    {
+      "title": "Babá de campanha",
+      "body": "Você abre o Ads Manager 8 vezes por dia pra checar CPA, pausar criativo ruim, subir budget. Custo: o dia inteiro preso no painel."
+    },
+    {
+      "title": "Otimização tardia",
+      "body": "A decisão depende de você olhar. Madrugada, fim de semana, feriado: o anúncio gasta e ninguém ajusta. Custo: orçamento desperdiçado."
+    },
+    {
+      "title": "Não escala",
+      "body": "Cada cliente novo é mais trabalho braçal — abas, planilhas, status. Custo: seu teto de clientes fica preso ao seu tempo."
+    }
+  ],
+  "mecanismo": {
+    "loop": "criar · otimizar · monitorar · repetir",
+    "intro": "O sistema é um loop de 4 funções operado por três times de agentes.",
+    "times": [
+      {
+        "name": "Criadores de campanha",
+        "desc": "Claude Code como orquestrador: o briefing vira campanha estruturada (público, criativo, budget, objetivo) via spec, revisada antes de subir."
+      },
+      {
+        "name": "Analistas de desempenho",
+        "desc": "MCP do Facebook conectado lê as métricas reais da conta (ex.: CPA das últimas 72h em N conjuntos) a cada hora."
+      },
+      {
+        "name": "Editores de campanhas ativas",
+        "desc": "Trocam anúncios, duplicam campanhas/conjuntos/anúncios vencedores, trocam públicos e pausam o que não performou."
+      }
+    ],
+    "subtimes": ["Copy", "Geração de anúncios em imagem", "Geração de anúncios em vídeo", "Criação de landing pages", "Traqueamento"],
+    "loop247": "Cron + human-in-the-loop: roda sozinho dia e noite; decisões sensíveis pedem sua aprovação — direto do celular."
+  },
+  "stack": {
+    "cerebro": ["Claude Code (orquestrador)", "MCP do Facebook (ponte oficial Meta Ads)", "GitHub (versionamento do que os agentes produzem)"],
+    "infra": ["Fly.io (onde roda 24/7)", "Supabase (estado das campanhas)", "Upstash (jobs agendados / triggers)"],
+    "custoArgumento": "Tudo open-source ou de baixo custo, com planos gratuitos no início — nada de SaaS caro de gestão de tráfego."
+  },
+  "prereqs": [
+    "Claude Code Pro ou Max (assinatura ativa)",
+    "Conta no GitHub",
+    "Conta de anúncios de teste (Meta Ads que você administre)",
+    "Não precisa ser dev — só usar o Claude Code no básico; o resto é conduzido ao vivo"
+  ],
+  "agenda": [
+    { "bloco": "Bloco 01–02 // Setup", "desc": "Conectar Claude Code + MCP do Facebook à conta; primeiro prompt que lê métricas reais e descreve o cenário." },
+    { "bloco": "Bloco 03 // Criação", "desc": "A campanha nasce de uma spec (público, criativo, budget, objetivo) revisada pelo agente antes de subir." },
+    { "bloco": "Bloco 04–05 // Loop & Entrega", "desc": "Cron rodando, human-in-the-loop no celular e playbook de replicação por cliente." }
+  ],
+  "entregaveis": [
+    "Sistema montado e online",
+    "Prompts usados na imersão",
+    "Estrutura de agentes (times e subtimes)",
+    "Cron de otimização configurado",
+    "Playbook de replicação por cliente"
+  ],
+  "persona": [
+    { "icon": "🎯", "title": "Gestor de tráfego solo", "desc": "Vive dentro do Ads Manager e quer recuperar o dia, sem largar a qualidade da operação." },
+    { "icon": "🏢", "title": "Dono de agência", "desc": "Quer escalar o número de clientes sem multiplicar o time braçal nem o caos de planilhas." },
+    { "icon": "🚀", "title": "Infoprodutor / operação própria", "desc": "Roda o próprio tráfego e quer um sistema que otimiza 24/7 enquanto foca no produto." }
+  ],
+  "comparison": {
+    "ours": "Imersão AgêncIA",
+    "theirs": "Gestão manual",
+    "rows": [
+      { "label": "Otimiza 24/7 (madrugada, fim de semana)", "ours": true, "theirs": false },
+      { "label": "Escala pra múltiplos clientes sem mais trabalho braçal", "ours": true, "theirs": false },
+      { "label": "Decisão estratégica, não execução manual", "ours": true, "theirs": false },
+      { "label": "Você preso no Ads Manager o dia todo", "ours": false, "theirs": true },
+      { "label": "Custo de ferramentas", "ours": "Baixo / open-source", "theirs": "SaaS caro" }
+    ]
+  },
+  "autoridade": {
+    "eyebrow": "Quem conduz",
+    "name": "Bruno Bracaioli",
+    "bio": "Founder da B2Tech, ~10 anos construindo produtos. Não é teoria de palco: é o sistema que eu uso pra operar.",
+    "image": "/instrutor.jpg",
+    "provas": [
+      "Meta Tech Provider",
+      "Anthropic Partner Network",
+      "Google for Startups",
+      "Pós-graduado PUC",
+      "50k+ @brunobracaioli",
+      "9 produtos em produção",
+      "3 partner programs"
+    ]
+  },
+  "numeros": [
+    { "value": "09", "label": "produtos em produção" },
+    { "value": "10+ anos", "label": "de stack" },
+    { "value": "24/7", "label": "loop de otimização" },
+    { "value": "3", "label": "partner programs" },
+    { "value": "5h", "label": "de imersão" }
+  ],
+  "faqHints": [
+    { "q": "Preciso ser desenvolvedor?", "a": "Não. Você só precisa usar o Claude Code no básico — o resto é conduzido ao vivo, mão na massa." },
+    { "q": "Vou sair com o sistema funcionando?", "a": "Sim. Você sai da imersão com os primeiros times de agentes configurados e online, prontos pra rodar." },
+    { "q": "Tem gravação?", "a": "Sim, quem participa recebe a gravação dos 5 blocos." },
+    { "q": "O que preciso ter antes?", "a": "Claude Code Pro ou Max, conta no GitHub e uma conta de anúncios de teste que você administre." },
+    { "q": "Como funciona a garantia?", "a": "7 dias de garantia — se não for pra você, reembolso de 100% via email para bruno@b2tech.io." }
+  ],
+  "seo": {
+    "title": "Imersão AgêncIA Tráfego Pago — sua agência de IA 24/7",
+    "description": "Workshop ao vivo: monte times de agentes de IA que operam Meta Ads no automático, 24/7. 20/06, 5h, mão na massa. 1º lote R$147."
+  },
+  "assets": {
+    "logo": ".claude/materiais-das-empresas/brunobracaioli/logo/logo.png",
+    "instructorPhoto": ".claude/materiais-das-empresas/brunobracaioli/logo/foto-do-infoprodutor/bruno-bracaioli.jpg",
+    "mascote": ".claude/materiais-das-empresas/brunobracaioli/mascote/claude-lendo.png",
+    "exampleAds": ".claude/materiais-das-empresas/brunobracaioli/exemplo-de-ads/"
+  },
+  "brand": {
+    "navy": "#0A0F1A",
+    "navyAlt": "#0E1422",
+    "orange": "#FF6B1A"
+  }
+}

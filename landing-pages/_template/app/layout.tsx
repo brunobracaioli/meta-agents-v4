@@ -3,7 +3,15 @@ import { contentSpec, messages } from "@/lib/content";
 import { buildJsonLd } from "@/lib/jsonld";
 import { Consent } from "@/components/Consent";
 import { Tracking } from "@/components/Tracking";
-import "./globals.css";
+// Self-hosted fonts (@fontsource) — bundled at build time, no network during `next build`
+// on the headless Fly runner. Inter for titles, DM Sans for body. See ADR 0013.
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
+import "@fontsource/inter/800.css";
+import "@fontsource/dm-sans/400.css";
+import "@fontsource/dm-sans/500.css";
+import "@fontsource/dm-sans/700.css";
+import "@b2tech/lp-render/globals.css";
 
 const noindex = process.env.NEXT_PUBLIC_NOINDEX === "1";
 

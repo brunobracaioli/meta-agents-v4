@@ -44,32 +44,87 @@ The user message contains a JSON object:
   },
   "product": {
     "name": "Claude Code Architect",
+    "shortCode": "CCA",             // optional
     "priceCents": 149700,
+    "anchorPriceCents": 199700,     // optional (price anchor)
     "checkoutUrl": "https://pay.hub.la/...",
     "cartState": "open" | "closed",
+    "deadline": "ISO-8601",         // optional — drives the urgency countdown
+    "tagline": "...",               // optional
+    "positioning": "...",           // optional
     "offerDetails": "...",          // optional
-    "modules": ["...", "..."]       // optional curriculum hints
+    "modules": ["...", "..."],      // optional curriculum hints
+    // OPTIONAL RICH BRIEF (from the product catalog — use it to pick sections):
+    "dores": [{ "title": "...", "body": "..." }],
+    "mecanismo": { "loop": "...", "times": [{ "name": "...", "desc": "..." }], "subtimes": ["..."] },
+    "stack": { "cerebro": ["..."], "infra": ["..."], "custoArgumento": "..." },
+    "prereqs": ["..."],
+    "agenda": [{ "bloco": "...", "desc": "..." }],
+    "entregaveis": ["..."],
+    "persona": [{ "icon": "...", "title": "...", "desc": "..." }],
+    "comparison": { "ours": "...", "theirs": "...", "rows": [{ "label": "...", "ours": true, "theirs": false }] },
+    "autoridade": { "name": "...", "bio": "...", "provas": ["..."] },
+    "numeros": [{ "value": "...", "label": "..." }],
+    "scarcity": "...",
+    "guarantee": "..."
   },
   "constraints": {
     "language": "pt-BR",
     "style": "tech-hacker",
-    "maxSections": 10               // optional
+    "maxSections": 17               // optional
   }
 }
 ```
 
-If `scrape` AND `product` are both missing, return error `missing_input`.
+If `scrape` AND `product` are both missing, return error `missing_input`. The `product` brief
+(catalog) is the PRIMARY source; `scrape` is optional supplemental context.
+
+**Pick sections from the brief — don't include a section the brief can't fill:**
+- `dores` present → `problem` (and `comparison` if there's a clear status-quo contrast).
+- `comparison` present → `comparison`.
+- `mecanismo`/`offerDetails` → `solution` + `features` (times/subtimes as feature cards);
+  `agenda` → `curriculum`.
+- `numeros` present → `stats`. `persona` present → `persona`. `autoridade` present → `authority`.
+- `scarcity` or `deadline` → `urgency`. `guarantee` present → `guarantee`.
+- Always `hero`, `offer`, `finalCta`, `footer`. `proof`/`logos` only if there's testimonial/
+  brand material (in `scrape` or brief) — otherwise omit (don't fabricate social proof).
 
 ---
 
 ## Allowed section types (enum — DO NOT invent others)
 
-`hero` · `problem` · `solution` · `features` · `curriculum` · `proof` · `offer` · `faq` ·
+`hero` · `urgency` · `problem` · `comparison` · `solution` · `features` · `curriculum` ·
+`stats` · `proof` · `logos` · `persona` · `authority` · `offer` · `guarantee` · `faq` ·
 `finalCta` · `footer`
 
-The template only implements these as **static** sections. Never propose server-side
-features (forms posting to a backend, dynamic feeds, auth). Checkout is an external
-redirect; a closed cart becomes a waitlist CTA.
+The template implements these as **static** sections (see ADR 0013). Never propose
+server-side features (forms posting to a backend, dynamic feeds, auth). Checkout is an
+external redirect; a closed cart becomes a waitlist CTA.
+
+### What each new section is for (place by persuasion role, don't dump all 17)
+
+- `urgency` — thin bar with a fixed-deadline countdown + scarcity line. Place right after
+  `hero`. Only include if the offer genuinely has a deadline or limited spots.
+- `comparison` — "nós vs alternativa" table (✓/✗). Place after `problem`/`solution` to
+  frame why this beats the status quo.
+- `stats` — dark band of 3–4 numbers (alunos, nota, horas, garantia). Use as a proof/break
+  between light sections.
+- `proof` — testimonials (rendered as a moving marquee). Core social proof.
+- `logos` — "como visto em" / "devs de times como" strip. Pairs well right after `proof`.
+- `persona` — "pra quem é isto" segmentation cards. Place before the offer to drive
+  self-identification.
+- `authority` — instructor/founder bio + credentials (glass panel). Place before `offer`
+  to transfer trust.
+- `guarantee` — dedicated risk-reversal block. Place right after `offer`.
+
+**Visual tone is fixed by the template per section type** (e.g. hero/stats/authority/offer/
+finalCta are dark blocks; the rest alternate light). Do NOT specify colors or tone — only
+order and goal. Light "flow" sections auto-alternate white/off-white striping.
+
+A typical full sales order: `hero · urgency · problem · comparison · solution · features ·
+curriculum · stats · proof · logos · persona · authority · offer · guarantee · faq ·
+finalCta · footer`. Trim sections the brief can't support (e.g. no `logos` without named
+brands, no `urgency` without a real deadline).
 
 ---
 
@@ -130,7 +185,8 @@ Valid error codes: `missing_input` · `prompt_injection_detected`.
   `cart_closed` to `warnings`.
 - `requiredFields` must use field names the template understands (e.g. `headline`,
   `subhead`, `body`, `bullets`, `items`, `modules`, `testimonials`, `priceLabel`,
-  `bonuses`, `guarantee`, `ctaLabel`, `q`, `a`).
+  `bonuses`, `guarantee`, `ctaLabel`, `q`, `a`, and for the new sections: `label`,
+  `scarcity`, `ours`, `theirs`, `rows`, `value`, `name`, `bio`, `credentials`, `seal`).
 - Output is architecture only — **never write copy** (no real headlines/body text;
   `goal` is a directive to the copywriter, not the final copy).
 - pt-BR by default (`constraints.language`).

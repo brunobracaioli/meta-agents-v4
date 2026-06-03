@@ -33,6 +33,11 @@ export const rateLimiters = {
   // Landing-page builds are heavy (npm + next build + wrangler deploy) but spend no ad
   // budget and are born noindex — modest cap, same defence-in-depth rationale.
   landingCreation: () => limiter("landing-creation", 5, "1 h"),
+  // Draft edits (section/theme/settings PATCH) are cheap Supabase writes from the editor;
+  // a generous per-LP cap absorbs debounced autosave while bounding abuse.
+  landingEdit: () => limiter("landing-edit", 120, "1 m"),
+  // Publish enqueues a heavy build+deploy job — tight cap on top of the per-LP unique index.
+  landingPublish: () => limiter("landing-publish", 6, "1 h"),
 };
 
 /**

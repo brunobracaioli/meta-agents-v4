@@ -29,20 +29,39 @@ object shaped like `messages/pt.json`. No prose, no markdown, no commentary outs
 {
   "architecture": { /* output of landing-page-architect: sections[], heroAngle, ... */ },
   "product": {
-    "name": "Claude Code Architect",
-    "priceCents": 149700,
-    "checkoutUrl": "https://pay.hub.la/...",
-    "cartState": "open" | "closed",
-    "offerDetails": "...",
-    "modules": ["..."]
+    "name": "Claude Code Architect", "shortCode": "CCA",
+    "priceCents": 149700, "anchorPriceCents": 199700,
+    "checkoutUrl": "https://pay.hub.la/...", "cartState": "open" | "closed",
+    "deadline": "ISO-8601", "tagline": "...", "positioning": "...", "offerDetails": "...",
+    /* RICH BRIEF (product catalog) — write copy FROM this, do not invent: */
+    "dores": [{ "title": "...", "body": "..." }],
+    "mecanismo": { "loop": "...", "times": [{ "name": "...", "desc": "..." }], "subtimes": ["..."] },
+    "stack": { "cerebro": ["..."], "infra": ["..."], "custoArgumento": "..." },
+    "prereqs": ["..."], "agenda": [{ "bloco": "...", "desc": "..." }], "entregaveis": ["..."],
+    "persona": [{ "icon": "...", "title": "...", "desc": "..." }],
+    "comparison": { "ours": "...", "theirs": "...", "rows": [{ "label": "...", "ours": true, "theirs": false }] },
+    "autoridade": { "name": "...", "bio": "...", "provas": ["..."] },
+    "numeros": [{ "value": "...", "label": "..." }],
+    "scarcity": "...", "guarantee": "...",
+    "faqHints": [{ "q": "...", "a": "..." }]
   },
-  "scrape": { /* scrape-extractor output, for theme/USPs/tone */ },
+  "scrape": { /* optional: scrape-extractor output. May be null — the brief is primary. */ },
   "tone": "tech-hacker",
   "language": "pt-BR"
 }
 ```
 
 If `architecture` is missing, return error `missing_architecture`.
+
+**Write FROM the brief — never invent product facts.** Map the rich fields to sections:
+- `dores` → `problem` (heading + body + bullets) and the contrast in `comparison`.
+- `comparison` → the `comparison` rows (keep `ours`/`theirs` honest; reuse booleans/strings).
+- `mecanismo.times`/`subtimes`/`offerDetails` → `solution` + `features.items`. `agenda` → `curriculum.modules`.
+- `numeros` → `stats.items` (value+label as given). `persona` → `persona.items`.
+- `autoridade` → `authority` (name, bio, credentials = `provas`). `guarantee` → `guarantee` + `offer.guarantee`.
+- `scarcity`/`deadline` → `urgency` (label + scarcity). `prereqs`/`faqHints` → `faq`.
+- `offer`: use `priceCents`→`priceLabel`, `anchorPriceCents`→`anchor`, `payments`→`payments`,
+  `checkoutUrl` is wired by the template (don't output it). `tagline` informs `hero.headline`/`badge`.
 
 ---
 
@@ -51,17 +70,26 @@ If `architecture` is missing, return error `missing_architecture`.
 ```json
 {
   "seo": { "title": "≤ 60", "description": "≤ 155", "ogAlt": "..." },
-  "hero": { "headline": "...", "subhead": "...", "ctaLabel": "≤ 24" },
+  "hero": { "badge": "≤ 32 (optional)", "headline": "...", "subhead": "...", "ctaLabel": "≤ 24" },
   "sections": {
+    "urgency":    { "label": "≤ 40", "scarcity": "≤ 40 (optional)" },
     "problem":    { "heading": "...", "body": "...", "bullets": ["...", "..."] },
+    "comparison": { "heading": "...", "subhead": "...", "ours": "≤ 24", "theirs": "≤ 24",
+                    "rows": [{ "label": "...", "ours": true, "theirs": false }] },
     "solution":   { "heading": "...", "body": "..." },
-    "features":   { "heading": "...", "items": [{ "title": "...", "desc": "..." }] },
-    "curriculum": { "heading": "...", "modules": [{ "title": "...", "desc": "..." }] },
-    "proof":      { "heading": "...", "testimonials": [{ "quote": "...", "author": "..." }] }
+    "features":   { "heading": "...", "subhead": "...", "items": [{ "icon": "emoji (optional)", "title": "...", "desc": "..." }] },
+    "curriculum": { "heading": "...", "subhead": "...", "modules": [{ "title": "...", "desc": "..." }] },
+    "stats":      { "heading": "(optional)", "items": [{ "value": "+2.000", "label": "..." }] },
+    "proof":      { "heading": "...", "subhead": "...", "testimonials": [{ "quote": "...", "author": "..." }] },
+    "logos":      { "heading": "(optional)", "items": ["Marca", "..."] },
+    "persona":    { "heading": "...", "subhead": "...", "items": [{ "icon": "emoji (optional)", "title": "...", "desc": "..." }] },
+    "authority":  { "eyebrow": "(optional)", "name": "...", "bio": "...", "credentials": ["...", "..."] },
+    "guarantee":  { "heading": "...", "body": "...", "seal": "emoji (optional)" }
   },
   "offer": {
-    "heading": "...", "priceLabel": "R$ 1.497", "anchor": "de R$ ...",
-    "bonuses": ["..."], "guarantee": "...", "ctaLabel": "≤ 24"
+    "heading": "...", "priceLabel": "R$ 1.497", "anchor": "De R$ ...", "installments": "ou 12x de R$ ...",
+    "bonuses": ["..."], "guarantee": "...", "payments": ["Pix", "Cartão", "Boleto"],
+    "secure": "🔒 Pagamento 100% seguro · Acesso imediato", "ctaLabel": "≤ 24"
   },
   "faq": [{ "q": "...", "a": "..." }],
   "finalCta": { "headline": "...", "ctaLabel": "≤ 24" },
@@ -75,6 +103,16 @@ Only include keys under `sections` for section `type`s present in
 `architecture.sections`. ALWAYS include `seo`, `hero`, `offer`, `faq`, `finalCta`,
 `cartClosed`, `footer` (the template flips between `offer`/`finalCta` and `cartClosed`
 based on `content-spec.cart_state`).
+
+Notes on the new sections:
+- `comparison.rows[].ours`/`theirs`: use `true` (✓) / `false` (✗), or a short string for a
+  nuanced cell (e.g. `"Só demos"`). Keep `ours` honest — don't fabricate weaknesses.
+- `stats.items[].value`: short and punchy ("+2.000", "4.9★", "12h"). Only use numbers the
+  brief supports; never invent metrics.
+- `authority`: write `name`/`bio` from the brief's instructor info; `credentials` are short
+  badge phrases. If no instructor info exists, omit the `authority` key.
+- `urgency.scarcity`/`logos.items`: omit if not grounded in the brief (see compliance).
+- `icon`/`seal`: a single emoji is fine; omit if unsure.
 
 ## Output schema (error)
 

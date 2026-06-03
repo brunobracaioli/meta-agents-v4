@@ -16,6 +16,10 @@ if (!process.env.ANTHROPIC_API_KEY && process.env.CLAUDE_API_KEY) {
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // The live landing-page preview (/lp-preview/[id]) renders the same React section
+  // components the static template uses, imported from the shared @b2tech/lp-render
+  // package (a file: dependency, not pre-compiled). Next must transpile it. See ADR 0017.
+  transpilePackages: ["@b2tech/lp-render"],
   // Signed image URLs from Supabase Storage (private bucket previews).
   images: {
     remotePatterns: [

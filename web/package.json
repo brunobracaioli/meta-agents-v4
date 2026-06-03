@@ -13,6 +13,9 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
+    "@b2tech/lp-render": "file:../packages/lp-render",
+    "@fontsource/dm-sans": "^5.2.8",
+    "@fontsource/inter": "^5.2.8",
     "@supabase/supabase-js": "^2.45.4",
     "@upstash/ratelimit": "^2.0.3",
     "@upstash/redis": "^1.34.3",
