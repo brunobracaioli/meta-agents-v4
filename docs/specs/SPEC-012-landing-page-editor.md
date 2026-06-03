@@ -148,7 +148,7 @@ Waves 4/5; a skill + serializer (esta wave) já publicam dado um ContentDoc no S
    (Wave 3 — ✅; round-trip rows→serializer validado).
 4. Editor: editar um campo salva e reflete no iframe; toggle mobile/desktop (Wave 4 — ✅).
 5. Ultron: "modifique o headline da hero da LP X" pergunta o que faltar, confirma, aplica;
-   "publica a LP X" enfileira `landing_publish` (Wave 5).
+   "publica a LP X" enfileira `landing_publish` (Wave 5 — ✅).
 6. Publicar atualiza `<subdomain>.b2tech.io` e grava `published_snapshot` (Wave 2/5).
 7. Segurança: rotas com sessão, Zod em toda fronteira, RLS, rate limits, threat model (Wave 6).
 
@@ -159,7 +159,7 @@ Waves 4/5; a skill + serializer (esta wave) já publicam dado um ContentDoc no S
 2. Pipeline de publicação (snapshot → build → Cloudflare) — ✅.
 3. Geração escreve no Supabase ao vivo — ✅.
 4. Editor WYSIWYG no dashboard — ✅.
-5. Edição por voz (Ultron).
+5. Edição por voz (Ultron) — ✅.
 6. Hardening (segurança, RLS, testes, docs).
 
 ### 9.1 Geração — `create-landing-page-*` reescrita (Wave 3)
@@ -214,3 +214,27 @@ e ganhou fontes self-hosted (`@fontsource/inter`,`/dm-sans`) para a fidelidade d
   settings parcial com URL http(s); fields com limites estruturais + `href` só http(s)/relativo
   (bloqueia `javascript:`). Rate limits `landingEdit`/`landingPublish`. Tipos do DB regenerados
   (`lib/db/types.ts`).
+
+### 9.3 Edição por voz — tools do Ultron (Wave 5)
+
+`web/lib/ultron/tools.ts` ganhou 5 tools (mesmo padrão das de campanha: 2 turnos `confirm`,
+`needs_input` quando falta parâmetro, allowlist server-side, `enforceLimit`):
+
+- `list_landing_pages(client_slug, product_slug?)` / `get_landing_page(landing_page_id)` —
+  leitura: a 2ª devolve seções (type/position) + chaves e valores (truncados) de cada campo +
+  theme + settings = o "mapa de endereços" (section_type + field_path).
+- `request_landing_page_edit(landing_page_id, section_type, field_path, new_value, confirm)` —
+  edição barata aplicada **direto no Supabase** (não via HTTP): `applyScalarEdit`
+  (`lib/landing/edit-path.ts`) seta **um leaf escalar EXISTENTE** (sem criar chave/estrutura;
+  coage ao tipo do leaf; recusa lista/objeto), `validateSectionFields`, e UPDATE com **version
+  otimista** (reaplica 1× no conflito). `needs_input` p/ seção/campo/valor faltando.
+- `request_landing_page_theme(landing_page_id, token, value, confirm)` — 1 token de design
+  (cor hex / fonte allowlist / scale), validado por `themeSchema`, merge em `landing_pages.theme`.
+- `request_landing_page_publish(landing_page_id, confirm, noindex?)` — enfileira `landing_publish`
+  (skill por slug allowlist, dedup per-LP; `noindex=false` = go-live indexável).
+
+`prompt.ts` (`ULTRON_SYSTEM_PROMPT`) ganhou o bloco "EDITAR E PUBLICAR LANDING PAGES" (descobrir→
+editar texto/tema→publicar, sempre 2 turnos; deixar claro que edição é no rascunho até publicar).
+Edições de texto/tema são **escrita síncrona barata** (não viram job no Fly — SPEC §2); só o
+publish é job. **Gotcha corrigido:** o route handler precisava de `export const PATCH` (Next exige
+um export por método HTTP) — sem ele o PATCH do editor não despachava.

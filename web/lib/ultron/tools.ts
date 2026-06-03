@@ -1,7 +1,10 @@
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db/client";
+import type { Json } from "@/lib/db/types";
 import { rateLimiters, enforceLimit } from "@/lib/ratelimit";
+import { validateSectionFields, themeSchema } from "@/lib/landing/validate";
+import { applyScalarEdit } from "@/lib/landing/edit-path";
 
 /**
  * Tools the Ultron assistant can call. The data tools run parameterized SELECTs
@@ -47,6 +50,9 @@ const ACTIVATE_SKILL_BY_SLUG: Record<string, string> = {
 const LANDING_SKILL_BY_SLUG: Record<string, string> = {
   brunobracaioli: "create-landing-page-brunobracaioli",
 };
+const PUBLISH_SKILL_BY_SLUG: Record<string, string> = {
+  brunobracaioli: "publish-landing-page-brunobracaioli",
+};
 
 // `nome` becomes the subdomain (<nome>.b2tech.io) AND the Cloudflare project suffix
 // (b2tech-<nome>) AND a runner arg — so it must satisfy the poller's args charset and
@@ -75,6 +81,44 @@ async function resolveClientId(slug: string): Promise<ResolvedClient | null> {
 // already in flight for the client — i.e. a duplicate/misheard trigger.
 function isUniqueViolation(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
+}
+
+type ResolvedLanding = {
+  id: string;
+  client_id: string;
+  name: string;
+  subdomain: string;
+  url: string;
+  status: string;
+  draft_status: string;
+  noindex: boolean;
+  settings: unknown;
+  theme: unknown;
+};
+
+async function resolveLanding(id: string): Promise<ResolvedLanding | null> {
+  const { data } = await db()
+    .from("landing_pages")
+    .select("id, client_id, name, subdomain, url, status, draft_status, noindex, settings, theme")
+    .eq("id", id)
+    .maybeSingle();
+  return data ?? null;
+}
+
+/** Truncate a value for read-back to the operator (spoken summaries stay short). */
+function truncateValue(v: unknown, max = 90): unknown {
+  if (typeof v === "string" && v.length > max) return `${v.slice(0, max)}…`;
+  return v;
+}
+
+// Theme tokens the voice tool may set, mapped to a themeSchema-shaped patch.
+function buildThemePatch(token: string, value: string): Record<string, unknown> | null {
+  const colorKeys = ["orange", "orangeHi", "navy900", "navy800", "text", "textDim", "bg", "bgAlt"];
+  if (colorKeys.includes(token)) return { colors: { [token]: value } };
+  if (token === "font_title") return { fonts: { title: value } };
+  if (token === "font_body") return { fonts: { body: value } };
+  if (token === "scale") return { scale: Number(value) };
+  return null;
 }
 
 const tools: Record<string, ToolDef> = {
@@ -509,6 +553,364 @@ const tools: Record<string, ToolDef> = {
         subdomain: `${nome}.b2tech.io`,
         queued_at: new Date().toISOString(),
         message: "Pedido de landing page enfileirado. Os agents começam em até um minuto; a página vai nascer em preview (noindex).",
+      };
+    },
+  },
+
+  list_landing_pages: {
+    spec: {
+      name: "list_landing_pages",
+      description:
+        "Lista as landing pages de um cliente (id, subdomínio, status de deploy e do rascunho). Filtra por produto se informado. Use quando o operador quiser editar ou publicar uma LP, para descobrir o id correto.",
+      input_schema: {
+        type: "object",
+        properties: {
+          client_slug: { type: "string", description: "slug do cliente, ex.: brunobracaioli" },
+          product_slug: { type: "string", description: "opcional: filtra por produto, ex.: cca" },
+        },
+        required: ["client_slug"],
+      },
+    },
+    handler: async (input) => {
+      const slug = str(input, "client_slug");
+      if (!slug) return { error: "client_slug é obrigatório" };
+      const client = await resolveClientId(slug);
+      if (!client) return { error: `cliente '${slug}' não encontrado` };
+      let productId: string | undefined;
+      const product = str(input, "product_slug");
+      if (product) {
+        const pr = await db()
+          .from("products")
+          .select("id")
+          .eq("client_id", client.id)
+          .eq("slug", product)
+          .maybeSingle();
+        if (pr.error) throw pr.error;
+        if (!pr.data) return { error: `produto '${product}' não encontrado para ${slug}` };
+        productId = pr.data.id;
+      }
+      let query = db()
+        .from("landing_pages")
+        .select("id, name, subdomain, status, draft_status, url")
+        .eq("client_id", client.id)
+        .order("updated_at", { ascending: false })
+        .limit(25);
+      if (productId) query = query.eq("product_id", productId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  },
+
+  get_landing_page: {
+    spec: {
+      name: "get_landing_page",
+      description:
+        "Detalha uma landing page: suas seções (type/position) com as CHAVES e valores (truncados) de cada campo, mais tema e settings. É o mapa de 'endereços' para você mirar uma edição: a partir daqui você sabe o section_type e o field_path para request_landing_page_edit.",
+      input_schema: {
+        type: "object",
+        properties: { landing_page_id: { type: "string", description: "uuid da landing page (use list_landing_pages)" } },
+        required: ["landing_page_id"],
+      },
+    },
+    handler: async (input) => {
+      const id = str(input, "landing_page_id");
+      if (!id) return { error: "landing_page_id é obrigatório" };
+      const lp = await resolveLanding(id);
+      if (!lp) return { error: "landing page não encontrada" };
+      const secs = await db()
+        .from("landing_page_sections")
+        .select("type, position, enabled, fields")
+        .eq("landing_page_id", id)
+        .order("position", { ascending: true });
+      if (secs.error) throw secs.error;
+      const sections = (secs.data ?? []).map((s) => {
+        const raw = (s.fields && typeof s.fields === "object" && !Array.isArray(s.fields)
+          ? s.fields
+          : {}) as Record<string, unknown>;
+        const fields: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(raw)) {
+          fields[k] = Array.isArray(v)
+            ? `[lista com ${v.length} itens]`
+            : v && typeof v === "object"
+              ? "[objeto]"
+              : truncateValue(v);
+        }
+        return { type: s.type, position: s.position, enabled: s.enabled, fields };
+      });
+      const settings = (lp.settings && typeof lp.settings === "object" ? lp.settings : {}) as Record<string, unknown>;
+      return {
+        id: lp.id,
+        name: lp.name,
+        subdomain: lp.subdomain,
+        status: lp.status,
+        draft_status: lp.draft_status,
+        theme: lp.theme,
+        settings: {
+          cart_state: settings.cart_state,
+          price_cents: settings.price_cents,
+          noindex: settings.noindex,
+          seo: settings.seo,
+        },
+        sections,
+        note: "Para editar um texto escalar, use request_landing_page_edit com section_type + field_path (ex.: 'headline', 'subhead', 'items.0.title') + new_value. Listas/objetos inteiros só pelo painel do editor.",
+      };
+    },
+  },
+
+  request_landing_page_edit: {
+    spec: {
+      name: "request_landing_page_edit",
+      description:
+        "Edita UM campo de texto/número/sim-não de uma seção da landing page, aplicado DIRETO no rascunho do Supabase (edição barata, não vai ao ar até publicar). FLUXO OBRIGATÓRIO em dois passos: confirm=false devolve o de/para para você reler ao operador; confirm=true aplica só após o 'sim'. Se faltar seção/campo/valor, devolve needs_input — peça ao operador. Use get_landing_page para descobrir os endereços.",
+      input_schema: {
+        type: "object",
+        properties: {
+          landing_page_id: { type: "string", description: "uuid da LP (use list_landing_pages)" },
+          section_type: { type: "string", description: "tipo da seção, ex.: hero, offer, faq" },
+          field_path: { type: "string", description: "caminho do campo dentro da seção, ex.: 'headline', 'subhead', 'items.0.title'" },
+          new_value: { type: "string", description: "novo valor do campo" },
+          confirm: { type: "boolean", description: "false = devolve de/para; true = aplica (só após confirmação)" },
+        },
+        required: ["landing_page_id", "confirm"],
+      },
+    },
+    handler: async (input) => {
+      const id = str(input, "landing_page_id");
+      if (!id) return { error: "landing_page_id é obrigatório" };
+      const type = str(input, "section_type");
+      const fieldPath = str(input, "field_path");
+      const newValue =
+        typeof input.new_value === "string"
+          ? input.new_value
+          : input.new_value != null
+            ? String(input.new_value)
+            : undefined;
+      const confirm = input.confirm === true;
+      if (!type)
+        return { needs_input: true, field: "section_type", message: "Qual seção? (ex.: hero, offer, faq). Use get_landing_page para ver as seções." };
+      if (!fieldPath)
+        return { needs_input: true, field: "field_path", message: "Qual campo? (ex.: headline, subhead, items.0.title). Use get_landing_page para ver os campos." };
+      if (newValue === undefined)
+        return { needs_input: true, field: "new_value", message: "Qual o novo valor desse campo?" };
+
+      const lp = await resolveLanding(id);
+      if (!lp) return { error: "landing page não encontrada" };
+      if (lp.draft_status === "generating" || lp.draft_status === "publishing")
+        return { error: "a página está gerando ou publicando agora; espere terminar para editar" };
+
+      const sec = await db()
+        .from("landing_page_sections")
+        .select("fields, version")
+        .eq("landing_page_id", id)
+        .eq("type", type)
+        .maybeSingle();
+      if (sec.error) throw sec.error;
+      if (!sec.data) return { error: `a seção '${type}' não existe nessa página` };
+      const fields0 = (sec.data.fields && typeof sec.data.fields === "object" && !Array.isArray(sec.data.fields)
+        ? sec.data.fields
+        : {}) as Record<string, unknown>;
+      const res = applyScalarEdit(fields0, fieldPath, newValue);
+      if (!res.ok) return { error: res.error };
+      const check = validateSectionFields(res.fields);
+      if (!check.ok) return { error: check.error };
+
+      if (!confirm) {
+        return {
+          confirmation_required: true,
+          action: "editar landing page",
+          subdomain: `${lp.subdomain}.b2tech.io`,
+          section: type,
+          field_path: fieldPath,
+          from: truncateValue(res.applied.from),
+          to: truncateValue(res.applied.to),
+          note: "Edição barata aplicada direto no rascunho (não vai ao ar até publicar). Releia o de/para e confirme antes de chamar com confirm=true.",
+        };
+      }
+
+      const { allowed } = await enforceLimit(rateLimiters.landingEdit(), id, "landing-edit");
+      if (!allowed) return { error: "muitas edições nessa página agora; tente em instantes" };
+
+      // Optimistic concurrency on `version`; on conflict re-read latest and re-apply once.
+      let version = sec.data.version;
+      let toFields: Record<string, unknown> = res.fields;
+      let appliedTo: unknown = res.applied.to;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const upd = await db()
+          .from("landing_page_sections")
+          .update({ fields: toFields as Json, version: version + 1, updated_by: "ultron" })
+          .eq("landing_page_id", id)
+          .eq("type", type)
+          .eq("version", version)
+          .select("version")
+          .maybeSingle();
+        if (upd.error) throw upd.error;
+        if (upd.data) {
+          return {
+            applied: true,
+            section: type,
+            field_path: fieldPath,
+            to: truncateValue(appliedTo),
+            message: "Pronto, ajustei no rascunho. Quer que eu publique?",
+          };
+        }
+        const fresh = await db()
+          .from("landing_page_sections")
+          .select("fields, version")
+          .eq("landing_page_id", id)
+          .eq("type", type)
+          .maybeSingle();
+        if (fresh.error) throw fresh.error;
+        if (!fresh.data) return { error: "a seção sumiu durante a edição" };
+        const f0 = (fresh.data.fields && typeof fresh.data.fields === "object" && !Array.isArray(fresh.data.fields)
+          ? fresh.data.fields
+          : {}) as Record<string, unknown>;
+        const r2 = applyScalarEdit(f0, fieldPath, newValue);
+        if (!r2.ok) return { error: r2.error };
+        version = fresh.data.version;
+        toFields = r2.fields;
+        appliedTo = r2.applied.to;
+      }
+      return { error: "a página mudou durante a edição; tente de novo" };
+    },
+  },
+
+  request_landing_page_theme: {
+    spec: {
+      name: "request_landing_page_theme",
+      description:
+        "Ajusta UM token de design da landing page (cor, fonte ou escala) direto no rascunho. Tokens de cor: orange, orangeHi, navy900, navy800, text, textDim, bg, bgAlt (valor em hex, ex.: #FF6B1A). Fontes: font_title, font_body (nome de uma fonte da lista permitida). Escala: scale (número 0.8 a 1.3). FLUXO em dois passos (confirm=false devolve o que vai mudar; confirm=true aplica após o 'sim').",
+      input_schema: {
+        type: "object",
+        properties: {
+          landing_page_id: { type: "string", description: "uuid da LP" },
+          token: { type: "string", description: "orange|orangeHi|navy900|navy800|text|textDim|bg|bgAlt|font_title|font_body|scale" },
+          value: { type: "string", description: "hex (#RRGGBB), nome de fonte, ou número de escala" },
+          confirm: { type: "boolean", description: "false = prévia; true = aplica" },
+        },
+        required: ["landing_page_id", "confirm"],
+      },
+    },
+    handler: async (input) => {
+      const id = str(input, "landing_page_id");
+      if (!id) return { error: "landing_page_id é obrigatório" };
+      const token = str(input, "token");
+      const value =
+        typeof input.value === "string" ? input.value : input.value != null ? String(input.value) : undefined;
+      const confirm = input.confirm === true;
+      if (!token)
+        return { needs_input: true, field: "token", message: "Qual token de tema? Uma cor (orange, navy900, text, bg...), font_title, font_body ou scale." };
+      if (value === undefined)
+        return { needs_input: true, field: "value", message: "Qual o valor? Cor em hex (#FF6B1A), nome de fonte, ou número de escala." };
+
+      const lp = await resolveLanding(id);
+      if (!lp) return { error: "landing page não encontrada" };
+      if (lp.draft_status === "generating" || lp.draft_status === "publishing")
+        return { error: "a página está gerando ou publicando agora; espere terminar" };
+
+      const patch = buildThemePatch(token, value);
+      if (!patch) return { error: `token '${token}' desconhecido; use uma cor, font_title, font_body ou scale` };
+      const parsed = themeSchema.safeParse(patch);
+      if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "valor inválido para o tema" };
+
+      if (!confirm) {
+        return {
+          confirmation_required: true,
+          action: "ajustar tema da landing page",
+          subdomain: `${lp.subdomain}.b2tech.io`,
+          token,
+          value,
+          note: "Ajuste de design aplicado direto no rascunho (não vai ao ar até publicar). Confirme antes de chamar com confirm=true.",
+        };
+      }
+
+      const { allowed } = await enforceLimit(rateLimiters.landingEdit(), id, "landing-edit");
+      if (!allowed) return { error: "muitas edições nessa página agora; tente em instantes" };
+
+      const current = (lp.theme && typeof lp.theme === "object" ? lp.theme : {}) as Record<string, unknown>;
+      const merged: Record<string, unknown> = { ...current };
+      if (parsed.data.colors) merged.colors = { ...((current.colors as object) ?? {}), ...parsed.data.colors };
+      if (parsed.data.fonts) merged.fonts = { ...((current.fonts as object) ?? {}), ...parsed.data.fonts };
+      if (parsed.data.scale !== undefined) merged.scale = parsed.data.scale;
+      const upd = await db().from("landing_pages").update({ theme: merged as Json }).eq("id", id);
+      if (upd.error) throw upd.error;
+      return { applied: true, token, value, message: "Tema ajustado no rascunho. Quer que eu publique?" };
+    },
+  },
+
+  request_landing_page_publish: {
+    spec: {
+      name: "request_landing_page_publish",
+      description:
+        "Enfileira a PUBLICAÇÃO de uma landing page no Cloudflare (os agents serializam o rascunho atual, buildam e fazem deploy sob <subdomínio>.b2tech.io). Por padrão republica mantendo o noindex atual; passe noindex=false para go-live (indexável). FLUXO em dois passos: confirm=false devolve os detalhes; confirm=true enfileira após o 'sim'.",
+      input_schema: {
+        type: "object",
+        properties: {
+          landing_page_id: { type: "string", description: "uuid da LP (use list_landing_pages)" },
+          noindex: { type: "boolean", description: "opcional; false = go-live indexável; omitido = mantém o estado atual" },
+          confirm: { type: "boolean", description: "false = detalhes; true = enfileira (só após confirmação)" },
+        },
+        required: ["landing_page_id", "confirm"],
+      },
+    },
+    handler: async (input) => {
+      const id = str(input, "landing_page_id");
+      if (!id) return { error: "landing_page_id é obrigatório" };
+      const confirm = input.confirm === true;
+      const lp = await resolveLanding(id);
+      if (!lp) return { error: "landing page não encontrada" };
+
+      const clientRow = await db().from("clients").select("slug, name").eq("id", lp.client_id).maybeSingle();
+      if (clientRow.error) throw clientRow.error;
+      const slug = clientRow.data?.slug;
+      const skill = slug ? PUBLISH_SKILL_BY_SLUG[slug] : undefined;
+      if (!slug || !skill) return { error: "esta página não está habilitada para publicação automática" };
+
+      const noindexParam = typeof input.noindex === "boolean" ? input.noindex : undefined;
+      const noindex = noindexParam !== undefined ? (noindexParam ? 1 : 0) : lp.noindex ? 1 : 0;
+
+      if (!confirm) {
+        return {
+          confirmation_required: true,
+          action: "publicar landing page",
+          client: clientRow.data?.name,
+          subdomain: `${lp.subdomain}.b2tech.io`,
+          indexavel: noindex === 0,
+          note:
+            noindex === 0
+              ? "Vai publicar INDEXÁVEL (go-live, aparece no Google). Confirme antes de chamar com confirm=true."
+              : "Vai publicar/republicar em PREVIEW (noindex, não indexável). Confirme antes de chamar com confirm=true.",
+        };
+      }
+
+      const { allowed } = await enforceLimit(rateLimiters.landingPublish(), slug, "landing-publish");
+      if (!allowed) return { error: "muitos pedidos de publicação agora; tente daqui a pouco" };
+
+      const { data, error } = await db()
+        .from("agent_jobs")
+        .insert({
+          client_id: lp.client_id,
+          skill,
+          kind: "landing_publish",
+          landing_page_id: id,
+          args: { landing_page_id: id, noindex },
+          requested_by: "ultron",
+        })
+        .select("id")
+        .single();
+      if (error) {
+        if (isUniqueViolation(error)) {
+          return { enqueued: false, reason: "já existe uma publicação em andamento para esta página" };
+        }
+        throw error;
+      }
+      return {
+        enqueued: true,
+        job_id: data.id,
+        subdomain: `${lp.subdomain}.b2tech.io`,
+        indexavel: noindex === 0,
+        queued_at: new Date().toISOString(),
+        message: "Publicação enfileirada; os agents publicam em até um minuto.",
       };
     },
   },
