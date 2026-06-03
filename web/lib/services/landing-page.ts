@@ -134,6 +134,38 @@ export async function getLandingPageFull(id: string): Promise<LandingPageFull | 
   return { meta: metaFromRow(page), doc, versions };
 }
 
+/**
+ * Route-scoped editor read: like getLandingPageFull, but verifies the LP actually belongs to
+ * the client `slug` and `product` in the URL before returning it (SPEC-012 §5 — "valida que a
+ * LP pertence ao slug da rota"). Defense in depth on top of the session gate: a valid id for a
+ * different client/product is treated as not-found rather than served. Null if no match.
+ */
+export async function getLandingPageFullForRoute(
+  clientSlug: string,
+  productSlug: string,
+  id: string,
+): Promise<LandingPageFull | null> {
+  const supabase = db();
+  const clientRes = await supabase.from("clients").select("id").eq("slug", clientSlug).maybeSingle();
+  if (clientRes.error) throw clientRes.error;
+  if (!clientRes.data) return null;
+
+  const productRes = await supabase
+    .from("products")
+    .select("id")
+    .eq("client_id", clientRes.data.id)
+    .eq("slug", productSlug)
+    .maybeSingle();
+  if (productRes.error) throw productRes.error;
+  if (!productRes.data) return null;
+
+  const full = await getLandingPageFull(id);
+  if (!full) return null;
+  // The id must resolve to a LP under this exact client + product, or it's not ours to edit.
+  if (full.meta.client_id !== clientRes.data.id || full.meta.product_id !== productRes.data.id) return null;
+  return full;
+}
+
 /** Products for a client slug, each with a count of its landing pages. Null if no client. */
 export async function getClientProducts(slug: string): Promise<ProductSummary[] | null> {
   const supabase = db();

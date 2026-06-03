@@ -150,7 +150,8 @@ Waves 4/5; a skill + serializer (esta wave) já publicam dado um ContentDoc no S
 5. Ultron: "modifique o headline da hero da LP X" pergunta o que faltar, confirma, aplica;
    "publica a LP X" enfileira `landing_publish` (Wave 5 — ✅).
 6. Publicar atualiza `<subdomain>.b2tech.io` e grava `published_snapshot` (Wave 2/5).
-7. Segurança: rotas com sessão, Zod em toda fronteira, RLS, rate limits, threat model (Wave 6).
+7. Segurança: rotas com sessão, Zod em toda fronteira, RLS, rate limits, threat model (Wave 6 —
+   ✅ código/docs; aplicar a migration de RLS `…0005` em prod pende OK do operador).
 
 ## 9. Waves
 
@@ -160,7 +161,7 @@ Waves 4/5; a skill + serializer (esta wave) já publicam dado um ContentDoc no S
 3. Geração escreve no Supabase ao vivo — ✅.
 4. Editor WYSIWYG no dashboard — ✅.
 5. Edição por voz (Ultron) — ✅.
-6. Hardening (segurança, RLS, testes, docs).
+6. Hardening (segurança, RLS, testes, docs) — ✅ (código/docs; RLS migration pende apply).
 
 ### 9.1 Geração — `create-landing-page-*` reescrita (Wave 3)
 
@@ -238,3 +239,31 @@ editar texto/tema→publicar, sempre 2 turnos; deixar claro que edição é no r
 Edições de texto/tema são **escrita síncrona barata** (não viram job no Fly — SPEC §2); só o
 publish é job. **Gotcha corrigido:** o route handler precisava de `export const PATCH` (Next exige
 um export por método HTTP) — sem ele o PATCH do editor não despachava.
+
+### 9.4 Hardening (Wave 6)
+
+Fecha a superfície nova com as regras globais (security by design, observabilidade, docs):
+
+- **Whitelist por tipo de seção** (`web/lib/landing/section-schemas.ts`): Zod `.strict()` por
+  SectionType (chaves conhecidas + tipos corretos + `CompareCell` união + `href` seguro no
+  footer), rodando **após** o guard estrutural (`validateSectionFields`). `validateSection(type,
+  fields)` é a fronteira única, usada pela API (`PATCH …/sections/:type`) **e** pela tool de
+  edição do Ultron. Os schemas foram validados contra os dados reais da fixture cca-e2e (todas as
+  17 seções) — campos opcionais por design (rascunho parcial editável); strict é o whitelist.
+- **Ownership por rota:** o editor usa `getLandingPageFullForRoute(slug, product, id)` — id de
+  outro cliente/produto vira not-found (defesa em profundidade sobre o gate de sessão).
+- **Auditoria** (`operation_logs`, entity_type=`landing_page`, action=`update`): publish (API
+  actor=`operator`, Ultron actor=`ultron`) e edições autônomas do Ultron (texto/tema). Edições
+  interativas do operador na UI não são logadas por-campo (decisão documentada no threat model).
+- **RLS:** migration `20260603000005_landing_editor_rls_hardening.sql` — `revoke` de grants de
+  anon/authenticated em products/landing_page_sections/landing_pages (defesa em profundidade
+  sobre o RLS deny-by-default já existente; só service_role acessa) + comentários de tabela.
+  **Aplicar em prod pende OK do operador.**
+- **Assets:** bucket `landing-assets` raster-only (SVG removido — pode embutir script e o bucket
+  é público), ≤ 5MB, nome server-side.
+- **Threat model STRIDE:** `docs/security/threats/landing-page-editor.md`.
+- **API-First / docs (Diátaxis):** OpenAPI 3.1 em `docs/reference/landing-editor-api.yaml`;
+  referência do ContentDoc em `docs/reference/content-doc.md`; how-to em
+  `docs/how-to/edit-and-publish-a-landing-page.md`.
+- **Testes:** `web/lib/landing/section-schemas.test.ts` (13 — inclui as 17 shapes reais da
+  fixture + whitelist/href/CompareCell). Suite web **89/89**.

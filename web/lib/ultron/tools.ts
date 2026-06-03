@@ -3,7 +3,8 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db/client";
 import type { Json } from "@/lib/db/types";
 import { rateLimiters, enforceLimit } from "@/lib/ratelimit";
-import { validateSectionFields, themeSchema } from "@/lib/landing/validate";
+import { themeSchema } from "@/lib/landing/validate";
+import { validateSection } from "@/lib/landing/section-schemas";
 import { applyScalarEdit } from "@/lib/landing/edit-path";
 
 /**
@@ -109,6 +110,17 @@ async function resolveLanding(id: string): Promise<ResolvedLanding | null> {
 function truncateValue(v: unknown, max = 90): unknown {
   if (typeof v === "string" && v.length > max) return `${v.slice(0, max)}…`;
   return v;
+}
+
+/** Append-only audit trail for Ultron's autonomous landing-page actions (Repudiation —
+ * STRIDE). Best-effort: never let a logging failure break the edit/publish. */
+async function logLandingOp(clientId: string, lpId: string, summary: string): Promise<void> {
+  const res = await db()
+    .from("operation_logs")
+    .insert({ client_id: clientId, entity_type: "landing_page", entity_id: lpId, action: "update", actor: "ultron", summary });
+  if (res.error) {
+    console.error(JSON.stringify({ level: "error", event: "landing_oplog_failed", message: res.error.message }));
+  }
 }
 
 // Theme tokens the voice tool may set, mapped to a themeSchema-shaped patch.
@@ -712,7 +724,7 @@ const tools: Record<string, ToolDef> = {
         : {}) as Record<string, unknown>;
       const res = applyScalarEdit(fields0, fieldPath, newValue);
       if (!res.ok) return { error: res.error };
-      const check = validateSectionFields(res.fields);
+      const check = validateSection(type, res.fields);
       if (!check.ok) return { error: check.error };
 
       if (!confirm) {
@@ -746,6 +758,7 @@ const tools: Record<string, ToolDef> = {
           .maybeSingle();
         if (upd.error) throw upd.error;
         if (upd.data) {
+          await logLandingOp(lp.client_id, id, `editou ${type}.${fieldPath}`);
           return {
             applied: true,
             section: type,
@@ -834,6 +847,7 @@ const tools: Record<string, ToolDef> = {
       if (parsed.data.scale !== undefined) merged.scale = parsed.data.scale;
       const upd = await db().from("landing_pages").update({ theme: merged as Json }).eq("id", id);
       if (upd.error) throw upd.error;
+      await logLandingOp(lp.client_id, id, `tema: ${token}=${value}`);
       return { applied: true, token, value, message: "Tema ajustado no rascunho. Quer que eu publique?" };
     },
   },
@@ -904,6 +918,7 @@ const tools: Record<string, ToolDef> = {
         }
         throw error;
       }
+      await logLandingOp(lp.client_id, id, `publish enfileirado (noindex=${noindex})`);
       return {
         enqueued: true,
         job_id: data.id,

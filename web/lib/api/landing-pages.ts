@@ -3,7 +3,8 @@ import type { Json } from "@/lib/db/types";
 import { db } from "@/lib/db/client";
 import { getLandingPageFull } from "@/lib/services/landing-page";
 import { rateLimiters, enforceLimit } from "@/lib/ratelimit";
-import { themeSchema, settingsPatchSchema, validateSectionFields } from "@/lib/landing/validate";
+import { themeSchema, settingsPatchSchema } from "@/lib/landing/validate";
+import { validateSection } from "@/lib/landing/section-schemas";
 
 // Editor API for the landing-page DRAFT (SPEC-012 §5). All routes sit behind the session
 // gate (middleware) and operate on the Supabase source-of-truth; cheap edits are written
@@ -22,10 +23,23 @@ const PUBLISH_SKILL_BY_SLUG: Record<string, string> = {
 
 const ASSETS_BUCKET = "landing-assets";
 const MAX_ASSET_BYTES = 5_000_000; // 5MB
-const ASSET_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/svg+xml"]);
+// Raster only. SVG is excluded on purpose: it can embed <script>, and the bucket is public —
+// a hostile SVG opened directly from the Storage origin would execute there (Wave 6 hardening).
+const ASSET_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
 
 function isUniqueViolation(err: unknown): boolean {
   return typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23505";
+}
+
+/** Append-only audit trail for consequential landing-page actions (Repudiation — STRIDE).
+ * Best-effort: a logging failure must never break the operation. */
+async function logLandingOp(clientId: string, lpId: string, summary: string, actor = "operator"): Promise<void> {
+  const res = await db()
+    .from("operation_logs")
+    .insert({ client_id: clientId, entity_type: "landing_page", entity_id: lpId, action: "update", actor, summary });
+  if (res.error) {
+    console.error(JSON.stringify({ level: "error", event: "landing_oplog_failed", message: res.error.message }));
+  }
 }
 
 /** Reads the LP's edit-relevant state; null if the LP does not exist. */
@@ -60,7 +74,7 @@ landingPages.patch("/:id/sections/:type", async (c) => {
 
   const body = (await c.req.json().catch(() => null)) as { fields?: unknown; version?: unknown } | null;
   if (!body || typeof body.version !== "number") return c.json({ error: "invalid_request" }, 400);
-  const fieldCheck = validateSectionFields(body.fields);
+  const fieldCheck = validateSection(type, body.fields);
   if (!fieldCheck.ok) return c.json({ error: "invalid_fields", detail: fieldCheck.error }, 400);
 
   const state = await loadEditState(id);
@@ -188,6 +202,7 @@ landingPages.post("/:id/publish", async (c) => {
     }
     throw ins.error;
   }
+  await logLandingOp(state.client_id, id, `publish enfileirado (noindex=${noindex})`, "operator");
   return c.json({ enqueued: true, job_id: ins.data.id, noindex });
 });
 

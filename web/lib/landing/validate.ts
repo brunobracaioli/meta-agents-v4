@@ -89,8 +89,8 @@ const MAX_KEYS = 100;
 const MAX_NODES = 3000;
 
 /** Reject hrefs that aren't http(s), root-relative, anchor, mailto or tel — blocks
- * `javascript:`/`data:` URIs. */
-function isSafeHref(value: string): boolean {
+ * `javascript:`/`data:` URIs. Shared with the per-type section schemas (section-schemas.ts). */
+export function isSafeHref(value: string): boolean {
   const v = value.trim().toLowerCase();
   if (v.startsWith("javascript:") || v.startsWith("data:") || v.startsWith("vbscript:")) return false;
   return /^(https?:\/\/|\/|#|mailto:|tel:)/.test(v);
