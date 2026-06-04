@@ -47,6 +47,14 @@ except Exception:  # noqa: BLE001 — telemetry must never break the run.
     _MOD = None
 
 
+# When a job runs through the agent_jobs queue, the poller exports AGENT_JOB_ID. Stamping
+# it as the event's run_id links every agent_events row of this run to its job — which is how
+# the autonomous-mode watch (ADR 0019) correlates a watched job to its granular activity
+# ("lançou o subagente Z"). Without a queued job (direct cron run) we keep the Claude
+# session_id as run_id, exactly as before — fully backward compatible.
+_JOB_RUN_ID = (os.environ.get("AGENT_JOB_ID") or "").strip() or None
+
+
 def _emit_tool(session: str, name: str, tool_input: object) -> None:
     """Build a synthetic PreToolUse event and route it through the hook's classifier."""
     if _MOD is None:
@@ -60,6 +68,8 @@ def _emit_tool(session: str, name: str, tool_input: object) -> None:
     try:
         row = _MOD._classify(event)
         if row is not None:
+            if _JOB_RUN_ID is not None:
+                row["run_id"] = _JOB_RUN_ID
             _MOD._emit(row)
     except Exception:  # noqa: BLE001
         pass

@@ -16,3 +16,8 @@
 # the Ultron dashboard (create/activate campaign). Single-flight via mkdir lock — see
 # scripts/poll-agent-jobs.sh and docs/adr/0009-on-demand-agent-jobs-queue.md.
 * * * * * /app/scripts/poll-agent-jobs.sh
+
+# Autonomous mode: every minute, claim+tick one DUE autonomous_watches row (Ultron narrates a
+# long task's progress by voice while the operator is away). Own mkdir lock, ~90s cadence per
+# watch. See scripts/poll-autonomous-watches.sh and docs/adr/0019-ultron-autonomous-mode.md.
+* * * * * /app/scripts/poll-autonomous-watches.sh
