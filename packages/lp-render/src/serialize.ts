@@ -79,6 +79,8 @@ function buildContentSpec(doc: ContentDoc): ContentSpec {
     tracking: s.tracking,
     seo: { title: s.seo.title, description: s.seo.description },
   };
+  if (s.seo.ogImage) spec.seo.ogImage = s.seo.ogImage;
+  if (s.logo) spec.logo = s.logo;
   if (s.waitlist_url) spec.waitlist_url = s.waitlist_url;
   if (s.deadline) spec.deadline = s.deadline;
   return spec;

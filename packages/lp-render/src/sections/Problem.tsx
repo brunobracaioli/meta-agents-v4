@@ -20,6 +20,10 @@ export function Problem({ tone }: { tone: Tone }) {
             ))}
           </ul>
         ) : null}
+        {data.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="section-image" src={data.image} alt="" />
+        ) : null}
       </FadeIn>
     </section>
   );

@@ -15,6 +15,10 @@ export function Features({ tone }: { tone: Tone }) {
           <h2>{data.heading}</h2>
           {data.subhead ? <p>{data.subhead}</p> : null}
         </div>
+        {data.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="section-image" src={data.image} alt="" />
+        ) : null}
         <div className="grid">
           {data.items.map((item, i) => (
             <div className="card" key={i}>

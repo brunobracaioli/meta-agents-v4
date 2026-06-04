@@ -14,6 +14,12 @@ export function Proof({ tone }: { tone: Tone }) {
         <h2>{data.heading}</h2>
         {data.subhead ? <p>{data.subhead}</p> : null}
       </div>
+      {data.image ? (
+        <div className="container container--narrow">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="section-image" src={data.image} alt="" />
+        </div>
+      ) : null}
       <Marquee>
         {data.testimonials.map((t, i) => (
           <div className="card" key={i}>

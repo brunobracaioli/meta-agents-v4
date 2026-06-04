@@ -15,6 +15,11 @@ import "@b2tech/lp-render/globals.css";
 
 const noindex = process.env.NEXT_PUBLIC_NOINDEX === "1";
 
+// OG image: prefer the durable Storage URL persisted at generation time (settings.seo.ogImage,
+// passed through to messages.seo.ogImage); fall back to the legacy local /og.png. metadataBase
+// resolves a relative path against site_url.
+const ogImage = messages.seo.ogImage || "/og.png";
+
 export const metadata: Metadata = {
   metadataBase: new URL(contentSpec.site_url),
   title: messages.seo.title,
@@ -24,7 +29,7 @@ export const metadata: Metadata = {
     description: messages.seo.description,
     url: contentSpec.site_url,
     type: "website",
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: messages.seo.ogAlt }],
+    images: [{ url: ogImage, width: 1200, height: 630, alt: messages.seo.ogAlt }],
   },
   ...(noindex ? { robots: { index: false, follow: false } } : {}),
 };

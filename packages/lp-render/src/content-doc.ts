@@ -24,7 +24,9 @@ export interface Settings {
   name: string;
   product: string;
   site_url: string;
-  seo: { title: string; description: string; ogAlt: string };
+  /** Brand logo URL (page-level, rendered at the top of the hero). Optional. */
+  logo?: string;
+  seo: { title: string; description: string; ogAlt: string; ogImage?: string };
   tracking: { fb_pixel_id: string; ga4_id: string; consent_key: string };
   checkout_url: string;
   waitlist_url?: string;
