@@ -396,6 +396,85 @@ export type Database = {
           },
         ]
       }
+      autonomous_watches: {
+        Row: {
+          agent_job_id: string | null
+          client_id: string
+          closed_at: string | null
+          created_at: string
+          id: string
+          last_event_ts: string | null
+          last_narrated_milestone: string | null
+          phase: string
+          publish_job_id: string | null
+          result: Json
+          session_id: string
+          started_by: string
+          target_hint: string | null
+          target_id: string | null
+          target_kind: string
+          updated_at: string
+        }
+        Insert: {
+          agent_job_id?: string | null
+          client_id: string
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          last_event_ts?: string | null
+          last_narrated_milestone?: string | null
+          phase?: string
+          publish_job_id?: string | null
+          result?: Json
+          session_id: string
+          started_by?: string
+          target_hint?: string | null
+          target_id?: string | null
+          target_kind?: string
+          updated_at?: string
+        }
+        Update: {
+          agent_job_id?: string | null
+          client_id?: string
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          last_event_ts?: string | null
+          last_narrated_milestone?: string | null
+          phase?: string
+          publish_job_id?: string | null
+          result?: Json
+          session_id?: string
+          started_by?: string
+          target_hint?: string | null
+          target_id?: string | null
+          target_kind?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "autonomous_watches_agent_job_id_fkey"
+            columns: ["agent_job_id"]
+            isOneToOne: false
+            referencedRelation: "agent_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "autonomous_watches_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "autonomous_watches_publish_job_id_fkey"
+            columns: ["publish_job_id"]
+            isOneToOne: false
+            referencedRelation: "agent_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaigns: {
         Row: {
           ads_manager_url: string | null
@@ -1020,6 +1099,50 @@ export type Database = {
           },
         ]
       }
+      ultron_narrations: {
+        Row: {
+          created_at: string
+          id: string
+          image_path: string | null
+          kind: string
+          session_id: string
+          spoken_at: string | null
+          text: string
+          ts: string
+          watch_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_path?: string | null
+          kind?: string
+          session_id: string
+          spoken_at?: string | null
+          text: string
+          ts?: string
+          watch_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_path?: string | null
+          kind?: string
+          session_id?: string
+          spoken_at?: string | null
+          text?: string
+          ts?: string
+          watch_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ultron_narrations_watch_id_fkey"
+            columns: ["watch_id"]
+            isOneToOne: false
+            referencedRelation: "autonomous_watches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1049,6 +1172,33 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "agent_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_autonomous_watch: {
+        Args: { p_worker_id: string }
+        Returns: {
+          agent_job_id: string | null
+          client_id: string
+          closed_at: string | null
+          created_at: string
+          id: string
+          last_event_ts: string | null
+          last_narrated_milestone: string | null
+          phase: string
+          publish_job_id: string | null
+          result: Json
+          session_id: string
+          started_by: string
+          target_hint: string | null
+          target_id: string | null
+          target_kind: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "autonomous_watches"
           isOneToOne: false
           isSetofReturn: true
         }
