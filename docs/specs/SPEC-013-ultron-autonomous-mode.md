@@ -111,8 +111,12 @@ reprocessar um tick não duplica narração (cursor `last_event_ts` + `last_narr
   done`. Critério: prints + opiniões sem screen share. (Nota de escopo: o `image_path` é
   persistido para auditoria; a aba FALA a opinião, mas ainda não RENDERIZA o print — opcional,
   fora do critério.)
-- **Fase 3 — Email + encerramento:** Resend (`send-email.mjs`), fase `notifying`, fala final.
-  Critério: email entregue + watch `done`.
+- **Fase 3 — Email + encerramento ✅ (2026-06-04):** Resend (`scripts/send-email.cjs`), fase
+  `notifying` na skill (Passo N: email ao operador + fala "saindo do modo autônomo"), `done`.
+  Destinatário/remetente fixos via env/default (`AUTONOMOUS_NOTIFY_EMAIL`/`AUTONOMOUS_FROM_EMAIL`),
+  nunca derivados de conteúdo da página. Idempotente (`result.notify_attempted`). Fail-safe: sem
+  `RESEND_API_KEY` o Passo N degrada (narra + encerra, sem travar). Critério: email entregue +
+  watch `done`. **Requer `RESEND_API_KEY` no Fly + domínio verificado no Resend.**
 - **Fase 4 (futuro) — Genérico:** plugar `target_kind=campaign|analysis` reusando o schema.
 
 ## 7. Fora de escopo (v1)
