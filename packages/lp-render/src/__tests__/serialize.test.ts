@@ -163,4 +163,19 @@ describe("contentDocToFiles", () => {
     expect("waitlist_url" in contentSpec).toBe(false);
     expect("deadline" in contentSpec).toBe(false);
   });
+
+  it("carries the brand logo and og image to content-spec/messages when present (ADR 0018)", () => {
+    const doc = ccaDoc();
+    doc.settings.logo = "https://x.supabase.co/storage/v1/object/public/landing-assets/cca/logo.png";
+    doc.settings.seo.ogImage = "https://x.supabase.co/storage/v1/object/public/landing-assets/cca/og.png";
+    const { contentSpec, messages } = contentDocToFiles(doc);
+    expect(contentSpec.logo).toBe(doc.settings.logo);
+    expect(contentSpec.seo.ogImage).toBe(doc.settings.seo.ogImage);
+    expect(messages.seo.ogImage).toBe(doc.settings.seo.ogImage);
+  });
+
+  it("omits the brand logo from content-spec when absent", () => {
+    const { contentSpec } = contentDocToFiles(ccaDoc());
+    expect("logo" in contentSpec).toBe(false);
+  });
 });

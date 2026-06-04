@@ -35,10 +35,18 @@ const iconCard = z.object({ icon: txt.optional(), title: txt.optional(), desc: t
 /** Maps each SectionType to the strict schema of its editable `fields`. */
 export const SECTION_SCHEMAS: Record<SectionType, z.ZodTypeAny> = {
   hero: z
-    .object({ badge: txt.optional(), headline: txt.optional(), subhead: txt.optional(), ctaLabel: txt.optional() })
+    .object({
+      badge: txt.optional(),
+      headline: txt.optional(),
+      subhead: txt.optional(),
+      ctaLabel: txt.optional(),
+      image: txt.optional(),
+    })
     .strict(),
   urgency: z.object({ label: txt.optional(), scarcity: txt.optional() }).strict(),
-  problem: z.object({ heading: txt.optional(), body: txt.optional(), bullets: arr(txt).optional() }).strict(),
+  problem: z
+    .object({ heading: txt.optional(), body: txt.optional(), bullets: arr(txt).optional(), image: txt.optional() })
+    .strict(),
   comparison: z
     .object({
       heading: txt.optional(),
@@ -50,8 +58,10 @@ export const SECTION_SCHEMAS: Record<SectionType, z.ZodTypeAny> = {
       ).optional(),
     })
     .strict(),
-  solution: z.object({ heading: txt.optional(), body: txt.optional() }).strict(),
-  features: z.object({ heading: txt.optional(), subhead: txt.optional(), items: arr(iconCard).optional() }).strict(),
+  solution: z.object({ heading: txt.optional(), body: txt.optional(), image: txt.optional() }).strict(),
+  features: z
+    .object({ heading: txt.optional(), subhead: txt.optional(), image: txt.optional(), items: arr(iconCard).optional() })
+    .strict(),
   curriculum: z
     .object({
       heading: txt.optional(),
@@ -69,6 +79,7 @@ export const SECTION_SCHEMAS: Record<SectionType, z.ZodTypeAny> = {
     .object({
       heading: txt.optional(),
       subhead: txt.optional(),
+      image: txt.optional(),
       testimonials: arr(z.object({ quote: txt.optional(), author: txt.optional() }).strict()).optional(),
     })
     .strict(),

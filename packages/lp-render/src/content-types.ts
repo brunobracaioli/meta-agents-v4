@@ -33,6 +33,8 @@ export interface ContentSpec {
   cart_state: "open" | "closed";
   noindex: boolean;
   site_url: string;
+  /** Brand logo URL (page-level, rendered at the top of the hero). Optional. */
+  logo?: string;
   /** ISO 8601 deadline for the countdown in the urgency bar. Omit/past → bar shows scarcity only. */
   deadline?: string;
   sections: SectionType[];
@@ -41,18 +43,18 @@ export interface ContentSpec {
     ga4_id: string;
     consent_key: string;
   };
-  seo: { title: string; description: string };
+  seo: { title: string; description: string; ogImage?: string };
 }
 
 /** A comparison cell: true = ✓, false = ✗, string = custom text. */
 export type CompareCell = boolean | string;
 
 export interface Messages {
-  seo: { title: string; description: string; ogAlt: string };
-  hero: { badge?: string; headline: string; subhead: string; ctaLabel: string };
+  seo: { title: string; description: string; ogAlt: string; ogImage?: string };
+  hero: { badge?: string; headline: string; subhead: string; ctaLabel: string; image?: string };
   sections: {
     urgency?: { label: string; scarcity?: string };
-    problem?: { heading: string; body: string; bullets?: string[] };
+    problem?: { heading: string; body: string; bullets?: string[]; image?: string };
     comparison?: {
       heading: string;
       subhead?: string;
@@ -60,11 +62,11 @@ export interface Messages {
       theirs: string;
       rows: { label: string; ours: CompareCell; theirs: CompareCell }[];
     };
-    solution?: { heading: string; body: string };
-    features?: { heading: string; subhead?: string; items: { icon?: string; title: string; desc: string }[] };
+    solution?: { heading: string; body: string; image?: string };
+    features?: { heading: string; subhead?: string; image?: string; items: { icon?: string; title: string; desc: string }[] };
     curriculum?: { heading: string; subhead?: string; modules: { title: string; desc: string }[] };
     stats?: { heading?: string; items: { value: string; label: string }[] };
-    proof?: { heading: string; subhead?: string; testimonials: { quote: string; author: string }[] };
+    proof?: { heading: string; subhead?: string; image?: string; testimonials: { quote: string; author: string }[] };
     logos?: { heading?: string; items: string[] };
     persona?: { heading: string; subhead?: string; items: { icon?: string; title: string; desc: string }[] };
     authority?: { eyebrow?: string; name: string; bio: string; credentials?: string[]; image?: string };

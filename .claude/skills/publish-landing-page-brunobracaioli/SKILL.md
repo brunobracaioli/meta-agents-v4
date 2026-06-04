@@ -188,14 +188,27 @@ o `:root` sobreponha os defaults. Faça **só no clone**, idempotente:
 - Se já contém (republish) → não faça nada.
 
 ### Passo 5 — Assets (best-effort, bounded)
-- **Preserve** o `${LP_DIR}/public/` existente (hero/og/instrutor de uma geração anterior na
-  mesma máquina). **Não** clobber.
-- Se algum `fields`/`settings` referenciar uma URL de Storage do bucket `landing-assets`
-  (`.../storage/v1/object/public/landing-assets/...`), baixe para `${LP_DIR}/public/` com o
-  basename do arquivo (best-effort; falha de download não aborta — o template degrada).
+A geração (skill `create-*` Passo 6) e o editor persistem imagens no bucket **público**
+`landing-assets` e gravam **URLs absolutas** em `fields.image` (hero/authority/problem/solution/
+features/proof) e `settings.seo.ogImage`. Como o bucket é público, o `<img src="https://…/
+landing-assets/…">` do export estático **carrega direto do Storage no browser** — o build **não
+precisa** de arquivo local para essas imagens. Portanto:
+- **Preserve** o `${LP_DIR}/public/` existente (hero/og/instrutor de uma geração na mesma
+  máquina). **Não** clobber. Não é obrigatório baixar nada — URLs absolutas já renderizam.
+- **Back-compat (best-effort):** se o doc serializado ainda referenciar uma URL de Storage do
+  `landing-assets`, espelhe-a em `${LP_DIR}/public/` com o basename (cobre conteúdo legado que
+  usa caminho relativo). Falha de download **não** aborta:
+  ```bash
+  mkdir -p "${LP_DIR}/public"
+  grep -rhoE 'https?://[^"]+/storage/v1/object/public/landing-assets/[^"]+\.(png|jpe?g|webp|avif)' \
+    "${LP_DIR}/messages/pt.json" "${LP_DIR}/content-spec.json" 2>/dev/null | sort -u | \
+  while IFS= read -r url; do
+    base=$(basename "${url%%\?*}")
+    [ -f "${LP_DIR}/public/${base}" ] || curl -fsS --max-time 30 -o "${LP_DIR}/public/${base}" "${url}" || true
+  done
+  ```
 - Imagens faltantes (`/hero.png`, `/og.png`, `/instrutor.jpg`) **não** quebram o build
-  (`images.unoptimized`); a página degrada graciosamente. O round-trip completo de assets do
-  editor (upload → Storage → publish) é finalizado na Wave 4.
+  (`images.unoptimized`); a página degrada graciosamente.
 
 ### Passo 6 — Build local
 Em `${LP_DIR}`:

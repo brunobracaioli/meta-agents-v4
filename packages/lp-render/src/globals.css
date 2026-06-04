@@ -224,6 +224,14 @@ a {
   overflow: hidden;
 }
 
+.hero-logo {
+  display: block;
+  height: 48px;
+  width: auto;
+  margin: 0 auto 28px;
+  object-fit: contain;
+}
+
 .hero::before {
   content: "";
   position: absolute;
@@ -454,6 +462,33 @@ a {
   object-fit: cover;
   border-radius: var(--radius-card);
   background: var(--navy-800);
+}
+
+/* Optional per-section illustration (problem/solution/features/proof). Plain <img>,
+   static export has images.unoptimized. Falls back to nothing when absent. */
+.section-image {
+  display: block;
+  width: 100%;
+  max-width: 760px;
+  margin: 40px auto 0;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  background: var(--bg-alt);
+}
+
+/* Hero visual sits below the CTA on the dark hero. Constrained + soft glow border. */
+.hero-visual {
+  display: block;
+  width: 100%;
+  max-width: 880px;
+  margin: 48px auto 0;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-card);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
 }
 
 .authority-creds {

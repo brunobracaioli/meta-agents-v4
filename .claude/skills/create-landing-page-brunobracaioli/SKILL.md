@@ -136,6 +136,22 @@ Em uma chamada Bash:
   `WAITLIST_URL=.offer.waitlistUrl`, `CART=.offer.cartState` (arg `cart-state` sobrescreve),
   `DEADLINE=.offer.deadline`, `DEFAULT_SUB=.defaultSubdomain`. O `PRODUCT` inteiro alimenta os
   subagents (Passos 3/4).
+- **Resolver os assets do brief (ADR 0014/0018) — fonte de verdade é `assets.*`, com fallback
+  de convenção** (caminhos relativos ao repo). Use o que o brief declara; só caia pro padrão se
+  o campo faltar. Resolva e confira existência:
+  ```bash
+  resolve_asset() { # $1 = jq path no brief  $2 = caminho-convenção de fallback
+    local p; p=$(jq -r "$1 // \"\"" "${BRIEF_FILE}")
+    [ -n "${p}" ] && [ "${p}" != "null" ] || p="$2"
+    [ -f "${REPO}/${p}" ] && printf '%s' "${REPO}/${p}" || printf ''  # vazio = ausente
+  }
+  LOGO_SRC=$(resolve_asset '.assets.logo'            "${MAT}/logo/logo.png")
+  INSTRUCTOR_SRC=$(resolve_asset '.assets.instructorPhoto' "${MAT}/logo/foto-do-infoprodutor/bruno-bracaioli.jpg")
+  MASCOTE_SRC=$(resolve_asset '.assets.mascote'      "${MAT}/mascote/claude-lendo.png")
+  EXAMPLE_ADS_DIR=$(jq -r '.assets.exampleAds // ""' "${BRIEF_FILE}"); [ -n "${EXAMPLE_ADS_DIR}" ] || EXAMPLE_ADS_DIR="${MAT}/exemplo-de-ads/"
+  ```
+  Asset ausente (`*_SRC` vazio) **não** aborta — degrada (sem logo/foto). Esses caminhos
+  alimentam o Passo 6 (refs do `image-prompt-generator`, cópia da foto, upload da logo).
 - **Constantes derivadas:**
   ```bash
   NOINDEX_BOOL=$([ "${noindex:-1}" = "0" ] && echo false || echo true)
@@ -311,19 +327,88 @@ se `ref-url` for passado (para suplementar tom/visual de uma referência externa
   `package.json` + `public/` presentes e **pula o scaffold e o `npm ci`**. Esta skill **não**
   escreve `messages/pt.json`/`content-spec.json` (o publish serializa do Supabase).
 
-### Passo 6 — Visual hero + OG + foto do instrutor (idempotente) → `${LP_DIR}/public`
-**Reuse** se já existirem `${LP_DIR}/public/hero.png` e `og.png` do dia. Senão:
-- `Agent(subagent_type="image-prompt-generator")` (variant A) com:
-  `{scrape, brief:<PRODUCT (tagline/positioning/numeros)>, aspectRatio:"1920x1080",
-  referenceImagePaths:[ ${MAT}/logo/logo.png, ${MAT}/mascote/claude-lendo.png,
-  ${MAT}/exemplo-de-ads/*.png ], configHints:{brandName:"<PROD_NAME>"}}` → prompt do hero.
-- **Foto do instrutor (seção authority):** se o brief tem `autoridade.image` (ex.: `/instrutor.jpg`),
-  copie `${MAT}/logo/foto-do-infoprodutor/bruno-bracaioli.jpg` para `${LP_DIR}/public/instrutor.jpg`.
-  Sem foto, o template degrada para painel só-texto.
-- `Skill(skill="image-generate", args="prompt-file=<prompt> aspect=1.91:1 out-dir=${LP_DIR}/public out-name=hero")`
-  → `hero.png`. Derive `og.png` (1200×630) do hero (ou gere um segundo). Registre o custo
-  estimado (manifest do `image-generate`). Imagens faltando **não** quebram o publish
-  (`images.unoptimized`). (O round-trip de assets via Storage `landing-assets` entra na Wave 4.)
+### Passo 6 — Visual hero + OG + foto do instrutor → `${LP_DIR}/public` + Storage (idempotente, best-effort)
+Gera os visuais localmente **E os persiste no bucket público `landing-assets`** + grava as URLs
+no Supabase, para que **sobrevivam a republish/edição** (SPEC-012 Wave 4). As imagens passam a
+ser **renderizadas** na página: `settings.logo` (logo no topo do hero), `hero.image` (visual do
+hero), `authority.image` (foto do instrutor), e `settings.seo.ogImage` (preview social). Os
+caminhos de origem (`LOGO_SRC`/`INSTRUCTOR_SRC`/`MASCOTE_SRC`/`EXAMPLE_ADS_DIR`) vêm de
+`assets.*` do brief (Passo 0). Falha de imagem/upload **não** quebra o publish
+(`images.unoptimized`) — degrada para texto.
+
+1. **Reuse**: se `${LP_DIR}/public/hero.png` e `og.png` já existem do dia, pule a geração. Senão:
+   - `Agent(subagent_type="image-prompt-generator")` (variant A) com:
+     `{scrape, brief:<PRODUCT (tagline/positioning/numeros)>, aspectRatio:"1920x1080",
+     referenceImagePaths:[ <LOGO_SRC>, <MASCOTE_SRC>, <EXAMPLE_ADS_DIR>/*.png ] (use os
+     `*_SRC` resolvidos no Passo 0 — pule os vazios), configHints:{brandName:"<PROD_NAME>"}}`
+     → prompt do hero.
+   - `Skill(skill="image-generate", args="prompt-file=<prompt> aspect=1.91:1 out-dir=${LP_DIR}/public out-name=hero")`
+     → `hero.png`. Derive `og.png` (1200×630) do hero (ou gere um segundo). Registre o custo
+     estimado (manifest do `image-generate`) para o `image_cost_usd_estimate` (Passo 8).
+2. **Foto do instrutor (seção authority):** se `INSTRUCTOR_SRC` (Passo 0) existe, copie-o para
+   `${LP_DIR}/public/instrutor.jpg` (`[ -n "${INSTRUCTOR_SRC}" ] && cp "${INSTRUCTOR_SRC}" "${LP_DIR}/public/instrutor.jpg"`).
+   Sem foto, o template degrada para painel só-texto.
+2b. **Logo da marca:** se `LOGO_SRC` (Passo 0) existe, copie-o para `${LP_DIR}/public/logo.png`
+   (`[ -n "${LOGO_SRC}" ] && cp "${LOGO_SRC}" "${LP_DIR}/public/logo.png"`). A logo é renderizada
+   no topo do hero (`settings.logo`) — ver Passo 5 da persistência abaixo. Sem logo, degrada.
+3. **Bucket** (idempotente — ignore "já existe"): garanta `landing-assets` público:
+   ```bash
+   curl -sS -X POST "${SUPABASE_URL%/}/storage/v1/bucket" \
+     -H "apikey: ${SUPABASE_KEY}" -H "Authorization: Bearer ${SUPABASE_KEY}" \
+     -H "Content-Type: application/json" --max-time 15 \
+     -d '{"id":"landing-assets","name":"landing-assets","public":true}' >/dev/null 2>&1 || true
+   ```
+4. **Upload** de cada PNG/JPG presente (`x-upsert: true` para regravar numa re-run), caminho
+   estável `${LP_ID}/<file>` → ecoa a URL pública (vazio se o arquivo não existe ou o upload falhou):
+   ```bash
+   upload_asset() {  # $1=arquivo local  $2=nome no bucket  $3=content-type
+     [ -f "$1" ] || return 1
+     curl -sS -X POST "${SUPABASE_URL%/}/storage/v1/object/landing-assets/${LP_ID}/$2" \
+       -H "apikey: ${SUPABASE_KEY}" -H "Authorization: Bearer ${SUPABASE_KEY}" \
+       -H "x-upsert: true" -H "Content-Type: $3" --max-time 30 --data-binary @"$1" >/dev/null 2>&1 \
+       && printf '%s' "${SUPABASE_URL%/}/storage/v1/object/public/landing-assets/${LP_ID}/$2"
+   }
+   HERO_URL=$(upload_asset "${LP_DIR}/public/hero.png"      hero.png      image/png  || true)
+   OG_URL=$(upload_asset   "${LP_DIR}/public/og.png"        og.png        image/png  || true)
+   INSTR_URL=$(upload_asset "${LP_DIR}/public/instrutor.jpg" instrutor.jpg image/jpeg || true)
+   LOGO_URL=$(upload_asset "${LP_DIR}/public/logo.png"      logo.png      image/png  || true)
+   ```
+5. **Persistir as URLs no Supabase** (sempre **merge** — NÃO clobber a copy do Passo 4: GET →
+   `+` no jq → PATCH):
+   ```bash
+   patch_section_image() {  # $1=type  $2=url
+     [ -n "$2" ] || return 0
+     local cur new
+     cur=$(curl -fsS "${REST}/landing_page_sections?landing_page_id=eq.${LP_ID}&type=eq.$1&select=fields" \
+       -H "apikey: ${SUPABASE_KEY}" -H "Authorization: Bearer ${SUPABASE_KEY}" --max-time 15 \
+       | jq -c '.[0].fields // {}') || return 0
+     [ -n "${cur}" ] || cur='{}'
+     new=$(jq -nc --argjson f "${cur}" --arg u "$2" '$f + {image:$u}')
+     curl -fsS -X PATCH "${REST}/landing_page_sections?landing_page_id=eq.${LP_ID}&type=eq.$1" \
+       -H "apikey: ${SUPABASE_KEY}" -H "Authorization: Bearer ${SUPABASE_KEY}" \
+       -H "Content-Type: application/json" -H "Prefer: return=minimal" --max-time 15 \
+       -d "$(jq -nc --argjson f "${new}" '{fields:$f, updated_by:"generator"}')" >/dev/null 2>&1 || true
+   }
+   patch_section_image hero      "${HERO_URL:-}"
+   patch_section_image authority "${INSTR_URL:-}"   # no-op se não há row authority
+   # Page-level: og → settings.seo.ogImage; logo → settings.logo (1 GET/merge/PATCH):
+   if [ -n "${OG_URL:-}" ] || [ -n "${LOGO_URL:-}" ]; then
+     CURS=$(curl -fsS "${REST}/landing_pages?id=eq.${LP_ID}&select=settings" \
+       -H "apikey: ${SUPABASE_KEY}" -H "Authorization: Bearer ${SUPABASE_KEY}" --max-time 15 \
+       | jq -c '.[0].settings // {}')
+     [ -n "${CURS}" ] || CURS='{}'
+     NEWS=$(jq -nc --argjson s "${CURS}" --arg og "${OG_URL:-}" --arg logo "${LOGO_URL:-}" \
+       '$s
+        + (if $og   != "" then {seo: (($s.seo // {}) + {ogImage:$og})} else {} end)
+        + (if $logo != "" then {logo:$logo} else {} end)')
+     curl -fsS -X PATCH "${REST}/landing_pages?id=eq.${LP_ID}" \
+       -H "apikey: ${SUPABASE_KEY}" -H "Authorization: Bearer ${SUPABASE_KEY}" \
+       -H "Content-Type: application/json" -H "Prefer: return=minimal" --max-time 15 \
+       -d "$(jq -nc --argjson s "${NEWS}" '{settings:$s}')" >/dev/null 2>&1 || true
+   fi
+   ```
+   Imagens faltando **não** quebram o publish (`images.unoptimized`); o publish baixa as URLs
+   do `landing-assets` de volta para `public/` (skill `publish-*` Passo 5).
 
 ### Passo 7 — Marcar `ready` + enfileirar `landing_publish` + `operation_logs`
 1. **`draft_status='ready'`** (rascunho pronto para editar/publicar):
@@ -411,7 +496,10 @@ estado `noindex`, e a frase: **"Rascunho no Supabase pronto para edição. Publi
   pela copy (hero/offer/finalCta/footer/faq + middle), `position` na ordem da arquitetura.
 - `landing_pages.settings` completo (subdomain, site_url, seo, tracking, checkout_url,
   price_cents, cart_state, noindex, cartClosed) — pronto para o publish validar.
-- Imagens em `${LP_DIR}/public/` (hero/og; instrutor se houver) + template scaffoldado.
+- Imagens em `${LP_DIR}/public/` (hero/og; instrutor/logo se houver) + template scaffoldado, e
+  (best-effort) subidas ao bucket `landing-assets` com as URLs persistidas em
+  `landing_page_sections.fields.image` (hero/authority), `settings.seo.ogImage` e `settings.logo`
+  — assets resolvidos de `assets.*` do brief.
 - Job `landing_publish` enfileirado em `agent_jobs` (ou `409` dedup) + 1 `operation_logs`.
 - Manifest JSON gravado em `${TRY_DIR}/`.
 

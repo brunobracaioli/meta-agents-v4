@@ -14,6 +14,10 @@ export function Solution({ tone }: { tone: Tone }) {
         <span className="eyebrow">A solução</span>
         <h2>{data.heading}</h2>
         <p className="lead">{data.body}</p>
+        {data.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="section-image" src={data.image} alt="" />
+        ) : null}
       </FadeIn>
     </section>
   );

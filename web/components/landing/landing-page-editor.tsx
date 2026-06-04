@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ContentDoc, Settings, Theme } from "@b2tech/lp-render/content-doc";
-import { FieldEditor } from "@/components/landing/field-editor";
+import { FieldEditor, ImageField, SECTION_IMAGE_KEYS } from "@/components/landing/field-editor";
 import { FONT_ALLOWLIST, COLOR_TOKENS } from "@/lib/landing/constants";
 import {
   reconcile,
@@ -448,10 +448,12 @@ export function LandingPageEditor({
             {active === TAB_THEME ? (
               <ThemeEditor theme={doc.theme} onChange={onThemeChange} />
             ) : active === TAB_SETTINGS ? (
-              <SettingsEditor settings={doc.settings} onChange={onSettingsChange} />
+              <SettingsEditor settings={doc.settings} landingPageId={meta.id} onChange={onSettingsChange} />
             ) : activeSection ? (
               <FieldEditor
                 value={activeSection.fields}
+                landingPageId={meta.id}
+                imageKeys={SECTION_IMAGE_KEYS[activeSection.type] ?? []}
                 onChange={(fields) => onSectionChange(activeSection.type, fields)}
               />
             ) : (
@@ -614,11 +616,29 @@ function ThemeEditor({ theme, onChange }: { theme: Theme; onChange: (t: Theme) =
 }
 
 // ---------- Settings editor ----------
-function SettingsEditor({ settings, onChange }: { settings: Settings; onChange: (s: Settings) => void }) {
+function SettingsEditor({
+  settings,
+  landingPageId,
+  onChange,
+}: {
+  settings: Settings;
+  landingPageId: string;
+  onChange: (s: Settings) => void;
+}) {
   const set = (patch: Partial<Settings>) => onChange({ ...settings, ...patch });
 
   return (
     <div className="space-y-4">
+      <div className="space-y-2">
+        <span className={PANEL_LABEL}>Marca</span>
+        <ImageField
+          label="Logo (topo do hero)"
+          value={settings.logo ?? ""}
+          landingPageId={landingPageId}
+          onChange={(v) => set({ logo: v })}
+        />
+      </div>
+
       <div className="space-y-2">
         <span className={PANEL_LABEL}>SEO</span>
         <input
@@ -638,6 +658,12 @@ function SettingsEditor({ settings, onChange }: { settings: Settings; onChange: 
           placeholder="Texto alternativo da imagem OG"
           value={settings.seo.ogAlt}
           onChange={(e) => set({ seo: { ...settings.seo, ogAlt: e.target.value } })}
+        />
+        <ImageField
+          label="Imagem OG (preview social, 1200×630)"
+          value={settings.seo.ogImage ?? ""}
+          landingPageId={landingPageId}
+          onChange={(v) => set({ seo: { ...settings.seo, ogImage: v } })}
         />
       </div>
 
