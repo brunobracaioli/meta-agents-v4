@@ -232,6 +232,97 @@ a {
   object-fit: contain;
 }
 
+/* AI-generated hero visual (landscape banner) in the single-column hero, below the CTA. */
+.hero-visual {
+  display: block;
+  width: 100%;
+  max-width: 880px;
+  margin: 48px auto 0;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-card);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+}
+
+/* ---------- split hero (copy left, portrait right) ---------- */
+/* Active only when there is a cut-out portrait (messages.hero.portrait); otherwise the
+   hero stays the centered single column above. */
+.hero-inner {
+  position: relative;
+  z-index: 1;
+}
+
+.hero--split {
+  text-align: left;
+}
+
+.hero--split .hero-inner {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 48px;
+  align-items: center;
+}
+
+.hero--split .hero-logo {
+  margin: 0 0 24px;
+}
+
+.hero-cta {
+  margin-top: 32px;
+}
+
+.hero-figure {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 340px;
+}
+
+/* soft brand glow behind the cut-out portrait */
+.hero-figure::before {
+  content: "";
+  position: absolute;
+  inset: 6% 8% 4%;
+  background: radial-gradient(closest-side, rgba(255, 107, 26, 0.3), transparent 70%);
+  filter: blur(28px);
+  z-index: 0;
+}
+
+.hero-portrait {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 440px;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 28px 60px rgba(0, 0, 0, 0.55));
+  /* fade the bottom edge so the cut-out blends into the navy hero */
+  -webkit-mask-image: linear-gradient(to bottom, #000 82%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 82%, transparent 100%);
+}
+
+@media (max-width: 880px) {
+  .hero--split {
+    text-align: center;
+  }
+  .hero--split .hero-inner {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .hero--split .hero-logo {
+    margin: 0 auto 24px;
+  }
+  .hero-figure {
+    min-height: 0;
+    margin-top: 12px;
+  }
+  .hero-portrait {
+    max-width: 300px;
+  }
+}
+
 .hero::before {
   content: "";
   position: absolute;
@@ -476,19 +567,6 @@ a {
   border-radius: var(--radius-card);
   border: 1px solid var(--border);
   background: var(--bg-alt);
-}
-
-/* Hero visual sits below the CTA on the dark hero. Constrained + soft glow border. */
-.hero-visual {
-  display: block;
-  width: 100%;
-  max-width: 880px;
-  margin: 48px auto 0;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  border-radius: var(--radius-card);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
 }
 
 .authority-creds {

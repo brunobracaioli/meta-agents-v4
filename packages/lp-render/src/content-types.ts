@@ -51,7 +51,9 @@ export type CompareCell = boolean | string;
 
 export interface Messages {
   seo: { title: string; description: string; ogAlt: string; ogImage?: string };
-  hero: { badge?: string; headline: string; subhead: string; ctaLabel: string; image?: string };
+  /** `image` = AI-generated hero visual (landscape banner, single-column hero).
+   * `portrait` = optional cut-out portrait that switches the hero to a two-column split. */
+  hero: { badge?: string; headline: string; subhead: string; ctaLabel: string; image?: string; portrait?: string };
   sections: {
     urgency?: { label: string; scarcity?: string };
     problem?: { heading: string; body: string; bullets?: string[]; image?: string };
