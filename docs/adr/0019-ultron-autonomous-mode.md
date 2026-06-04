@@ -2,11 +2,11 @@
 
 | Campo | Valor |
 |---|---|
-| Status | Proposed |
+| Status | Accepted (Fases 1+2 implementadas; Fase 3 pendente) |
 | Data | 2026-06-04 |
 | Decidido por | brunobracaioli |
 | Spec | [docs/specs/SPEC-013-ultron-autonomous-mode.md](../specs/SPEC-013-ultron-autonomous-mode.md) |
-| Migrations | `add_autonomous_watches` + `add_ultron_narrations` (a aplicar) |
+| Migrations | `20260604000001_add_autonomous_mode` + `20260604000002_add_ultron_review_bucket` (aplicadas) |
 | Relacionado | [ADR 0001](0001-fly-machine-supercronic.md) (runner sem HTTP), [ADR 0007](0007-daily-summaries-and-agent-events.md) (polling deny-by-default + agent_events), [ADR 0009](0009-on-demand-agent-jobs-queue.md) (fila agent_jobs), [ADR 0010](0010-ultron-screen-vision.md) (screen vision), [ADR 0012](0012-landing-pages-on-cloudflare-pages.md) (URL publicada) |
 
 ## Context
@@ -142,8 +142,10 @@ e notificar por email.** A narração chega ao browser pelo mesmo padrão de pol
 - **Auditável**: trilha completa por watch.
 
 ### Negativas / dívidas
-- **Playwright na imagem Fly** aumenta o tamanho do container (Chromium). Mitigável com build
-  multi-stage / `playwright install --with-deps chromium` só no runner.
+- **Playwright na imagem Fly** aumenta o tamanho do container (Chromium, ~170MB + libs). Instalado
+  como root via `playwright install --with-deps chromium` num dir compartilhado world-readable
+  (`/ms-playwright`); o script roda como o usuário `runner` com `--no-sandbox`. Memória da VM
+  subiu de 1GB → **2GB** (fly.toml) pra dar folga ao Chromium headless durante a revisão.
 - **Latência de narração** de ~2–3 min (cadência do tick). Aceitável p/ tarefa de 5–25 min.
 - **Correlação `run_id`**: depende de `run-skill.sh` propagar um id que ligue o `agent_job` ao
   stream de `agent_events` — verificar/instrumentar (dependência da Fase 1).
