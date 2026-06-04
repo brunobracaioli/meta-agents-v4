@@ -19,9 +19,11 @@
 - **Migration APLICADA em prod** (`20260604000001_add_autonomous_mode`) via Supabase MCP:
   `autonomous_watches`, `ultron_narrations`, RPC `claim_autonomous_watch`. Tipos regenerados.
 - **Fases 2, 3, 4 = NÃO feitas** (revisão visual / e-mail / genérico). Schema já preparado pra elas.
-- ⚠️ **Web sobe sozinho no push pra `main` (Vercel).** O **runner Fly NÃO** — precisa de
-  `fly deploy` pra pegar o poller novo + crontab + skill + `emit-from-stream.py`. **Até o redeploy
-  do Fly, o modo autônomo NÃO funciona end-to-end** (a tool liga o watch, mas nada faz o tick).
+- ✅ **DEPLOYADO E AO VIVO (2026-06-04):** push pra `main` (Vercel auto-deploy do web) + `fly deploy`
+  do runner `meta-agents-v4` (versão 20, machine 286501db9e7e78 `started`). Verificado por SSH na
+  máquina: poller, skill, crontab (2 linhas) e o fix do `emit-from-stream.py` presentes. O supercronic
+  já roda `poll-autonomous-watches.sh` a cada minuto. **Falta só o teste e2e real** (criar LP pelo
+  Ultron → "modo autônomo" → ouvir narrações → conclusão fala a URL).
 
 ## 1. O que o usuário quer (pedido original)
 
@@ -141,11 +143,12 @@ Retrocompatível (cron sem job mantém run_id = session). **Só vale após redep
   ramo `notifying` + fala final "saindo do modo autônomo".
 - **Fase 4**: `target_kind` já genérico no schema → plugar campanha/análise.
 
-## 9. Ações consequentes pendentes (precisam de OK / ação externa)
+## 9. Ações consequentes — FEITAS nesta rodada
 
-- **`fly deploy`** do runner `meta-agents-v4` (machine 286501db9e7e78) — necessário pra Fase 1
-  funcionar de verdade. Ainda NÃO executado nesta rodada.
-- Sem isso, a Fase 1 está só "mergeada", não "ao vivo".
+- ✅ Merge `--no-ff` na `main` + push (origin) — 2026-06-04.
+- ✅ `fly deploy` do runner `meta-agents-v4` (machine 286501db9e7e78, versão 20) — verificado por SSH.
+- ✅ Migration aplicada em prod (Supabase MCP) + smoke test SQL ok.
+- **PENDENTE**: teste e2e real com voz (depende do operador acionar pelo dashboard) e as Fases 2/3.
 
 ## 10. Estado git
 
