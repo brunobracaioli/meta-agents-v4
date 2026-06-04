@@ -113,6 +113,13 @@ export function useUltronVoice() {
   const publishedTriggerIdsRef = useRef<Set<string>>(new Set());
   const publishedLandingEditKeysRef = useRef<Set<string>>(new Set());
 
+  // Autonomous-mode narrations (ADR 0019): the headless watch inserts spoken updates; we poll
+  // and speak them via the same TTS when the assistant is otherwise idle. statusRef mirrors the
+  // current status so the poller can gate without re-subscribing; the Set dedupes across polls.
+  const statusRef = useRef<UltronStatus>("idle");
+  const narrationSpokenIdsRef = useRef<Set<string>>(new Set());
+  const narrationBusyRef = useRef<boolean>(false);
+
   // VAD-via-worklet state. `vadMode` is decided once on first mic setup.
   const vadMicRef = useRef<VadMicHandle | null>(null);
   const vadModeRef = useRef<"worklet" | "raf">("raf");
@@ -393,6 +400,42 @@ export function useUltronVoice() {
     [patch],
   );
 
+  // Autonomous-mode narration drain. Runs on a slow interval; speaks at most one pending
+  // narration per pass, and ONLY when no user turn is in progress (idle or wake-armed) so it
+  // never cuts off the operator. Reuses speak(), which restores the prior mode afterwards.
+  const pollNarrations = useCallback(async () => {
+    if (narrationBusyRef.current) return;
+    const status = statusRef.current;
+    if (status !== "idle" && status !== "armed") return;
+
+    let narrations: Array<{ id?: unknown; text?: unknown }> = [];
+    try {
+      const res = await fetch(`/api/ultron/narrations?session=${encodeURIComponent(getSessionId())}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { narrations?: unknown };
+      if (Array.isArray(data.narrations)) narrations = data.narrations as typeof narrations;
+    } catch {
+      return; // transient; try again next tick
+    }
+
+    const next = narrations.find(
+      (n) => n && typeof n.id === "string" && typeof n.text === "string" && !narrationSpokenIdsRef.current.has(n.id),
+    );
+    if (!next || typeof next.id !== "string" || typeof next.text !== "string") return;
+
+    // Mark spoken locally + server-side BEFORE speaking so a concurrent poll can't replay it.
+    narrationSpokenIdsRef.current.add(next.id);
+    void fetch(`/api/ultron/narrations/${next.id}`, { method: "PATCH" }).catch(() => {});
+
+    narrationBusyRef.current = true;
+    patch({ reply: next.text });
+    try {
+      await speak(next.text);
+    } finally {
+      narrationBusyRef.current = false;
+    }
+  }, [patch, speak]);
+
   // Sends the transcript to Ultron and resolves any capture_screen pauses: when the
   // server replies need_capture, grab a frame from the shared screen and resume.
   const resolveReply = useCallback(
@@ -634,6 +677,18 @@ export function useUltronVoice() {
   useEffect(() => {
     patch({ wakeSupported: isWakeWordSupported() });
   }, [patch]);
+
+  // Keep statusRef in sync for the narration poller's gate (avoids re-creating the interval).
+  useEffect(() => {
+    statusRef.current = state.status;
+  }, [state.status]);
+
+  // Poll for autonomous-mode narrations and speak them when idle. Low frequency: these are
+  // status updates every couple of minutes, not a chat stream.
+  useEffect(() => {
+    const iv = window.setInterval(() => void pollNarrations(), 5000);
+    return () => window.clearInterval(iv);
+  }, [pollNarrations]);
 
   // Resume the VAD audio context when the tab becomes visible again — contexts
   // can get suspended after a long time backgrounded on some platforms.

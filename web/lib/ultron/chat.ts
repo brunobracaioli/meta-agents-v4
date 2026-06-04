@@ -149,7 +149,9 @@ async function runLoop(
         captureToolUseId = block.id;
         continue;
       }
-      const result = await runTool(block.name, (block.input ?? {}) as Record<string, unknown>);
+      const result = await runTool(block.name, (block.input ?? {}) as Record<string, unknown>, {
+        sessionId: ctx.sessionId,
+      });
       pushAgentTrigger(agentTriggers, agentTriggerFromToolResult(block.name, result));
       pushLandingEdit(landingEdits, landingEditFromToolResult(block.name, result));
       partialResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) });
