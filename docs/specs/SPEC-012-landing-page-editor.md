@@ -102,6 +102,11 @@ Mesmo padrão das tools existentes: allowlist server-side, 2-turnos (`confirm`),
   → edição barata: **aplica direto no Supabase** após confirmação (whitelist de campo por
   tipo + caps + sanitização). Sem job no Fly.
 - `request_landing_page_theme(landing_page_id, token, value, confirm)`
+- `request_landing_page_section_image(landing_page_id, section_type, image_url, confirm)`
+  → define/troca/remove a imagem (`fields.image`) de uma seção com imagem (hero, problem,
+  solution, features, proof, authority). Valida `https` + raster/`landing-assets`; `image_url`
+  vazio remove. O upload de arquivo é do operador (editor); o Ultron só aplica a URL. Mesmo
+  fluxo `confirm` + concorrência otimista + sinal de realtime sync (ver §9.6 / [ADR 0018]).
 - `request_landing_page_publish(landing_page_id, confirm, noindex?)` → enfileira `landing_publish`.
 
 ## 6.1 Publicação — job `landing_publish` (Wave 2)
@@ -277,3 +282,33 @@ Read-only, atrás do gate de sessão. Serviço `getAllLandingPages()`
 (clients, products) — sem N+1. Cada linha mostra cliente · produto · subdomínio · `draft_status` ·
 estado de deploy · pill preview/no-ar (`noindex`) + ações **Editar** (só se a LP tiver produto;
 `product_id` pode ser null = LP órfã → "sem editor") e **Ver no ar ↗** (link externo se `deployed`).
+
+### 9.6 Imagens por seção (render + persistência + edição) — [ADR 0018]
+
+Fecha o ciclo de imagens: antes as LPs nasciam text-only (o `hero.png` gerado nunca era
+renderizado; imagens só no disco efêmero do Fly). Modelo: a imagem de uma seção é uma **URL
+absoluta** (string) em `landing_page_sections.fields.image`; o OG em `settings.seo.ogImage`. Sem
+tabela nova. URLs apontam para o bucket **público** `landing-assets` → o `<img src>` do export
+estático carrega direto do Storage (não depende de arquivo local).
+
+- **Render** (`packages/lp-render`): `image?` em `hero/problem/solution/features/proof`
+  (+ `authority.image`) e `seo.ogImage?`; `<img>` condicional (padrão `Authority.tsx`), classes
+  `.section-image`/`.hero-visual`. `layout.tsx` usa `seo.ogImage` (fallback `/og.png`).
+- **Geração** (`create-landing-page-*` Passo 6): upload best-effort de hero/og/instrutor/**logo**
+  ao `landing-assets` (REST + `x-upsert`, caminho `${LP_ID}/<file>`) + PATCH **merge** das URLs em
+  `fields.image`/`settings.seo.ogImage`/`settings.logo`. Os caminhos de origem vêm de `assets.*`
+  do brief (Passo 0, fallback de convenção) — o brief é a fonte de verdade dos materiais. Falha
+  não aborta (degrada para texto).
+- **Logo da marca** (page-level): `settings.logo` → `contentSpec.logo` → renderizada no topo do
+  hero. Editável no painel **Config** do editor (`ImageField`); como o og, não passa pelo tool de
+  imagem por seção do Ultron (é page-level).
+- **Publish** (`publish-landing-page-*` Passo 5): URLs absolutas renderizam direto; download
+  para `public/` é back-compat best-effort de refs relativas legadas.
+- **Editor** (`web/field-editor`): `ImageField` (preview + upload via `POST /:id/assets` +
+  colar URL + remover); slot sempre visível p/ seções com imagem (`SECTION_IMAGE_KEYS`), mesmo
+  com a key ausente. Save/sync/reconciliação reusados (imagem é "mais um campo string").
+- **Ultron**: `request_landing_page_section_image` (§6). Validação Zod: `image: txt.optional()`
+  nos schemas `.strict()`.
+
+Fora de escopo: tabela de audit/custo por imagem, GC de órfãos no Storage, upload por voz,
+geração de imagem por seção via gpt-image-2 (hoje só hero/og).
