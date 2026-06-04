@@ -41,6 +41,7 @@ export const SECTION_SCHEMAS: Record<SectionType, z.ZodTypeAny> = {
       subhead: txt.optional(),
       ctaLabel: txt.optional(),
       image: txt.optional(),
+      portrait: txt.optional(),
     })
     .strict(),
   urgency: z.object({ label: txt.optional(), scarcity: txt.optional() }).strict(),

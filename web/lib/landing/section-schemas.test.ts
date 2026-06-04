@@ -107,6 +107,13 @@ describe("validateSection — per-section image field (ADR 0018)", () => {
     expect(validateSection("offer", { image: withImage }).ok).toBe(false);
     expect(validateSection("faq", { image: withImage }).ok).toBe(false);
   });
+
+  it("accepts a portrait URL on the hero (split layout), but rejects it elsewhere", () => {
+    const portrait = "https://x.supabase.co/storage/v1/object/public/landing-assets/lp/hero-portrait.png";
+    expect(validateSection("hero", { portrait }).ok).toBe(true);
+    expect(validateSection("hero", { image: withImage, portrait }).ok).toBe(true);
+    expect(validateSection("authority", { portrait }).ok).toBe(false);
+  });
 });
 
 describe("validateSection — CompareCell union", () => {

@@ -147,6 +147,7 @@ Em uma chamada Bash:
   }
   LOGO_SRC=$(resolve_asset '.assets.logo'            "${MAT}/logo/logo.png")
   INSTRUCTOR_SRC=$(resolve_asset '.assets.instructorPhoto' "${MAT}/logo/foto-do-infoprodutor/bruno-bracaioli.jpg")
+  HERO_IMG_SRC=$(resolve_asset '.assets.heroImage'   "")   # retrato do hero (lado direito); opcional, sem fallback
   MASCOTE_SRC=$(resolve_asset '.assets.mascote'      "${MAT}/mascote/claude-lendo.png")
   EXAMPLE_ADS_DIR=$(jq -r '.assets.exampleAds // ""' "${BRIEF_FILE}"); [ -n "${EXAMPLE_ADS_DIR}" ] || EXAMPLE_ADS_DIR="${MAT}/exemplo-de-ads/"
   ```
@@ -351,6 +352,13 @@ caminhos de origem (`LOGO_SRC`/`INSTRUCTOR_SRC`/`MASCOTE_SRC`/`EXAMPLE_ADS_DIR`)
 2b. **Logo da marca:** se `LOGO_SRC` (Passo 0) existe, copie-o para `${LP_DIR}/public/logo.png`
    (`[ -n "${LOGO_SRC}" ] && cp "${LOGO_SRC}" "${LP_DIR}/public/logo.png"`). A logo é renderizada
    no topo do hero (`settings.logo`) — ver Passo 5 da persistência abaixo. Sem logo, degrada.
+2c. **Retrato do hero (lado direito, layout split):** se `HERO_IMG_SRC` (Passo 0) existe, copie-o
+   para `${LP_DIR}/public/hero-portrait.png` (`[ -n "${HERO_IMG_SRC}" ] && cp "${HERO_IMG_SRC}"
+   "${LP_DIR}/public/hero-portrait.png"`). Quando há retrato, ele vira o campo **`hero.portrait`**
+   (distinto de `hero.image`) e o hero renderiza em 2 colunas: copy à esquerda, retrato à direita.
+   Sem retrato, `hero.portrait` fica ausente e o hero permanece em **coluna única centralizada**,
+   com o `hero.png` gerado por IA como `hero.image` (banner abaixo do CTA) — comportamento
+   inalterado para produtos sem `assets.heroImage` (ex.: `cca`).
 3. **Bucket** (idempotente — ignore "já existe"): garanta `landing-assets` público:
    ```bash
    curl -sS -X POST "${SUPABASE_URL%/}/storage/v1/bucket" \
@@ -368,29 +376,38 @@ caminhos de origem (`LOGO_SRC`/`INSTRUCTOR_SRC`/`MASCOTE_SRC`/`EXAMPLE_ADS_DIR`)
        -H "x-upsert: true" -H "Content-Type: $3" --max-time 30 --data-binary @"$1" >/dev/null 2>&1 \
        && printf '%s' "${SUPABASE_URL%/}/storage/v1/object/public/landing-assets/${LP_ID}/$2"
    }
-   HERO_URL=$(upload_asset "${LP_DIR}/public/hero.png"      hero.png      image/png  || true)
    OG_URL=$(upload_asset   "${LP_DIR}/public/og.png"        og.png        image/png  || true)
    INSTR_URL=$(upload_asset "${LP_DIR}/public/instrutor.jpg" instrutor.jpg image/jpeg || true)
    LOGO_URL=$(upload_asset "${LP_DIR}/public/logo.png"      logo.png      image/png  || true)
+   # hero.image = SEMPRE o hero.png gerado por IA (banner da coluna única + base do og/preview social).
+   HERO_URL=$(upload_asset "${LP_DIR}/public/hero.png"      hero.png      image/png  || true)
+   # hero.portrait = retrato recortado (assets.heroImage), SE fornecido → dispara o layout split.
+   PORTRAIT_URL=""
+   if [ -f "${LP_DIR}/public/hero-portrait.png" ]; then
+     PORTRAIT_URL=$(upload_asset "${LP_DIR}/public/hero-portrait.png" hero-portrait.png image/png || true)
+   fi
    ```
+   (`hero.image` e `og.png` saem sempre do hero gerado por IA; o retrato, quando existe, vai num
+   campo separado `hero.portrait` — nunca sobrescreve o `hero.image`.)
 5. **Persistir as URLs no Supabase** (sempre **merge** — NÃO clobber a copy do Passo 4: GET →
    `+` no jq → PATCH):
    ```bash
-   patch_section_image() {  # $1=type  $2=url
-     [ -n "$2" ] || return 0
+   patch_section_field() {  # $1=type  $2=field  $3=url   (no-op se url vazia)
+     [ -n "$3" ] || return 0
      local cur new
      cur=$(curl -fsS "${REST}/landing_page_sections?landing_page_id=eq.${LP_ID}&type=eq.$1&select=fields" \
        -H "apikey: ${SUPABASE_KEY}" -H "Authorization: Bearer ${SUPABASE_KEY}" --max-time 15 \
        | jq -c '.[0].fields // {}') || return 0
      [ -n "${cur}" ] || cur='{}'
-     new=$(jq -nc --argjson f "${cur}" --arg u "$2" '$f + {image:$u}')
+     new=$(jq -nc --argjson f "${cur}" --arg k "$2" --arg u "$3" '$f + {($k):$u}')
      curl -fsS -X PATCH "${REST}/landing_page_sections?landing_page_id=eq.${LP_ID}&type=eq.$1" \
        -H "apikey: ${SUPABASE_KEY}" -H "Authorization: Bearer ${SUPABASE_KEY}" \
        -H "Content-Type: application/json" -H "Prefer: return=minimal" --max-time 15 \
        -d "$(jq -nc --argjson f "${new}" '{fields:$f, updated_by:"generator"}')" >/dev/null 2>&1 || true
    }
-   patch_section_image hero      "${HERO_URL:-}"
-   patch_section_image authority "${INSTR_URL:-}"   # no-op se não há row authority
+   patch_section_field hero      image    "${HERO_URL:-}"      # banner de IA (coluna única)
+   patch_section_field hero      portrait "${PORTRAIT_URL:-}"  # retrato recortado → split (no-op se vazio)
+   patch_section_field authority image    "${INSTR_URL:-}"     # no-op se não há row authority
    # Page-level: og → settings.seo.ogImage; logo → settings.logo (1 GET/merge/PATCH):
    if [ -n "${OG_URL:-}" ] || [ -n "${LOGO_URL:-}" ]; then
      CURS=$(curl -fsS "${REST}/landing_pages?id=eq.${LP_ID}&select=settings" \
@@ -498,7 +515,8 @@ estado `noindex`, e a frase: **"Rascunho no Supabase pronto para edição. Publi
   price_cents, cart_state, noindex, cartClosed) — pronto para o publish validar.
 - Imagens em `${LP_DIR}/public/` (hero/og; instrutor/logo se houver) + template scaffoldado, e
   (best-effort) subidas ao bucket `landing-assets` com as URLs persistidas em
-  `landing_page_sections.fields.image` (hero/authority), `settings.seo.ogImage` e `settings.logo`
+  `landing_page_sections.fields.image` (hero=banner de IA / authority=foto), `fields.portrait`
+  (hero, só quando há `assets.heroImage` → layout split), `settings.seo.ogImage` e `settings.logo`
   — assets resolvidos de `assets.*` do brief.
 - Job `landing_publish` enfileirado em `agent_jobs` (ou `409` dedup) + 1 `operation_logs`.
 - Manifest JSON gravado em `${TRY_DIR}/`.
