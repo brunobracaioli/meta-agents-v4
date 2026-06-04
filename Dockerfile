@@ -14,12 +14,18 @@ ARG SUPERCRONIC_SHA1SUM=9f27ad28c5c57cd133325b2a66bba69ba2235799
 ARG CLAUDE_CODE_VERSION=latest
 # Cloudflare Pages deploy CLI for the create-landing-page-* skill (ADR 0012). Pinned.
 ARG WRANGLER_VERSION=4.97.0
+# Playwright (Chromium) for server-side landing-page review screenshots (ADR 0019 Fase 2). Pinned.
+ARG PLAYWRIGHT_VERSION=1.49.1
 
 ENV TZ=America/Sao_Paulo \
     DEBIAN_FRONTEND=noninteractive \
     NODE_ENV=production \
     NPM_CONFIG_UPDATE_NOTIFIER=false \
-    NPM_CONFIG_FUND=false
+    NPM_CONFIG_FUND=false \
+    # CommonJS require resolves globally-installed modules (playwright) from here.
+    NODE_PATH=/usr/local/lib/node_modules \
+    # Shared, world-readable browser cache so the unprivileged `runner` user can launch Chromium.
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
@@ -35,6 +41,16 @@ RUN curl -fsSLo /usr/local/bin/supercronic \
 
 RUN npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" "wrangler@${WRANGLER_VERSION}" \
  && npm cache clean --force
+
+# Playwright + Chromium for the autonomous-mode visual review (ADR 0019 Fase 2). Installed as
+# root so `--with-deps` can apt-get the system libraries; the browser lands in the shared
+# PLAYWRIGHT_BROWSERS_PATH and is made world-readable so the `runner` user can launch it.
+RUN apt-get update \
+ && npm install -g "playwright@${PLAYWRIGHT_VERSION}" \
+ && playwright install --with-deps chromium \
+ && chmod -R a+rX "${PLAYWRIGHT_BROWSERS_PATH}" \
+ && npm cache clean --force \
+ && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -u 1001 -s /bin/bash runner \
  && mkdir -p /app /var/log/runs /home/runner/.claude \

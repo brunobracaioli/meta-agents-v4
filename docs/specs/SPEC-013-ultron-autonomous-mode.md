@@ -105,9 +105,12 @@ reprocessar um tick não duplica narração (cursor `last_event_ts` + `last_narr
   `poll-autonomous-watches.sh` + skill `autonomous-watch-tick` **só na fase `watching`**
   (narração de status). Critério: operador inicia, recebe narrações de status faladas, encerra.
   Verificar a correlação `agent_job ↔ run_id ↔ agent_events`.
-- **Fase 2 — Revisão visual server-side:** `screenshot-page.mjs` (Playwright na imagem Fly),
-  fase `reviewing` na skill (print → opinião por seção). Critério: prints + opiniões sem screen
-  share.
+- **Fase 2 — Revisão visual server-side ✅ (2026-06-04):** `scripts/screenshot-page.cjs`
+  (Playwright/Chromium na imagem Fly, SSRF guard `*.b2tech.io`), bucket privado `ultron-review`,
+  fase `reviewing` na skill (captura 1× → opinião 1/tick com visão). `watching → reviewing →
+  done`. Critério: prints + opiniões sem screen share. (Nota de escopo: o `image_path` é
+  persistido para auditoria; a aba FALA a opinião, mas ainda não RENDERIZA o print — opcional,
+  fora do critério.)
 - **Fase 3 — Email + encerramento:** Resend (`send-email.mjs`), fase `notifying`, fala final.
   Critério: email entregue + watch `done`.
 - **Fase 4 (futuro) — Genérico:** plugar `target_kind=campaign|analysis` reusando o schema.

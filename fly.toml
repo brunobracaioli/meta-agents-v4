@@ -22,9 +22,11 @@ primary_region = "gru"
   destination  = "/home/runner/.claude"
   initial_size = "1GB"
 
+# 2GB gives headless Chromium headroom for the autonomous-mode visual review (ADR 0019 Fase 2);
+# the screenshotter runs alone (the LP build job is already done by review time).
 [[vm]]
   size   = "shared-cpu-2x"
-  memory = "1024mb"
+  memory = "2048mb"
   cpus   = 2
 
 [deploy]
