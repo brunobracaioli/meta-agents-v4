@@ -110,9 +110,15 @@ app.post("/ultron/chat", async (c) => {
         pendingId: result.pendingId,
         usedTools: result.usedTools,
         agentTriggers: result.agentTriggers,
+        landingEdits: result.landingEdits,
       });
     }
-    return c.json({ reply: result.reply, usedTools: result.usedTools, agentTriggers: result.agentTriggers });
+    return c.json({
+      reply: result.reply,
+      usedTools: result.usedTools,
+      agentTriggers: result.agentTriggers,
+      landingEdits: result.landingEdits,
+    });
   } catch (err) {
     console.error(JSON.stringify({ level: "error", event: "chat_failed", message: errMsg(err) }));
     return c.json({ error: "chat_failed" }, 502);
@@ -139,9 +145,15 @@ app.post("/ultron/capture", async (c) => {
         pendingId: result.pendingId,
         usedTools: result.usedTools,
         agentTriggers: result.agentTriggers,
+        landingEdits: result.landingEdits,
       });
     }
-    return c.json({ reply: result.reply, usedTools: result.usedTools, agentTriggers: result.agentTriggers });
+    return c.json({
+      reply: result.reply,
+      usedTools: result.usedTools,
+      agentTriggers: result.agentTriggers,
+      landingEdits: result.landingEdits,
+    });
   } catch (err) {
     console.error(JSON.stringify({ level: "error", event: "capture_failed", message: errMsg(err) }));
     return c.json({ error: "chat_failed" }, 502);

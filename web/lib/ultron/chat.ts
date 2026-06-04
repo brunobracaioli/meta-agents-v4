@@ -4,7 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { env } from "@/lib/env";
 import { ULTRON_SYSTEM_PROMPT } from "@/lib/ultron/prompt";
 import { toolSpecs, runTool, CLIENT_TOOLS } from "@/lib/ultron/tools";
-import type { AgentTrigger } from "@/lib/ultron/agent-trigger";
+import { isLandingEditSignal, type AgentTrigger, type LandingEditSignal } from "@/lib/ultron/agent-trigger";
 import { loadMemory, appendExchange, type ChatTurn } from "@/lib/ultron/memory";
 import { savePending, loadPending, deletePending } from "@/lib/ultron/pending";
 
@@ -21,12 +21,19 @@ function anthropic(): Anthropic {
   return client;
 }
 
-export type ChatReply = { kind: "reply"; reply: string; usedTools: string[]; agentTriggers: AgentTrigger[] };
+export type ChatReply = {
+  kind: "reply";
+  reply: string;
+  usedTools: string[];
+  agentTriggers: AgentTrigger[];
+  landingEdits: LandingEditSignal[];
+};
 export type ChatNeedCapture = {
   kind: "need_capture";
   pendingId: string;
   usedTools: string[];
   agentTriggers: AgentTrigger[];
+  landingEdits: LandingEditSignal[];
 };
 export type ChatResult = ChatReply | ChatNeedCapture;
 
@@ -78,6 +85,25 @@ function pushAgentTrigger(agentTriggers: AgentTrigger[], trigger: AgentTrigger |
   agentTriggers.push(trigger);
 }
 
+function landingEditFromToolResult(toolName: string, result: unknown): LandingEditSignal | null {
+  if (toolName !== "request_landing_page_edit" && toolName !== "request_landing_page_theme") return null;
+  if (!result || typeof result !== "object" || Array.isArray(result)) return null;
+  if ((result as Record<string, unknown>).applied !== true) return null;
+
+  const signal = {
+    landingPageId: stringField(result, "landing_page_id"),
+    section: stringField(result, "section"),
+    version: (result as Record<string, unknown>).version,
+    at: stringField(result, "at"),
+  };
+  return isLandingEditSignal(signal) ? signal : null;
+}
+
+function pushLandingEdit(landingEdits: LandingEditSignal[], signal: LandingEditSignal | null): void {
+  if (!signal) return;
+  landingEdits.push(signal);
+}
+
 /**
  * The bounded Claude tool loop. Runs server-side tools inline. If Claude calls a
  * client-side tool (capture_screen), it CANNOT run here — we persist the in-flight
@@ -87,6 +113,7 @@ async function runLoop(
   messages: Anthropic.MessageParam[],
   usedTools: string[],
   agentTriggers: AgentTrigger[],
+  landingEdits: LandingEditSignal[],
   startIteration: number,
   ctx: LoopContext,
 ): Promise<ChatResult> {
@@ -100,7 +127,7 @@ async function runLoop(
     });
 
     if (res.stop_reason !== "tool_use") {
-      return { kind: "reply", reply: extractText(res.content) || FALLBACK, usedTools, agentTriggers };
+      return { kind: "reply", reply: extractText(res.content) || FALLBACK, usedTools, agentTriggers, landingEdits };
     }
 
     messages.push({ role: "assistant", content: res.content });
@@ -119,6 +146,7 @@ async function runLoop(
       }
       const result = await runTool(block.name, (block.input ?? {}) as Record<string, unknown>);
       pushAgentTrigger(agentTriggers, agentTriggerFromToolResult(block.name, result));
+      pushLandingEdit(landingEdits, landingEditFromToolResult(block.name, result));
       partialResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) });
     }
 
@@ -133,15 +161,16 @@ async function runLoop(
         iteration: i + 1,
         usedTools,
         agentTriggers,
+        landingEdits,
       });
-      return { kind: "need_capture", pendingId, usedTools, agentTriggers };
+      return { kind: "need_capture", pendingId, usedTools, agentTriggers, landingEdits };
     }
 
     messages.push({ role: "user", content: partialResults });
   }
 
   // Exhausted the tool-iteration budget without a final text answer.
-  return { kind: "reply", reply: FALLBACK, usedTools, agentTriggers };
+  return { kind: "reply", reply: FALLBACK, usedTools, agentTriggers, landingEdits };
 }
 
 /**
@@ -155,7 +184,7 @@ export async function runChat(sessionId: string, text: string): Promise<ChatResu
   const messages: Anthropic.MessageParam[] = memory.map((t) => ({ role: t.role, content: t.content }));
   messages.push({ role: "user", content: text });
 
-  const result = await runLoop(messages, [], [], 0, { sessionId, priorMemory: memory, userText: text });
+  const result = await runLoop(messages, [], [], [], 0, { sessionId, priorMemory: memory, userText: text });
   if (result.kind === "reply") {
     await appendExchange(sessionId, text, result.reply, memory);
   }
@@ -180,6 +209,7 @@ export async function resumeChat(
       reply: "Perdi o contexto da captura. Pode repetir o pedido?",
       usedTools: [],
       agentTriggers: [],
+      landingEdits: [],
     };
   }
 
@@ -192,11 +222,18 @@ export async function resumeChat(
   const messages = pending.messages;
   messages.push({ role: "user", content: [...pending.partialResults, captureResult] });
 
-  const result = await runLoop(messages, pending.usedTools, pending.agentTriggers ?? [], pending.iteration, {
-    sessionId,
-    priorMemory: pending.priorMemory,
-    userText: pending.userText,
-  });
+  const result = await runLoop(
+    messages,
+    pending.usedTools,
+    pending.agentTriggers ?? [],
+    pending.landingEdits ?? [],
+    pending.iteration,
+    {
+      sessionId,
+      priorMemory: pending.priorMemory,
+      userText: pending.userText,
+    },
+  );
 
   // This pending state is consumed; if the loop paused again it saved a fresh one.
   await deletePending(sessionId, pendingId);
