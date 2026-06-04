@@ -29,7 +29,7 @@ export interface Settings {
   /** Optional cinematic 3D panel rendered ABOVE the hero (pinned-scroll WebGL stage).
    * `model` is a .glb URL; `poster` a no-WebGL fallback image; `rain` toggles the matrix
    * digital-rain backdrop; `color` overrides the hologram/rain hue. Absent → no panel. */
-  stage3d?: { model: string; poster?: string; rain?: boolean; color?: string };
+  stage3d?: { model: string; poster?: string; rain?: boolean; color?: string; logo?: string };
   seo: { title: string; description: string; ogAlt: string; ogImage?: string };
   tracking: { fb_pixel_id: string; ga4_id: string; consent_key: string };
   checkout_url: string;

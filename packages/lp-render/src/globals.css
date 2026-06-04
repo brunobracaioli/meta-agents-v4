@@ -240,6 +240,30 @@ a {
   object-fit: contain;
   opacity: 0.85;
 }
+/* bottom gradient that lifts the revealed logo off the busy scene (fades in with it) */
+.stage3d-vignette {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 70vh;
+  opacity: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.95) 30%, rgba(0, 0, 0, 0.62) 60%, transparent 100%);
+  pointer-events: none;
+  will-change: opacity;
+}
+/* training logo that rises + fades in as the model recedes (style driven by JS) */
+.stage3d-logo {
+  position: absolute;
+  left: 50%;
+  bottom: 92px;
+  width: min(76vw, 740px);
+  transform: translate(-50%, 60px) scale(0.92);
+  opacity: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 14px 44px rgba(0, 0, 0, 0.7));
+  will-change: opacity, transform;
+}
 .stage3d-hint {
   position: absolute;
   left: 50%;

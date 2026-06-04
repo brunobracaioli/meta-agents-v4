@@ -8,12 +8,21 @@ import { useContent } from "../content";
 // backdrop, pinned-scroll scrub (spins + recedes as you scroll into the hero). Vanilla
 // three.js, built once and disposed (see ADR / neural-core-scene pattern). three is
 // dynamically imported so it stays out of the initial bundle and never runs during SSR.
-// Driven by contentSpec.stage3d ({ model, poster?, rain?, color? }). No model → renders nothing.
+// Driven by contentSpec.stage3d ({ model, poster?, rain?, color?, logo? }). No model → nothing.
+// As you scroll (model spins + recedes), the optional `logo` (training lockup) rises + fades in
+// over a bottom gradient that lifts it off the busy scene.
+const smoothstep = (a: number, b: number, x: number) => {
+  const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
+  return t * t * (3 - 2 * t);
+};
+
 export function Stage3D() {
   const { contentSpec } = useContent();
   const stage = contentSpec.stage3d;
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const logoRef = useRef<HTMLImageElement>(null);
+  const vignetteRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!stage?.model) return;
@@ -265,6 +274,14 @@ export function Stage3D() {
         group.position.z = -progress * RECEDE_Z;
         group.position.y = progress * 0.4;
 
+        // logo reveal: rises + fades in over the gradient as the model recedes
+        const lr = smoothstep(0.35, 0.9, progress);
+        if (logoRef.current) {
+          logoRef.current.style.opacity = String(lr);
+          logoRef.current.style.transform = `translate(-50%, ${(1 - lr) * 60}px) scale(${0.92 + 0.08 * lr})`;
+        }
+        if (vignetteRef.current) vignetteRef.current.style.opacity = String(lr);
+
         if (rGeo) {
           for (let c = 0; c < COLS; c++) {
             let head = colHead[c]! - colSpd[c]! * dt;
@@ -322,6 +339,13 @@ export function Stage3D() {
           <img className="stage3d-poster" src={stage.poster} alt="" />
         ) : null}
         <canvas className="stage3d-canvas" ref={canvasRef} />
+        {stage.logo ? (
+          <>
+            <div className="stage3d-vignette" ref={vignetteRef} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="stage3d-logo" ref={logoRef} src={stage.logo} alt="" />
+          </>
+        ) : null}
         <div className="stage3d-hint" />
       </div>
     </div>

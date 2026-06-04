@@ -149,6 +149,7 @@ Em uma chamada Bash:
   INSTRUCTOR_SRC=$(resolve_asset '.assets.instructorPhoto' "${MAT}/logo/foto-do-infoprodutor/bruno-bracaioli.jpg")
   HERO_IMG_SRC=$(resolve_asset '.assets.heroImage'   "")   # retrato do hero (lado direito); opcional, sem fallback
   STAGE_MODEL_SRC=$(resolve_asset '.assets.stage3d.model' "")  # modelo .glb do painel 3D; opcional, sem fallback
+  STAGE_LOGO_SRC=$(resolve_asset '.assets.stage3d.logo'  "")   # logo do treinamento (reveal no painel); opcional
   STAGE_RAIN=$(jq -r '.assets.stage3d.rain // true' "${BRIEF_FILE}")  # chuva Matrix on/off (default on)
   MASCOTE_SRC=$(resolve_asset '.assets.mascote'      "${MAT}/mascote/claude-lendo.png")
   EXAMPLE_ADS_DIR=$(jq -r '.assets.exampleAds // ""' "${BRIEF_FILE}"); [ -n "${EXAMPLE_ADS_DIR}" ] || EXAMPLE_ADS_DIR="${MAT}/exemplo-de-ads/"
@@ -399,6 +400,11 @@ caminhos de origem (`LOGO_SRC`/`INSTRUCTOR_SRC`/`MASCOTE_SRC`/`EXAMPLE_ADS_DIR`)
    if [ -n "${STAGE_MODEL_SRC}" ]; then
      STAGE_URL=$(upload_asset "${STAGE_MODEL_SRC}" stage.glb model/gltf-binary || true)
    fi
+   # logo do treinamento (reveal no painel) — subido direto da origem
+   STAGE_LOGO_URL=""
+   if [ -n "${STAGE_LOGO_SRC}" ]; then
+     STAGE_LOGO_URL=$(upload_asset "${STAGE_LOGO_SRC}" stage-logo.png image/png || true)
+   fi
    ```
    (`hero.image` e `og.png` saem sempre do hero gerado por IA; o retrato, quando existe, vai num
    campo separado `hero.portrait` — nunca sobrescreve o `hero.image`.)
@@ -429,11 +435,12 @@ caminhos de origem (`LOGO_SRC`/`INSTRUCTOR_SRC`/`MASCOTE_SRC`/`EXAMPLE_ADS_DIR`)
      [ -n "${CURS}" ] || CURS='{}'
      STAGE_RAIN_BOOL=$([ "${STAGE_RAIN:-true}" = "false" ] && echo false || echo true)
      NEWS=$(jq -nc --argjson s "${CURS}" --arg og "${OG_URL:-}" --arg logo "${LOGO_URL:-}" \
-       --arg stage "${STAGE_URL:-}" --argjson rain "${STAGE_RAIN_BOOL}" \
+       --arg stage "${STAGE_URL:-}" --arg stagelogo "${STAGE_LOGO_URL:-}" --argjson rain "${STAGE_RAIN_BOOL}" \
        '$s
         + (if $og    != "" then {seo: (($s.seo // {}) + {ogImage:$og})} else {} end)
         + (if $logo  != "" then {logo:$logo} else {} end)
-        + (if $stage != "" then {stage3d:{model:$stage, rain:$rain}} else {} end)')
+        + (if $stage != "" then {stage3d: ({model:$stage, rain:$rain}
+                                           + (if $stagelogo != "" then {logo:$stagelogo} else {} end))} else {} end)')
      curl -fsS -X PATCH "${REST}/landing_pages?id=eq.${LP_ID}" \
        -H "apikey: ${SUPABASE_KEY}" -H "Authorization: Bearer ${SUPABASE_KEY}" \
        -H "Content-Type: application/json" -H "Prefer: return=minimal" --max-time 15 \
