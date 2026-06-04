@@ -35,6 +35,8 @@ export interface ContentSpec {
   site_url: string;
   /** Brand logo URL (page-level, rendered at the top of the hero). Optional. */
   logo?: string;
+  /** Optional cinematic 3D panel (pinned-scroll WebGL stage) rendered ABOVE the hero. */
+  stage3d?: { model: string; poster?: string; rain?: boolean; color?: string };
   /** ISO 8601 deadline for the countdown in the urgency bar. Omit/past → bar shows scarcity only. */
   deadline?: string;
   sections: SectionType[];

@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useContent } from "./content";
 import type { SectionType, Tone } from "./content-types";
+import { Stage3D } from "./sections/Stage3D";
 import { Hero } from "./sections/Hero";
 import { Urgency } from "./sections/Urgency";
 import { Problem } from "./sections/Problem";
@@ -64,7 +65,10 @@ export function PageBody() {
   const { contentSpec, isCartClosed: closed } = useContent();
   let flowIndex = 0;
   return (
-    <main>
+    <>
+      {/* Optional cinematic 3D panel pinned above the hero (renders nothing without a model). */}
+      <Stage3D />
+      <main>
       {contentSpec.sections.map((id) => {
         // When the cart is closed, skip the curriculum/features deep-sell — keep it lean.
         if (closed && (id === "curriculum" || id === "features")) return null;
@@ -73,6 +77,7 @@ export function PageBody() {
         const tone: Tone = FLOW_SECTIONS.has(id) ? (flowIndex++ % 2 === 0 ? "light" : "alt") : "light";
         return render(tone);
       })}
-    </main>
+      </main>
+    </>
   );
 }
