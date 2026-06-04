@@ -136,6 +136,7 @@
     "logo": ".claude/materiais-das-empresas/brunobracaioli/logo/logo.png",
     "instructorPhoto": ".claude/materiais-das-empresas/brunobracaioli/logo/foto-do-infoprodutor/bruno-bracaioli.jpg",
     "heroImage": ".claude/materiais-das-empresas/brunobracaioli/hero/bruno-armour.png",
+    "stage3d": { "model": ".claude/materiais-das-empresas/brunobracaioli/hero/painel/iron_man_rig.glb", "rain": true, "logo": ".claude/materiais-das-empresas/brunobracaioli/hero/imersao-agencia.png" },
     "mascote": ".claude/materiais-das-empresas/brunobracaioli/mascote/claude-lendo.png",
     "exampleAds": ".claude/materiais-das-empresas/brunobracaioli/exemplo-de-ads/"
   },

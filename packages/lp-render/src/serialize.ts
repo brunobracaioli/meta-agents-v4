@@ -81,6 +81,7 @@ function buildContentSpec(doc: ContentDoc): ContentSpec {
   };
   if (s.seo.ogImage) spec.seo.ogImage = s.seo.ogImage;
   if (s.logo) spec.logo = s.logo;
+  if (s.stage3d?.model) spec.stage3d = s.stage3d;
   if (s.waitlist_url) spec.waitlist_url = s.waitlist_url;
   if (s.deadline) spec.deadline = s.deadline;
   return spec;

@@ -4,7 +4,9 @@
   "description": "Shared landing-page rendering: section components, content types, and the ContentDoc → build-files serializer. Consumed by landing-pages/_template (static export) and web (live preview).",
   "type": "module",
   "private": true,
-  "sideEffects": ["*.css"],
+  "sideEffects": [
+    "*.css"
+  ],
   "scripts": {
     "type-check": "tsc --noEmit"
   },
@@ -17,15 +19,25 @@
   },
   "peerDependencies": {
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "three": "^0.184.0"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true },
-    "react-dom": { "optional": true }
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "three": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "22.10.2",
     "@types/react": "19.0.2",
-    "@types/react-dom": "19.0.2"
+    "@types/react-dom": "19.0.2",
+    "@types/three": "^0.184.1",
+    "three": "^0.184.0"
   }
 }
