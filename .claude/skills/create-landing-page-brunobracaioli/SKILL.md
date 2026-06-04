@@ -146,7 +146,7 @@ Em uma chamada Bash:
     [ -f "${REPO}/${p}" ] && printf '%s' "${REPO}/${p}" || printf ''  # vazio = ausente
   }
   LOGO_SRC=$(resolve_asset '.assets.logo'            "${MAT}/logo/logo.png")
-  INSTRUCTOR_SRC=$(resolve_asset '.assets.instructorPhoto' "${MAT}/logo/foto-do-infoprodutor/bruno-bracaioli.jpg")
+  INSTRUCTOR_SRC=$(resolve_asset '.assets.instructorPhoto' "${MAT}/logo/foto-do-infoprodutor/bruno-bracaioli.png")
   HERO_IMG_SRC=$(resolve_asset '.assets.heroImage'   "")   # retrato do hero (lado direito); opcional, sem fallback
   STAGE_MODEL_SRC=$(resolve_asset '.assets.stage3d.model' "")  # modelo .glb do painel 3D; opcional, sem fallback
   STAGE_LOGO_SRC=$(resolve_asset '.assets.stage3d.logo'  "")   # logo do treinamento (reveal no painel); opcional

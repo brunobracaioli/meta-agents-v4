@@ -106,3 +106,14 @@ landing-pages/**/*.tsbuildinfo
 # _template scaffold is versioned. Keeps cca-e2e/cca-test/... from being committed by accident.
 landing-pages/*/
 !landing-pages/_template/
+
+# Working scratch that must never be committed (a stray `git add .` swept a 157MB
+# OBS installer into history once — see fix). Materials' generated/working images and
+# throwaway design previews are not part of the repo.
+.claude/materiais-das-empresas/*/imagens-geradas/
+/hero-preview.html
+/stage3d-preview.html
+/bruno-armour.png
+/claude-lendo.png
+/exemplo.hero.png
+/icone-logo.png
