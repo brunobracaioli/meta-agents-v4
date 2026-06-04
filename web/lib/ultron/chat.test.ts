@@ -133,6 +133,37 @@ describe("runChat — agent trigger metadata", () => {
   });
 });
 
+describe("runChat — landing edit signal (section image)", () => {
+  it("emits a landingEdit when request_landing_page_section_image applies", async () => {
+    runTool.mockResolvedValueOnce({
+      applied: true,
+      landing_page_id: "lp-1",
+      section: "hero",
+      version: 4,
+      at: "2026-06-04T12:00:00.000Z",
+      field_path: "image",
+    });
+    createMock
+      .mockResolvedValueOnce(
+        toolTurn("tu_img", "request_landing_page_section_image", {
+          landing_page_id: "lp-1",
+          section_type: "hero",
+          image_url: "https://x.supabase.co/storage/v1/object/public/landing-assets/lp-1/hero.png",
+          confirm: true,
+        }),
+      )
+      .mockResolvedValueOnce(textTurn("Troquei a imagem do hero."));
+
+    const result = await runChat(SESSION, "troca a imagem do hero");
+
+    expect(result.kind).toBe("reply");
+    if (result.kind !== "reply") throw new Error("unreachable");
+    expect(result.landingEdits).toEqual([
+      { landingPageId: "lp-1", section: "hero", version: 4, at: "2026-06-04T12:00:00.000Z" },
+    ]);
+  });
+});
+
 describe("resumeChat — inject image and finish", () => {
   it("injects the screenshot as the capture tool_result, replies, and clears state", async () => {
     createMock.mockResolvedValueOnce(capturePauseTurn());

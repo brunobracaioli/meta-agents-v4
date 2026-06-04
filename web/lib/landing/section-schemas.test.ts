@@ -94,6 +94,21 @@ describe("validateSection — href sanitization", () => {
   });
 });
 
+describe("validateSection — per-section image field (ADR 0018)", () => {
+  const withImage = "https://x.supabase.co/storage/v1/object/public/landing-assets/lp/hero.png";
+
+  it("accepts an image URL on the image-capable sections", () => {
+    for (const type of ["hero", "problem", "solution", "features", "proof", "authority"]) {
+      expect(validateSection(type, { image: withImage }).ok).toBe(true);
+    }
+  });
+
+  it("rejects image on a section that does not support it (strict whitelist)", () => {
+    expect(validateSection("offer", { image: withImage }).ok).toBe(false);
+    expect(validateSection("faq", { image: withImage }).ok).toBe(false);
+  });
+});
+
 describe("validateSection — CompareCell union", () => {
   it("accepts boolean and string cells, rejects an object cell", () => {
     expect(validateSection("comparison", { rows: [{ label: "a", ours: true, theirs: "x" }] }).ok).toBe(true);

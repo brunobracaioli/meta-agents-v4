@@ -47,6 +47,12 @@ const httpUrl = z
   .max(2000)
   .refine((u) => /^https?:\/\//i.test(u), "use uma URL http(s)");
 
+/** A brand/og image URL: http(s) OR empty (empty clears the field). */
+const imageUrlOrEmpty = z
+  .string()
+  .max(2000)
+  .refine((u) => u === "" || /^https?:\/\//i.test(u), "use uma URL http(s) de imagem");
+
 export const settingsPatchSchema = z
   .object({
     seo: z
@@ -54,10 +60,12 @@ export const settingsPatchSchema = z
         title: z.string().max(200),
         description: z.string().max(400),
         ogAlt: z.string().max(200),
+        ogImage: imageUrlOrEmpty,
       })
       .partial()
       .strict()
       .optional(),
+    logo: imageUrlOrEmpty.optional(),
     checkout_url: httpUrl.optional(),
     waitlist_url: httpUrl.optional(),
     price_cents: z.number().int().min(0).max(100_000_000).optional(),

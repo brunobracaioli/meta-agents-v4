@@ -87,4 +87,12 @@ describe("settingsPatchSchema", () => {
   it("rejects an invalid cart_state", () => {
     expect(settingsPatchSchema.safeParse({ cart_state: "halfopen" }).success).toBe(false);
   });
+
+  it("accepts a brand logo / og image URL and empty (clear), rejects non-http (ADR 0018)", () => {
+    const url = "https://x.supabase.co/storage/v1/object/public/landing-assets/lp/logo.png";
+    expect(settingsPatchSchema.safeParse({ logo: url }).success).toBe(true);
+    expect(settingsPatchSchema.safeParse({ logo: "" }).success).toBe(true); // clear
+    expect(settingsPatchSchema.safeParse({ seo: { ogImage: url } }).success).toBe(true);
+    expect(settingsPatchSchema.safeParse({ logo: "javascript:alert(1)" }).success).toBe(false);
+  });
 });

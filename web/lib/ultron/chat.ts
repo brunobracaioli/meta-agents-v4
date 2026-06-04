@@ -86,7 +86,12 @@ function pushAgentTrigger(agentTriggers: AgentTrigger[], trigger: AgentTrigger |
 }
 
 function landingEditFromToolResult(toolName: string, result: unknown): LandingEditSignal | null {
-  if (toolName !== "request_landing_page_edit" && toolName !== "request_landing_page_theme") return null;
+  if (
+    toolName !== "request_landing_page_edit" &&
+    toolName !== "request_landing_page_theme" &&
+    toolName !== "request_landing_page_section_image"
+  )
+    return null;
   if (!result || typeof result !== "object" || Array.isArray(result)) return null;
   if ((result as Record<string, unknown>).applied !== true) return null;
 

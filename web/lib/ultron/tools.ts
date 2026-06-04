@@ -791,6 +791,130 @@ const tools: Record<string, ToolDef> = {
     },
   },
 
+  request_landing_page_section_image: {
+    spec: {
+      name: "request_landing_page_section_image",
+      description:
+        "Define/troca a IMAGEM de uma seção da landing page (hero, problem, solution, features, proof, authority) por uma URL, direto no rascunho do Supabase. A URL deve ser https de imagem (de preferência uma já enviada ao bucket landing-assets pelo editor). O upload de arquivo é feito pelo operador no editor; aqui você só aplica a URL. FLUXO em dois passos: confirm=false devolve o de/para; confirm=true aplica após o 'sim'. Para REMOVER a imagem, passe image_url vazio.",
+      input_schema: {
+        type: "object",
+        properties: {
+          landing_page_id: { type: "string", description: "uuid da LP (use list_landing_pages)" },
+          section_type: { type: "string", description: "hero|problem|solution|features|proof|authority" },
+          image_url: { type: "string", description: "URL https da imagem (vazio = remover a imagem)" },
+          confirm: { type: "boolean", description: "false = devolve de/para; true = aplica (só após confirmação)" },
+        },
+        required: ["landing_page_id", "confirm"],
+      },
+    },
+    handler: async (input) => {
+      const id = str(input, "landing_page_id");
+      if (!id) return { error: "landing_page_id é obrigatório" };
+      const type = str(input, "section_type");
+      const imageUrl =
+        typeof input.image_url === "string" ? input.image_url.trim() : input.image_url != null ? String(input.image_url) : undefined;
+      const confirm = input.confirm === true;
+      if (!type)
+        return { needs_input: true, field: "section_type", message: "Qual seção? (hero, problem, solution, features, proof, authority)." };
+      if (imageUrl === undefined)
+        return { needs_input: true, field: "image_url", message: "Qual a URL da imagem? (ou vazio para remover)" };
+      // Validate the URL unless clearing. Accept https rasters; block javascript:/data:/etc.
+      if (imageUrl !== "") {
+        const okScheme = /^https:\/\//i.test(imageUrl);
+        const okShape =
+          imageUrl.length <= 2000 &&
+          (/\/storage\/v1\/object\/public\/landing-assets\//.test(imageUrl) ||
+            /\.(png|jpe?g|webp|avif)(\?|#|$)/i.test(imageUrl));
+        if (!okScheme || !okShape)
+          return { error: "URL de imagem inválida — use https de uma imagem (png/jpg/webp/avif), idealmente do bucket landing-assets" };
+      }
+
+      const lp = await resolveLanding(id);
+      if (!lp) return { error: "landing page não encontrada" };
+      if (lp.draft_status === "generating" || lp.draft_status === "publishing")
+        return { error: "a página está gerando ou publicando agora; espere terminar para editar" };
+
+      const sec = await db()
+        .from("landing_page_sections")
+        .select("fields, version")
+        .eq("landing_page_id", id)
+        .eq("type", type)
+        .maybeSingle();
+      if (sec.error) throw sec.error;
+      if (!sec.data) return { error: `a seção '${type}' não existe nessa página` };
+      const fields0 = (sec.data.fields && typeof sec.data.fields === "object" && !Array.isArray(sec.data.fields)
+        ? sec.data.fields
+        : {}) as Record<string, unknown>;
+      const res = applyScalarEdit(fields0, "image", imageUrl);
+      if (!res.ok) return { error: res.error };
+      const check = validateSection(type, res.fields);
+      if (!check.ok)
+        return { error: `a seção '${type}' não aceita imagem (${check.error})` };
+
+      if (!confirm) {
+        return {
+          confirmation_required: true,
+          action: imageUrl === "" ? "remover imagem da seção" : "trocar imagem da seção",
+          subdomain: `${lp.subdomain}.b2tech.io`,
+          section: type,
+          field_path: "image",
+          from: truncateValue(res.applied.from),
+          to: truncateValue(res.applied.to),
+          note: "Edição barata aplicada direto no rascunho (não vai ao ar até publicar). Confirme antes de chamar com confirm=true.",
+        };
+      }
+
+      const { allowed } = await enforceLimit(rateLimiters.landingEdit(), id, "landing-edit");
+      if (!allowed) return { error: "muitas edições nessa página agora; tente em instantes" };
+
+      // Optimistic concurrency on `version`; on conflict re-read latest and re-apply once.
+      let version = sec.data.version;
+      let toFields: Record<string, unknown> = res.fields;
+      let appliedTo: unknown = res.applied.to;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const upd = await db()
+          .from("landing_page_sections")
+          .update({ fields: toFields as Json, version: version + 1, updated_by: "ultron" })
+          .eq("landing_page_id", id)
+          .eq("type", type)
+          .eq("version", version)
+          .select("version")
+          .maybeSingle();
+        if (upd.error) throw upd.error;
+        if (upd.data) {
+          await logLandingOp(lp.client_id, id, `imagem de ${type}`);
+          return {
+            applied: true,
+            landing_page_id: id,
+            section: type,
+            version: upd.data.version,
+            at: new Date().toISOString(),
+            field_path: "image",
+            to: truncateValue(appliedTo),
+            message: imageUrl === "" ? "Removi a imagem no rascunho. Quer que eu publique?" : "Troquei a imagem no rascunho. Quer que eu publique?",
+          };
+        }
+        const fresh = await db()
+          .from("landing_page_sections")
+          .select("fields, version")
+          .eq("landing_page_id", id)
+          .eq("type", type)
+          .maybeSingle();
+        if (fresh.error) throw fresh.error;
+        if (!fresh.data) return { error: "a seção sumiu durante a edição" };
+        const f0 = (fresh.data.fields && typeof fresh.data.fields === "object" && !Array.isArray(fresh.data.fields)
+          ? fresh.data.fields
+          : {}) as Record<string, unknown>;
+        const r2 = applyScalarEdit(f0, "image", imageUrl);
+        if (!r2.ok) return { error: r2.error };
+        version = fresh.data.version;
+        toFields = r2.fields;
+        appliedTo = r2.applied.to;
+      }
+      return { error: "a página mudou durante a edição; tente de novo" };
+    },
+  },
+
   request_landing_page_theme: {
     spec: {
       name: "request_landing_page_theme",
