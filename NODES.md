@@ -12,18 +12,23 @@
 
 ## 0. TL;DR de estado
 
-- **FASES 1 + 2 = COMPLETAS.** Fase 1 mergeada na `main` (2026-06-04). Fase 2 (revisão visual
-  server-side) na branch `feat/ultron-autonomous-mode-phase2` (commit `2bdfe11`).
-- Gates verdes Fase 1: `tsc --strict` limpo no `web/`; **38 testes vitest**; `bash -n` + `py_compile`;
-  smoke test SQL em prod. Fase 2: `node --check` do `.cjs` ok; guardas SSRF/uuid validadas local.
+- **FASES 1 + 2 + 3 = COMPLETAS e MERGEADAS na `main`** (2026-06-04). Fluxo completo do modo
+  autônomo: `watching → reviewing → notifying → done`.
+- **Deployado e validado AO VIVO** no runner `meta-agents-v4`: Fase 2 (screenshot real de
+  cca-e2e.b2tech.io → 4 JPEGs no bucket privado) e Fase 3 (`send-email.cjs` presente + degrada
+  gracioso sem key). Gates: `node --check` dos `.cjs`, guardas SSRF/uuid/email validadas.
 - **Migrations APLICADAS em prod**: `20260604000001_add_autonomous_mode` (tabelas + RPC) e
   `20260604000002_add_ultron_review_bucket` (bucket privado `ultron-review`).
-- **Fase 2 entregue**: `scripts/screenshot-page.cjs` (Playwright/Chromium, SSRF guard `*.b2tech.io`),
-  fase `reviewing` na skill (captura 1× → opinião 1/tick com visão, `kind=opinion`+`image_path`),
-  Dockerfile com Playwright, fly.toml memória 1GB→2GB. Transição: `watching → reviewing → done`.
-- **Fases 3, 4 = NÃO feitas** (e-mail/`notifying` + encerramento; genérico). Schema já preparado.
-- **Falta validar**: o `fly deploy` da Fase 2 (Playwright na imagem) + o teste e2e real com voz
-  (criar LP pelo Ultron → "modo autônomo" → ouvir narrações de status → ouvir opiniões da revisão).
+- **Fase 3 entregue**: `scripts/send-email.cjs` (Resend), fase `notifying` na skill (Passo N: email
+  + fala "saindo do modo autônomo"). Destinatário/remetente fixos via env/default
+  (`bruno@b2tech.io` / `Ultron <ultron@b2tech.io>`), nunca de conteúdo da página. Idempotente
+  (`result.notify_attempted`). Fail-safe sem a key.
+- **⚠️ Falta 1 passo p/ email real**: setar `RESEND_API_KEY` no Fly (`fly secrets set
+  RESEND_API_KEY=re_... -a meta-agents-v4`) + verificar domínio `b2tech.io` no Resend. Sem isso, o
+  modo autônomo funciona inteiro, só não envia email (narra o fallback). Operador (Bruno) vai rodar.
+- **Fase 4 = NÃO feita** (genérico campanha/análise; schema já preparado).
+- **Falta validar**: teste e2e real com voz (criar LP pelo Ultron → "modo autônomo" → ouvir status →
+  opiniões da revisão → email + "saindo do modo autônomo").
 
 ## 1. O que o usuário quer (pedido original)
 
@@ -103,6 +108,9 @@ Retrocompatível (cron sem job mantém run_id = session). **Só vale após redep
   upload ao bucket `ultron-review`, JSON manifest). Invocado pela skill no ramo `reviewing`.
 - **(Fase 2)** `Dockerfile` — Playwright + Chromium (root, `--with-deps`, `/ms-playwright` world-
   readable) + `NODE_PATH`/`PLAYWRIGHT_BROWSERS_PATH`. `fly.toml` — memória 2GB.
+- **(Fase 3)** `scripts/send-email.cjs` — email via Resend (`RESEND_API_KEY` do env; to/from fixos
+  via env/default, NÃO de conteúdo da página; corpo via `--body-file`). Invocado no Passo N. É
+  `.cjs` pelo mesmo motivo do screenshotter (NODE_PATH p/ require). `.env.example` documenta a env.
 
 **Web** (deploy automático no push):
 - `web/lib/ultron/tools.ts` — tools `start_autonomous_mode`/`stop_autonomous_mode`; `ToolContext`;
@@ -145,12 +153,15 @@ Retrocompatível (cron sem job mantém run_id = session). **Só vale após redep
   na skill (R.1 captura 1× → R.2 opinião 1/tick com `Read` da imagem → R.3 encerra). Transição
   `watching → reviewing → done`. **`.cjs` (não `.mjs`)** de propósito: `require('playwright')`
   global resolve via `NODE_PATH` (ESM bare-specifier ignoraria `NODE_PATH`). Memória 2GB.
-- **Fase 3 (e-mail) — PRÓXIMA**: `scripts/send-email.mjs` (Resend, `RESEND_API_KEY` a criar no
-  Fly+Vercel) + ramo `notifying` na skill + fala final "saindo do modo autônomo". Onde plugar:
-  no Passo R.3 da skill, troque `phase='done'` por `phase='notifying'`; adicione um ramo
-  `notifying` (envia email com a `result.url` para `bruno@b2tech.io`, narra a fala final, então
-  `phase='done'`). A skill já trata `notifying` como no-op hoje (sai 0) — basta implementar.
-- **Fase 4**: `target_kind` já genérico no schema → plugar campanha/análise.
+- **Fase 3 (e-mail) ✅ FEITA.** `scripts/send-email.cjs` (Resend) + Passo N (`notifying`) na skill.
+  R.3 e os caminhos de falha/timeout da revisão agora vão p/ `notifying` (a página está no ar →
+  ainda notifica), nunca travam. Email só do **Fly** (a skill envia; Vercel não precisa). Falta só
+  o secret `RESEND_API_KEY` no Fly + domínio verificado no Resend. Destinatário via
+  `AUTONOMOUS_NOTIFY_EMAIL` (default `bruno@b2tech.io`), remetente via `AUTONOMOUS_FROM_EMAIL`
+  (default `Ultron <ultron@b2tech.io>`).
+- **Fase 4 — PRÓXIMA (futuro)**: `target_kind` já genérico no schema → plugar campanha/análise.
+  Onde plugar: a tool `start_autonomous_mode` (web/lib/ultron/tools.ts) hoje só resolve job
+  `kind='landing'`; generalizar p/ campanha/análise + ramos na skill por `target_kind`.
 
 ## 9. Ações consequentes — FEITAS nesta rodada
 
