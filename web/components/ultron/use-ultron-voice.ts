@@ -4,8 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AGENT_TRIGGER_CHANNEL,
   AGENT_TRIGGER_EVENT,
+  LANDING_EDIT_CHANNEL,
+  LANDING_EDIT_EVENT,
   isAgentTrigger,
+  isLandingEditSignal,
+  landingEditKey,
   type AgentTrigger,
+  type LandingEditSignal,
 } from "@/lib/ultron/agent-trigger";
 import { getSessionId } from "@/lib/ultron/session";
 import { createWakeWord, isWakeWordSupported, type WakeController } from "@/lib/ultron/wake-word";
@@ -65,6 +70,7 @@ type UltronApiResponse = {
   status?: string;
   pendingId?: string;
   agentTriggers?: unknown[];
+  landingEdits?: unknown[];
 };
 
 function silentOutputBands(): number[] {
@@ -105,6 +111,7 @@ export function useUltronVoice() {
   const wakeModeRef = useRef<boolean>(false);
   const armedRef = useRef<boolean>(false);
   const publishedTriggerIdsRef = useRef<Set<string>>(new Set());
+  const publishedLandingEditKeysRef = useRef<Set<string>>(new Set());
 
   // VAD-via-worklet state. `vadMode` is decided once on first mic setup.
   const vadMicRef = useRef<VadMicHandle | null>(null);
@@ -137,6 +144,35 @@ export function useUltronVoice() {
       window.setTimeout(() => channel.close(), 0);
     } catch {
       // Same-window CustomEvent already delivered the trigger; cross-tab delivery is best-effort.
+    }
+  }, []);
+
+  // Ultron edits landing-page drafts straight in Supabase, so the open editor would
+  // otherwise show stale content until a manual reload. We fan the applied edits back
+  // out the same way as agent triggers: a same-window CustomEvent (widget floating over
+  // the editor) plus a cross-tab BroadcastChannel (editor in another tab). The editor
+  // listens, refetches, and reconciles by version.
+  const publishLandingEdits = useCallback((values: unknown[] | undefined) => {
+    if (!values || values.length === 0) return;
+    const fresh = values.filter(isLandingEditSignal).filter((signal) => {
+      const key = landingEditKey(signal);
+      if (publishedLandingEditKeysRef.current.has(key)) return false;
+      publishedLandingEditKeysRef.current.add(key);
+      return true;
+    });
+    if (fresh.length === 0) return;
+
+    fresh.forEach((signal) => {
+      window.dispatchEvent(new CustomEvent<LandingEditSignal>(LANDING_EDIT_EVENT, { detail: signal }));
+    });
+
+    if (!("BroadcastChannel" in window)) return;
+    try {
+      const channel = new BroadcastChannel(LANDING_EDIT_CHANNEL);
+      fresh.forEach((signal) => channel.postMessage(signal));
+      window.setTimeout(() => channel.close(), 0);
+    } catch {
+      // Same-window CustomEvent already delivered the signal; cross-tab delivery is best-effort.
     }
   }, []);
 
@@ -369,6 +405,7 @@ export function useUltronVoice() {
       if (!chatRes.ok) throw new Error("chat");
       let data = (await chatRes.json()) as UltronApiResponse;
       publishAgentTriggers(data.agentTriggers);
+      publishLandingEdits(data.landingEdits);
 
       let hops = 0;
       while (data.status === "need_capture" && data.pendingId && hops++ < MAX_CAPTURE_HOPS) {
@@ -384,10 +421,11 @@ export function useUltronVoice() {
         if (!capRes.ok) throw new Error("capture");
         data = (await capRes.json()) as UltronApiResponse;
         publishAgentTriggers(data.agentTriggers);
+        publishLandingEdits(data.landingEdits);
       }
       return data.reply ?? CLIENT_FALLBACK;
     },
-    [captureFrame, patch, publishAgentTriggers],
+    [captureFrame, patch, publishAgentTriggers, publishLandingEdits],
   );
 
   const sendPipeline = useCallback(

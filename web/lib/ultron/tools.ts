@@ -761,7 +761,10 @@ const tools: Record<string, ToolDef> = {
           await logLandingOp(lp.client_id, id, `editou ${type}.${fieldPath}`);
           return {
             applied: true,
+            landing_page_id: id,
             section: type,
+            version: upd.data.version,
+            at: new Date().toISOString(),
             field_path: fieldPath,
             to: truncateValue(appliedTo),
             message: "Pronto, ajustei no rascunho. Quer que eu publique?",
@@ -848,7 +851,16 @@ const tools: Record<string, ToolDef> = {
       const upd = await db().from("landing_pages").update({ theme: merged as Json }).eq("id", id);
       if (upd.error) throw upd.error;
       await logLandingOp(lp.client_id, id, `tema: ${token}=${value}`);
-      return { applied: true, token, value, message: "Tema ajustado no rascunho. Quer que eu publique?" };
+      return {
+        applied: true,
+        landing_page_id: id,
+        section: "__theme",
+        version: 0, // theme has no per-field version; the editor reconciles it by content
+        at: new Date().toISOString(),
+        token,
+        value,
+        message: "Tema ajustado no rascunho. Quer que eu publique?",
+      };
     },
   },
 

@@ -5,6 +5,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ContentDoc, Settings, Theme } from "@b2tech/lp-render/content-doc";
 import { FieldEditor } from "@/components/landing/field-editor";
 import { FONT_ALLOWLIST, COLOR_TOKENS } from "@/lib/landing/constants";
+import {
+  reconcile,
+  sectionDirtyKey,
+  THEME_DIRTY_KEY,
+  SETTINGS_DIRTY_KEY,
+} from "@/lib/landing/reconcile";
+import {
+  LANDING_EDIT_CHANNEL,
+  LANDING_EDIT_EVENT,
+  isLandingEditSignal,
+} from "@/lib/ultron/agent-trigger";
 import type { LandingPageMeta } from "@/lib/services/landing-page";
 
 type SaveState = { kind: "idle" | "saving" | "saved" | "error"; msg?: string };
@@ -71,8 +82,13 @@ export function LandingPageEditor({
   const versionsRef = useRef(versions);
   versionsRef.current = versions;
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  // Keys (sectionDirtyKey/THEME_DIRTY_KEY/SETTINGS_DIRTY_KEY) the operator is actively
+  // editing: reconcile leaves these alone so a remote (Ultron) edit can't clobber typing.
+  const dirty = useRef(new Set<string>());
 
   const readOnly = meta.draft_status === "generating" || meta.draft_status === "publishing";
+  const readOnlyRef = useRef(readOnly);
+  readOnlyRef.current = readOnly;
 
   const postDoc = useCallback((d: ContentDoc) => {
     iframeRef.current?.contentWindow?.postMessage({ type: "lp-preview:doc", doc: d }, window.location.origin);
@@ -118,6 +134,81 @@ export function LandingPageEditor({
     return () => clearInterval(iv);
   }, [meta.draft_status, meta.id, postDoc]);
 
+  // Merge a freshly-fetched remote draft into local state without losing in-flight edits.
+  // "Local wins": dirty sections/theme/settings are skipped (resolved at save by the 409
+  // guard). Only applies changes — and re-renders / re-posts to the iframe — when something
+  // actually advanced, so an idle poll is a no-op.
+  const reconcileWith = useCallback(
+    (remoteDoc: ContentDoc, remoteVersions: Record<string, number>) => {
+      const result = reconcile({
+        localDoc: docRef.current,
+        localVersions: versionsRef.current,
+        remoteDoc,
+        remoteVersions,
+        dirty: dirty.current,
+      });
+      if (!result.changed) return;
+      setDoc(result.doc);
+      setVersions(result.versions);
+      postDoc(result.doc);
+    },
+    [postDoc],
+  );
+
+  const reconcileFromServer = useCallback(async () => {
+    if (readOnlyRef.current) return;
+    try {
+      const res = await fetch(`/api/landing-pages/${meta.id}`, { cache: "no-store" });
+      if (!res.ok) return;
+      const body = (await res.json()) as { doc: ContentDoc; versions: Record<string, number> };
+      reconcileWith(body.doc, body.versions);
+    } catch {
+      /* transient; the safety poll retries */
+    }
+  }, [meta.id, reconcileWith]);
+
+  // Push path: Ultron writes edits straight to Supabase, then the chat reply fans the
+  // applied edit back to this browser as a CustomEvent (same tab) / BroadcastChannel
+  // (cross tab). On a signal for THIS page we refetch and reconcile — near-instant.
+  useEffect(() => {
+    const onSignal = (value: unknown) => {
+      if (!isLandingEditSignal(value) || value.landingPageId !== meta.id) return;
+      void reconcileFromServer();
+    };
+    const onLocal = (event: Event) => onSignal((event as CustomEvent<unknown>).detail);
+    window.addEventListener(LANDING_EDIT_EVENT, onLocal);
+
+    if (!("BroadcastChannel" in window)) {
+      return () => window.removeEventListener(LANDING_EDIT_EVENT, onLocal);
+    }
+    const channel = new BroadcastChannel(LANDING_EDIT_CHANNEL);
+    channel.onmessage = (event: MessageEvent<unknown>) => onSignal(event.data);
+    return () => {
+      window.removeEventListener(LANDING_EDIT_EVENT, onLocal);
+      channel.close();
+    };
+  }, [meta.id, reconcileFromServer]);
+
+  // Safety poll: once the draft is editable, reconcile every few seconds while the tab is
+  // visible. Catches edits from any source the push path can't reach (headless runner,
+  // cron, another device/tab without the widget). Pauses when hidden; catches up on focus.
+  useEffect(() => {
+    if (meta.draft_status === "generating" || readOnly) return;
+    const tick = () => {
+      if (document.visibilityState !== "visible") return;
+      void reconcileFromServer();
+    };
+    const iv = setInterval(tick, 4000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void reconcileFromServer();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [meta.draft_status, readOnly, reconcileFromServer]);
+
   const schedule = useCallback((key: string, fn: () => void, ms = 600) => {
     const existing = timers.current.get(key);
     if (existing) clearTimeout(existing);
@@ -155,6 +246,9 @@ export function LandingPageEditor({
         setSave({ kind: "saved" });
       } catch {
         setSave({ kind: "error", msg: "Erro de rede ao salvar." });
+      } finally {
+        // Section is no longer in-flight — remote reconciles may touch it again.
+        dirty.current.delete(sectionDirtyKey(type));
       }
     },
     [meta.id, postDoc],
@@ -172,6 +266,8 @@ export function LandingPageEditor({
         setSave(res.ok ? { kind: "saved" } : { kind: "error", msg: "Falha ao salvar o tema." });
       } catch {
         setSave({ kind: "error", msg: "Erro de rede ao salvar o tema." });
+      } finally {
+        dirty.current.delete(THEME_DIRTY_KEY);
       }
     },
     [meta.id],
@@ -202,6 +298,8 @@ export function LandingPageEditor({
         setSave(res.ok ? { kind: "saved" } : { kind: "error", msg: "Falha ao salvar as configurações." });
       } catch {
         setSave({ kind: "error", msg: "Erro de rede ao salvar." });
+      } finally {
+        dirty.current.delete(SETTINGS_DIRTY_KEY);
       }
     },
     [meta.id],
@@ -209,6 +307,7 @@ export function LandingPageEditor({
 
   const onSectionChange = useCallback(
     (type: string, fields: Record<string, unknown>) => {
+      dirty.current.add(sectionDirtyKey(type));
       const next = withSectionFields(docRef.current, type, fields);
       setDoc(next);
       postDoc(next);
@@ -219,6 +318,7 @@ export function LandingPageEditor({
 
   const onThemeChange = useCallback(
     (theme: Theme) => {
+      dirty.current.add(THEME_DIRTY_KEY);
       const next = { ...docRef.current, theme };
       setDoc(next);
       postDoc(next);
@@ -229,6 +329,7 @@ export function LandingPageEditor({
 
   const onSettingsChange = useCallback(
     (settings: Settings) => {
+      dirty.current.add(SETTINGS_DIRTY_KEY);
       const next = { ...docRef.current, settings };
       setDoc(next);
       postDoc(next);
