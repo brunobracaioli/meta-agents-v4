@@ -16,7 +16,11 @@ import { applyScalarEdit } from "@/lib/landing/edit-path";
  * and both require an explicit two-turn confirmation (see prompt.ts).
  */
 
-type ToolHandler = (input: Record<string, unknown>) => Promise<unknown>;
+// Per-call context the chat loop threads into handlers. sessionId identifies the operator's
+// browser tab — needed by start/stop_autonomous_mode so a watch knows which tab to narrate to.
+export type ToolContext = { sessionId: string };
+
+type ToolHandler = (input: Record<string, unknown>, ctx: ToolContext) => Promise<unknown>;
 
 type ToolDef = {
   spec: Anthropic.Tool;
@@ -1098,6 +1102,108 @@ const tools: Record<string, ToolDef> = {
       return data ?? [];
     },
   },
+
+  start_autonomous_mode: {
+    spec: {
+      name: "start_autonomous_mode",
+      description:
+        "Liga o MODO AUTÔNOMO: o Ultron passa a monitorar sozinho uma tarefa longa que JÁ FOI enfileirada (hoje: a CRIAÇÃO de uma landing page) e vai te narrando o progresso por voz, periodicamente, até concluir. Use quando o operador disser algo como 'vou ter que sair, inicia o modo autônomo e monitora a execução'. PRÉ-REQUISITO: já deve existir um pedido de criação de landing page recente para o cliente (via request_landing_page_creation) — este tool NÃO cria nada, só passa a observar. Risco baixo, sem gasto: NÃO precisa de confirmação em dois passos.",
+      input_schema: {
+        type: "object",
+        properties: {
+          client_slug: { type: "string", description: "slug do cliente, ex.: brunobracaioli" },
+        },
+        required: ["client_slug"],
+      },
+    },
+    handler: async (input, ctx) => {
+      const slug = str(input, "client_slug");
+      if (!slug) return { error: "client_slug é obrigatório" };
+      const client = await resolveClientId(slug);
+      if (!client) return { error: `cliente '${slug}' não encontrado` };
+
+      // Find the landing-page creation job to watch: the most recent kind='landing' job for the
+      // client that is still in flight or just completed. We watch the CREATION job; the tick
+      // skill follows through to the publish job + deployed URL on its own.
+      const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const { data: job, error: jobErr } = await db()
+        .from("agent_jobs")
+        .select("id, status, args, created_at")
+        .eq("client_id", client.id)
+        .eq("kind", "landing")
+        .in("status", ["pending", "claimed", "running", "completed"])
+        .gte("created_at", cutoff)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (jobErr) throw jobErr;
+      if (!job) {
+        return {
+          started: false,
+          reason:
+            "não encontrei uma criação de landing page recente para monitorar. Primeiro peça para criar a landing page; depois ative o modo autônomo.",
+        };
+      }
+
+      const argsObj = (job.args && typeof job.args === "object" && !Array.isArray(job.args)
+        ? job.args
+        : {}) as Record<string, unknown>;
+      const nome = str(argsObj, "nome");
+      const { data: watch, error: insErr } = await db()
+        .from("autonomous_watches")
+        .insert({
+          client_id: client.id,
+          target_kind: "landing_page",
+          agent_job_id: job.id,
+          target_hint: nome ?? null,
+          session_id: ctx.sessionId,
+          started_by: "ultron",
+        })
+        .select("id")
+        .single();
+      if (insErr) {
+        if (isUniqueViolation(insErr)) {
+          return { started: false, reason: "já estou monitorando essa tarefa no modo autônomo" };
+        }
+        throw insErr;
+      }
+      await logLandingOp(client.id, job.id, "modo autônomo iniciado");
+      return {
+        started: true,
+        watch_id: watch.id,
+        target_hint: nome,
+        client_slug: slug,
+        message:
+          "Modo autônomo ativado. Vou monitorar a criação da landing page e te narrar o progresso por voz a cada par de minutos; quando ficar pronta, eu te aviso. Pode sair tranquilo.",
+      };
+    },
+  },
+
+  stop_autonomous_mode: {
+    spec: {
+      name: "stop_autonomous_mode",
+      description:
+        "Desliga o MODO AUTÔNOMO desta sessão: para de monitorar e narrar. Use quando o operador disser 'pode sair do modo autônomo', 'para de monitorar', 'cancela o modo autônomo'.",
+      input_schema: { type: "object", properties: {} },
+    },
+    handler: async (_input, ctx) => {
+      const { data, error } = await db()
+        .from("autonomous_watches")
+        .update({ phase: "done", closed_at: new Date().toISOString() })
+        .eq("session_id", ctx.sessionId)
+        .in("phase", ["watching", "reviewing", "notifying"])
+        .select("id");
+      if (error) throw error;
+      const stopped = data?.length ?? 0;
+      return {
+        stopped,
+        message:
+          stopped > 0
+            ? "Saindo do modo autônomo. Parei de monitorar."
+            : "Não havia nada sendo monitorado no momento.",
+      };
+    },
+  },
 };
 
 export const toolSpecs: Anthropic.Tool[] = [
@@ -1105,11 +1211,15 @@ export const toolSpecs: Anthropic.Tool[] = [
   CAPTURE_SCREEN_TOOL,
 ];
 
-export async function runTool(name: string, input: Record<string, unknown>): Promise<unknown> {
+export async function runTool(
+  name: string,
+  input: Record<string, unknown>,
+  ctx: ToolContext = { sessionId: "" },
+): Promise<unknown> {
   const tool = tools[name];
   if (!tool) return { error: `tool desconhecida: ${name}` };
   try {
-    return await tool.handler(input);
+    return await tool.handler(input, ctx);
   } catch (err) {
     console.warn(
       JSON.stringify({

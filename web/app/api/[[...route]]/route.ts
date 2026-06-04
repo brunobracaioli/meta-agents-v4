@@ -14,6 +14,7 @@ import { transcribe } from "@/lib/ultron/stt";
 import { runChat, resumeChat } from "@/lib/ultron/chat";
 import { synthesizeStream } from "@/lib/ultron/tts";
 import { getEvents, getProcesses } from "@/lib/services/events";
+import { getPendingNarrations, markNarrationSpoken } from "@/lib/services/narrations";
 import { landingPages } from "@/lib/api/landing-pages";
 
 export const runtime = "nodejs";
@@ -194,6 +195,37 @@ app.get("/dashboard/events", async (c) => {
   } catch (err) {
     console.error(JSON.stringify({ level: "error", event: "events_failed", message: errMsg(err) }));
     return c.json({ error: "events_failed" }, 502);
+  }
+});
+
+// ---------- Autonomous mode (server→browser narration channel, ADR 0019) ----------
+// The operator's tab polls for narrations its watch produced and speaks them via TTS. Same
+// polling + service-key pattern as /dashboard/events — RLS stays deny-by-default (no Realtime).
+
+const sessionQuerySchema = z.string().min(8).max(64);
+
+app.get("/ultron/narrations", async (c) => {
+  const session = c.req.query("session");
+  const parsed = sessionQuerySchema.safeParse(session);
+  if (!parsed.success) return c.json({ error: "invalid_request" }, 400);
+  try {
+    const narrations = await getPendingNarrations(parsed.data);
+    return c.json({ narrations, now: new Date().toISOString() });
+  } catch (err) {
+    console.error(JSON.stringify({ level: "error", event: "narrations_failed", message: errMsg(err) }));
+    return c.json({ error: "narrations_failed" }, 502);
+  }
+});
+
+app.patch("/ultron/narrations/:id", async (c) => {
+  const id = c.req.param("id");
+  if (!z.string().uuid().safeParse(id).success) return c.json({ error: "invalid_request" }, 400);
+  try {
+    await markNarrationSpoken(id);
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error(JSON.stringify({ level: "error", event: "narration_ack_failed", message: errMsg(err) }));
+    return c.json({ error: "narration_ack_failed" }, 502);
   }
 });
 

@@ -211,7 +211,11 @@ describe("resumeChat — chain capture into a data tool", () => {
 
     const result = await resumeChat(SESSION, paused.pendingId, FAKE_IMAGE);
 
-    expect(runTool).toHaveBeenCalledWith("get_campaign_metrics", { client_slug: "brunobracaioli" });
+    expect(runTool).toHaveBeenCalledWith(
+      "get_campaign_metrics",
+      { client_slug: "brunobracaioli" },
+      { sessionId: SESSION },
+    );
     expect(result.kind).toBe("reply");
     if (result.kind !== "reply") throw new Error("unreachable");
     expect(result.reply).toBe("O CPLPV está alto pro CTR observado.");
@@ -231,7 +235,11 @@ describe("runChat — mixed turn (capture_screen + data tool together)", () => {
 
     const paused = await runChat(SESSION, "o que tem nessa tela do bruno?");
     if (paused.kind !== "need_capture") throw new Error("expected need_capture");
-    expect(runTool).toHaveBeenCalledWith("get_client_overview", { client_slug: "brunobracaioli" });
+    expect(runTool).toHaveBeenCalledWith(
+      "get_client_overview",
+      { client_slug: "brunobracaioli" },
+      { sessionId: SESSION },
+    );
 
     createMock.mockResolvedValueOnce(textTurn("Pronto, cruzei tela e dados."));
     await resumeChat(SESSION, paused.pendingId, FAKE_IMAGE);
