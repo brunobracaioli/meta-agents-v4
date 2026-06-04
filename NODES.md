@@ -12,18 +12,18 @@
 
 ## 0. TL;DR de estado
 
-- **FASE 1 = COMPLETA, testada e MERGEADA na `main` (2026-06-04).**
-- Gates verdes: `tsc --strict` limpo no `web/` inteiro; **38 testes vitest** passando
-  (6 novos em `web/lib/ultron/autonomous-mode.test.ts`); `bash -n` + `py_compile` ok;
-  **smoke test SQL em prod** (claim + cadência + narração + cleanup) ok.
-- **Migration APLICADA em prod** (`20260604000001_add_autonomous_mode`) via Supabase MCP:
-  `autonomous_watches`, `ultron_narrations`, RPC `claim_autonomous_watch`. Tipos regenerados.
-- **Fases 2, 3, 4 = NÃO feitas** (revisão visual / e-mail / genérico). Schema já preparado pra elas.
-- ✅ **DEPLOYADO E AO VIVO (2026-06-04):** push pra `main` (Vercel auto-deploy do web) + `fly deploy`
-  do runner `meta-agents-v4` (versão 20, machine 286501db9e7e78 `started`). Verificado por SSH na
-  máquina: poller, skill, crontab (2 linhas) e o fix do `emit-from-stream.py` presentes. O supercronic
-  já roda `poll-autonomous-watches.sh` a cada minuto. **Falta só o teste e2e real** (criar LP pelo
-  Ultron → "modo autônomo" → ouvir narrações → conclusão fala a URL).
+- **FASES 1 + 2 = COMPLETAS.** Fase 1 mergeada na `main` (2026-06-04). Fase 2 (revisão visual
+  server-side) na branch `feat/ultron-autonomous-mode-phase2` (commit `2bdfe11`).
+- Gates verdes Fase 1: `tsc --strict` limpo no `web/`; **38 testes vitest**; `bash -n` + `py_compile`;
+  smoke test SQL em prod. Fase 2: `node --check` do `.cjs` ok; guardas SSRF/uuid validadas local.
+- **Migrations APLICADAS em prod**: `20260604000001_add_autonomous_mode` (tabelas + RPC) e
+  `20260604000002_add_ultron_review_bucket` (bucket privado `ultron-review`).
+- **Fase 2 entregue**: `scripts/screenshot-page.cjs` (Playwright/Chromium, SSRF guard `*.b2tech.io`),
+  fase `reviewing` na skill (captura 1× → opinião 1/tick com visão, `kind=opinion`+`image_path`),
+  Dockerfile com Playwright, fly.toml memória 1GB→2GB. Transição: `watching → reviewing → done`.
+- **Fases 3, 4 = NÃO feitas** (e-mail/`notifying` + encerramento; genérico). Schema já preparado.
+- **Falta validar**: o `fly deploy` da Fase 2 (Playwright na imagem) + o teste e2e real com voz
+  (criar LP pelo Ultron → "modo autônomo" → ouvir narrações de status → ouvir opiniões da revisão).
 
 ## 1. O que o usuário quer (pedido original)
 
@@ -97,8 +97,12 @@ Retrocompatível (cron sem job mantém run_id = session). **Só vale após redep
 **Runner** (no image Fly — exige redeploy):
 - `scripts/poll-autonomous-watches.sh` — espelha poll-agent-jobs.sh, lock `/tmp/autonomous-watch-poll.lock`.
 - `crontab` — nova linha `* * * * * /app/scripts/poll-autonomous-watches.sh`.
-- `.claude/skills/autonomous-watch-tick/SKILL.md` — a skill do tick (só fase `watching`).
+- `.claude/skills/autonomous-watch-tick/SKILL.md` — a skill do tick (fases `watching` + `reviewing`).
 - `scripts/emit-from-stream.py` — correlação run_id (ver §4).
+- **(Fase 2)** `scripts/screenshot-page.cjs` — screenshotter Playwright (SSRF guard `*.b2tech.io`,
+  upload ao bucket `ultron-review`, JSON manifest). Invocado pela skill no ramo `reviewing`.
+- **(Fase 2)** `Dockerfile` — Playwright + Chromium (root, `--with-deps`, `/ms-playwright` world-
+  readable) + `NODE_PATH`/`PLAYWRIGHT_BROWSERS_PATH`. `fly.toml` — memória 2GB.
 
 **Web** (deploy automático no push):
 - `web/lib/ultron/tools.ts` — tools `start_autonomous_mode`/`stop_autonomous_mode`; `ToolContext`;
@@ -134,13 +138,18 @@ Retrocompatível (cron sem job mantém run_id = session). **Só vale após redep
 - SQL de inspeção: `select phase,last_narrated_milestone,result from autonomous_watches order by created_at desc limit 5;`
   e `select ts,text,kind,spoken_at from ultron_narrations order by ts desc limit 10;`
 
-## 8. Próximos passos (Fases 2–3) — onde plugar
+## 8. Próximos passos — onde plugar
 
-- **Fase 2 (revisão visual)**: `scripts/screenshot-page.mjs` (Playwright no image Fly — aumenta o
-  container) + ramo `reviewing` na skill (print → opinião por seção, kind `opinion`, image_path no
-  bucket privado). Transição: em vez de `watching → done`, vira `watching → reviewing → ...`.
-- **Fase 3 (e-mail)**: `scripts/send-email.mjs` (Resend, `RESEND_API_KEY` a criar no Fly+Vercel) +
-  ramo `notifying` + fala final "saindo do modo autônomo".
+- **Fase 2 (revisão visual) ✅ FEITA.** `scripts/screenshot-page.cjs` (Playwright, captura por
+  scroll, upload ao bucket privado `ultron-review`, manifest JSON, SSRF guard) + ramo `reviewing`
+  na skill (R.1 captura 1× → R.2 opinião 1/tick com `Read` da imagem → R.3 encerra). Transição
+  `watching → reviewing → done`. **`.cjs` (não `.mjs`)** de propósito: `require('playwright')`
+  global resolve via `NODE_PATH` (ESM bare-specifier ignoraria `NODE_PATH`). Memória 2GB.
+- **Fase 3 (e-mail) — PRÓXIMA**: `scripts/send-email.mjs` (Resend, `RESEND_API_KEY` a criar no
+  Fly+Vercel) + ramo `notifying` na skill + fala final "saindo do modo autônomo". Onde plugar:
+  no Passo R.3 da skill, troque `phase='done'` por `phase='notifying'`; adicione um ramo
+  `notifying` (envia email com a `result.url` para `bruno@b2tech.io`, narra a fala final, então
+  `phase='done'`). A skill já trata `notifying` como no-op hoje (sai 0) — basta implementar.
 - **Fase 4**: `target_kind` já genérico no schema → plugar campanha/análise.
 
 ## 9. Ações consequentes — FEITAS nesta rodada
