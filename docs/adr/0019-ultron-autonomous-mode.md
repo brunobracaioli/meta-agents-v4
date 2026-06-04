@@ -87,15 +87,18 @@ e notificar por email.** A narração chega ao browser pelo mesmo padrão de pol
    - **Fase `notifying`**: envia email (item 7), insere narração final ("vou te notificar por
      email… saindo do modo autônomo"), seta `phase=done`, `closed_at`.
 
-6. **Screenshotter server-side (Playwright na Fly)** — `scripts/screenshot-page.mjs <url>
-   <out_dir>`: headless Chromium abre a URL pública (Cloudflare), captura viewport em N passos
-   de scroll, salva JPEGs e sobe ao bucket privado `creatives`/`landing-review`. **Independente
-   da tela do operador** (atende o "vou ter que sair"). Lê só URLs de `landing_pages` do cliente
-   (não-arbitrárias) — mitiga SSRF.
+6. **Screenshotter server-side (Playwright na Fly)** — `scripts/screenshot-page.cjs --url <https>
+   --watch <uuid> [--steps N]` (implementado como `.cjs`, não `.mjs`: `require('playwright')`
+   global resolve via `NODE_PATH`, que o ESM ignora): headless Chromium abre a URL pública
+   (Cloudflare), captura viewport em N passos de scroll, sobe JPEGs ao bucket privado
+   **`ultron-review`** (migration própria) e imprime o manifest JSON. **Independente da tela do
+   operador** (atende o "vou ter que sair"). SSRF guard: só `https://*.b2tech.io`.
 
-7. **Email via Resend** — `scripts/send-email.mjs` (ou endpoint server-side) usando
-   `RESEND_API_KEY`. Destinatário fixo por cliente (config), assunto + corpo com a URL e um
-   resumo. Sem PII além do necessário; secret em env (Fly + Vercel), nunca no código.
+7. **Email via Resend** — `scripts/send-email.cjs --subject <s> --body-file <path>` (também `.cjs`)
+   usando `RESEND_API_KEY`. Destinatário/remetente fixos via env/default
+   (`AUTONOMOUS_NOTIFY_EMAIL`/`AUTONOMOUS_FROM_EMAIL`), **nunca derivados de conteúdo da página**.
+   Sem PII além da URL; secret só no env do **Fly** (a skill envia; Vercel não precisa), nunca no
+   código. Degrada gracioso sem a key.
 
 8. **Cron `scripts/poll-autonomous-watches.sh`** no supercronic (`* * * * *`) — cópia do
    `poll-agent-jobs.sh`: lock single-flight (`mkdir`), claima watches "due" (com backoff por
@@ -124,8 +127,10 @@ e notificar por email.** A narração chega ao browser pelo mesmo padrão de pol
   resolvido server-side (padrão ADR 0009); sem string de skill/SQL do usuário.
 - **I (SSRF)**: o screenshotter recebe **apenas** URL de `landing_pages` do cliente, validada
   contra o domínio Cloudflare esperado — não navega URL arbitrária.
-- **I (email)**: corpo sem PII além da URL pública e do resumo; `RESEND_API_KEY` em secret
-  manager (Fly/Vercel), nunca no diff. Destinatário allow-listed por cliente.
+- **I (email)**: corpo sem PII além da URL pública e do resumo; `RESEND_API_KEY` só no secret
+  manager do **Fly** (a skill envia; Vercel não usa), nunca no diff. Destinatário/remetente fixos
+  via env/default no script — **nunca** derivados de conteúdo da página (sem spoofing/spam por
+  watch envenenado).
 - **D**: cadência com backoff (~2–3 min) e índice único de um watch ativo por target evitam
   loop de narração/screenshot descontrolado; reaper fecha órfãos.
 - **R**: cada narração e transição de fase fica em linha auditável (`ultron_narrations` +

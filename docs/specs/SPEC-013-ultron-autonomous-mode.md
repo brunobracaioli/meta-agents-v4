@@ -2,11 +2,12 @@
 
 | Campo | Valor |
 |---|---|
-| Status | Draft |
+| Status | Implementado — Fases 1+2+3 na `main` e deployadas (2026-06-04). Pendente: validação e2e por voz + `RESEND_API_KEY`. Fase 4 (genérico) futura. |
 | Data | 2026-06-04 |
 | Autor | brunobracaioli |
 | ADR | [docs/adr/0019-ultron-autonomous-mode.md](../adr/0019-ultron-autonomous-mode.md) |
 | Escopo v1 | `target_kind = landing_page` (genérico no schema) |
+| Handoff | `NODES.md` (raiz) — estado vivo, paths, como testar, próximos passos |
 
 ## 1. Objetivo
 
@@ -47,28 +48,40 @@ RETURNING *`. `SECURITY DEFINER`, `search_path=''`, EXECUTE revogado de public/a
 
 ### 3.2 Endpoints (web, server-side, service key)
 
-- `POST /api/ultron/autonomous/start` — body `{ target_kind, target_id, session_id }`. Resolve
-  `client_id`/`agent_job_id`/`run_id` server-side, insere watch. Idem-potente por índice único.
-- `POST /api/ultron/autonomous/stop` — encerra watch(es) ativos da sessão (`phase=done`).
-- `GET  /api/ultron/narrations?session=<id>&since=<iso>` — retorna narrações novas
-  (polling ~2s). 200 `{ narrations: [{id,text,kind,image_url?,ts}] }`.
-- `PATCH /api/ultron/narrations/:id` — marca `spoken_at` após o browser falar.
+> **Implementado (desvio do design):** `start`/`stop` NÃO viraram endpoints dedicados. As tools
+> `start_autonomous_mode`/`stop_autonomous_mode` (`web/lib/ultron/tools.ts`) inserem/encerram o
+> watch **direto via `db()`** (service key), resolvendo `client_id`/`agent_job_id` server-side a
+> partir do job `kind='landing'` recente + `ctx.sessionId`. Só as narrações têm endpoints HTTP.
+> O browser faz polling a ~5s (não 2s) e a narração é falada quando o status ∈ {idle, armed}.
 
-(As tools `start/stop_autonomous_mode` em `lib/ultron/tools.ts` chamam os dois primeiros.)
+- `start_autonomous_mode` (tool) — resolve o job de criação recente + `session_id` da aba, insere
+  o watch. Idempotente pelo índice único `one_active_per_job` (trata 23505).
+- `stop_autonomous_mode` (tool) — encerra watch(es) ativos da sessão (`phase=done`).
+- `GET  /api/ultron/narrations?session=<id>` — narrações não faladas (≤1h, limit 10).
+  200 `{ narrations: [{id,text,kind,image_path?,ts}] }`.
+- `PATCH /api/ultron/narrations/:id` — marca `spoken_at` após o browser falar.
 
 ### 3.3 Skill `autonomous-watch-tick` (headless)
 
-Input: `watch_id=<uuid>`. Lê o watch; ramifica por `phase`. Saídas: linhas em
-`ultron_narrations`, transições de `phase`, `result` (URL), email na fase final. Idempotente:
-reprocessar um tick não duplica narração (cursor `last_event_ts` + `last_narrated_milestone`).
+Input: `watch_id=<uuid>`. Lê o watch; ramifica por `phase` (`watching`→Passos 2–5, `reviewing`→
+Passo R, `notifying`→Passo N; `done`/`failed`→no-op). Saídas: linhas em `ultron_narrations`,
+transições de `phase`, `result` (URL + `review` + `notify_attempted`), email no Passo N.
+Idempotente: reprocessar um tick não duplica narração nem reenvia email (cursores `last_event_ts`,
+`last_narrated_milestone`, `result.review.next`, `result.notify_attempted`).
 
-### 3.4 Scripts
+### 3.4 Scripts (implementados)
 
-- `scripts/poll-autonomous-watches.sh` — cron `* * * * *`, claim + `run-skill.sh
-  autonomous-watch-tick watch_id=<id>`.
-- `scripts/screenshot-page.mjs <url> <out_dir>` — Playwright; N prints por scroll; sobe ao
-  bucket; imprime JSON `{ shots: [{ path, scroll_pct }] }`.
-- `scripts/send-email.mjs --to <addr> --subject <s> --html <h>` — Resend.
+> **Nota:** `.cjs` (CommonJS), não `.mjs` — `require('playwright')`/módulos globais resolvem via
+> `NODE_PATH`, que o ESM bare-specifier ignora. Ambos lêem credenciais do env do runner.
+
+- `scripts/poll-autonomous-watches.sh` — cron `* * * * *`, claim (`claim_autonomous_watch`) +
+  `AGENT_JOB_ID=<watch> run-skill.sh autonomous-watch-tick watch_id=<id>` (lock próprio).
+- `scripts/screenshot-page.cjs --url <https> --watch <uuid> [--steps N]` — Playwright/Chromium;
+  N prints por scroll; sobe ao bucket privado `ultron-review`; imprime
+  `{ ok, shots: [{ storage_path, scroll_pct }], count }`. SSRF guard: só `https://*.b2tech.io`.
+- `scripts/send-email.cjs --subject <s> --body-file <path> [--to] [--from]` — Resend. `RESEND_API_KEY`
+  do env; destinatário/remetente default via env (`AUTONOMOUS_NOTIFY_EMAIL`/`AUTONOMOUS_FROM_EMAIL`),
+  **nunca** de conteúdo da página. Imprime `{ ok, id }`. Degrada (`missing_resend_key`) sem a key.
 
 ## 4. Edge cases
 
