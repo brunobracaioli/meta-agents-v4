@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | Accepted (Fases 1+2 implementadas; Fase 3 pendente) |
+| Status | Accepted (Fases 1+2+3 implementadas; Fase 4 futura) |
 | Data | 2026-06-04 |
 | Decidido por | brunobracaioli |
 | Spec | [docs/specs/SPEC-013-ultron-autonomous-mode.md](../specs/SPEC-013-ultron-autonomous-mode.md) |
