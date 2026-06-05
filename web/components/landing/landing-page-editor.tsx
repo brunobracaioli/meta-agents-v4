@@ -42,6 +42,7 @@ const SECTION_LABELS: Record<string, string> = {
 
 const TAB_THEME = "__theme";
 const TAB_SETTINGS = "__settings";
+const TAB_TRACKING = "__tracking";
 
 function withSectionFields(doc: ContentDoc, type: string, fields: Record<string, unknown>): ContentDoc {
   return {
@@ -338,6 +339,46 @@ export function LandingPageEditor({
     [postDoc, schedule, saveSettings],
   );
 
+  // Tracking lives inside settings.tracking, but only the PUBLIC ID arrays are editable
+  // here — consent_key and the legacy single fields are preserved server-side by the
+  // shallow merge. Server-side CAPI secrets never pass through this path (Phase 2).
+  const saveTracking = useCallback(
+    async (tracking: Settings["tracking"]) => {
+      const patch = {
+        tracking: {
+          meta_pixels: tracking.meta_pixels ?? [],
+          ga4_ids: tracking.ga4_ids ?? [],
+          google_ads_ids: tracking.google_ads_ids ?? [],
+        },
+      };
+      setSave({ kind: "saving" });
+      try {
+        const res = await fetch(`/api/landing-pages/${meta.id}/settings`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        setSave(res.ok ? { kind: "saved" } : { kind: "error", msg: "Falha ao salvar o tracking." });
+      } catch {
+        setSave({ kind: "error", msg: "Erro de rede ao salvar." });
+      } finally {
+        dirty.current.delete(SETTINGS_DIRTY_KEY);
+      }
+    },
+    [meta.id],
+  );
+
+  const onTrackingChange = useCallback(
+    (tracking: Settings["tracking"]) => {
+      dirty.current.add(SETTINGS_DIRTY_KEY);
+      const next = { ...docRef.current, settings: { ...docRef.current.settings, tracking } };
+      setDoc(next);
+      postDoc(next);
+      schedule("tracking", () => saveTracking(tracking));
+    },
+    [postDoc, schedule, saveTracking],
+  );
+
   const publish = useCallback(async () => {
     setPublishing(true);
     try {
@@ -441,6 +482,15 @@ export function LandingPageEditor({
             >
               Config
             </button>
+            <button
+              type="button"
+              onClick={() => setActive(TAB_TRACKING)}
+              className={`rounded px-2 py-1 text-xs transition ${
+                active === TAB_TRACKING ? "bg-orange-300/15 text-orange-100" : "text-white/55 hover:bg-white/[0.04] hover:text-white"
+              }`}
+            >
+              Tracking
+            </button>
           </div>
 
           {/* Active panel */}
@@ -449,6 +499,8 @@ export function LandingPageEditor({
               <ThemeEditor theme={doc.theme} onChange={onThemeChange} />
             ) : active === TAB_SETTINGS ? (
               <SettingsEditor settings={doc.settings} landingPageId={meta.id} onChange={onSettingsChange} />
+            ) : active === TAB_TRACKING ? (
+              <TrackingEditor tracking={doc.settings.tracking} onChange={onTrackingChange} />
             ) : activeSection ? (
               <FieldEditor
                 value={activeSection.fields}
@@ -736,6 +788,144 @@ function SettingsEditor({
           value={settings.cartClosed.waitlistCtaLabel}
           onChange={(e) => set({ cartClosed: { ...settings.cartClosed, waitlistCtaLabel: e.target.value } })}
         />
+      </div>
+    </div>
+  );
+}
+
+// ---------- Tracking editor ----------
+// Manages the PUBLIC tracking IDs only (Meta pixels, GA4, Google Ads). These get baked into
+// the public static site, so they're never secret. The server-side CAPI tokens / API secrets
+// are a separate, write-only store (Phase 2) — never entered through this object. SPEC-015.
+type Tracking = Settings["tracking"];
+
+// Light client-side format hints (mirror the strict server schema in lib/landing/validate.ts).
+const ID_PATTERNS: Record<"meta_pixels" | "ga4_ids" | "google_ads_ids", RegExp> = {
+  meta_pixels: /^\d{15,16}$/,
+  ga4_ids: /^G-[A-Z0-9]{6,12}$/,
+  google_ads_ids: /^AW-[0-9]{9,12}(\/[A-Za-z0-9_-]{1,40})?$/,
+};
+const MAX_TRACKING_IDS = 10;
+
+function IdListField({
+  label,
+  hint,
+  placeholder,
+  pattern,
+  values,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  placeholder: string;
+  pattern: RegExp;
+  values: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const setAt = (i: number, v: string) => onChange(values.map((x, j) => (j === i ? v : x)));
+  const removeAt = (i: number) => onChange(values.filter((_, j) => j !== i));
+  const add = () => {
+    if (values.length >= MAX_TRACKING_IDS) return;
+    onChange([...values, ""]);
+  };
+  return (
+    <div className="space-y-2">
+      <span className={PANEL_LABEL}>{label}</span>
+      {values.length === 0 && <p className="text-[11px] text-white/35">Nenhum configurado.</p>}
+      {values.map((value, i) => {
+        const invalid = value.trim() !== "" && !pattern.test(value.trim());
+        return (
+          <div key={i} className="flex items-center gap-2">
+            <input
+              className={`${PANEL_INPUT} ${invalid ? "border-amber-300/50" : ""}`}
+              placeholder={placeholder}
+              value={value}
+              onChange={(e) => setAt(i, e.target.value)}
+              aria-invalid={invalid}
+            />
+            <button
+              type="button"
+              onClick={() => removeAt(i)}
+              className="shrink-0 rounded border border-white/10 px-2 py-1.5 text-xs text-white/50 transition hover:border-amber-300/40 hover:text-amber-100"
+              aria-label={`Remover ${label}`}
+            >
+              ✕
+            </button>
+          </div>
+        );
+      })}
+      <button
+        type="button"
+        onClick={add}
+        disabled={values.length >= MAX_TRACKING_IDS}
+        className="rounded border border-white/10 px-2 py-1 text-xs text-white/60 transition hover:border-cyan-200/40 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        + Adicionar
+      </button>
+      <p className="text-[10px] text-white/30">{hint}</p>
+    </div>
+  );
+}
+
+function TrackingEditor({ tracking, onChange }: { tracking: Tracking; onChange: (t: Tracking) => void }) {
+  // Read with back-compat: if the multi arrays are empty, surface the legacy single field so
+  // the operator sees the pixel the page was generated with and can grow the list from there.
+  const metaPixels = tracking.meta_pixels?.length
+    ? tracking.meta_pixels
+    : tracking.fb_pixel_id
+      ? [tracking.fb_pixel_id]
+      : [];
+  const ga4Ids = tracking.ga4_ids?.length ? tracking.ga4_ids : tracking.ga4_id ? [tracking.ga4_id] : [];
+  const googleAdsIds = tracking.google_ads_ids ?? [];
+
+  const setList = (key: "meta_pixels" | "ga4_ids" | "google_ads_ids", next: string[]) =>
+    onChange({ ...tracking, [key]: next });
+
+  return (
+    <div className="space-y-5">
+      <p className="text-[11px] leading-relaxed text-white/40">
+        IDs públicos disparados na página (após o consentimento LGPD). O checkout em si é
+        traqueado pela plataforma (Hubla/Hotmart). Você pode ter mais de um de cada.
+      </p>
+
+      <IdListField
+        label="Meta Pixel"
+        placeholder="653995666521954"
+        hint="ID numérico do Pixel (15–16 dígitos)."
+        pattern={ID_PATTERNS.meta_pixels}
+        values={metaPixels}
+        onChange={(next) => setList("meta_pixels", next)}
+      />
+
+      <IdListField
+        label="Google Analytics 4"
+        placeholder="G-XXXXXXXXXX"
+        hint="Measurement ID do GA4 (começa com G-)."
+        pattern={ID_PATTERNS.ga4_ids}
+        values={ga4Ids}
+        onChange={(next) => setList("ga4_ids", next)}
+      />
+
+      <IdListField
+        label="Google Ads"
+        placeholder="AW-123456789"
+        hint="ID de conversão do Google Ads (AW-…), com label opcional após a barra."
+        pattern={ID_PATTERNS.google_ads_ids}
+        values={googleAdsIds}
+        onChange={(next) => setList("google_ads_ids", next)}
+      />
+
+      <div className="space-y-2 rounded-lg border border-white/8 bg-white/[0.015] p-3 opacity-60">
+        <div className="flex items-center justify-between">
+          <span className={PANEL_LABEL}>Conversões server-side (Meta CAPI)</span>
+          <span className="rounded border border-white/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white/40">
+            em breve
+          </span>
+        </div>
+        <p className="text-[10px] leading-relaxed text-white/35">
+          Envio server-side via Cloudflare (CAPI + deduplicação por event_id) para EMQ alto.
+          Os tokens são segredos e ficam num cofre isolado — nunca na página. Chega na Fase 2.
+        </p>
       </div>
     </div>
   );
