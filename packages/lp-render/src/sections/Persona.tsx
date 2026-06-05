@@ -17,7 +17,7 @@ export function Persona({ tone }: { tone: Tone }) {
           {data.subhead ? <p>{data.subhead}</p> : null}
         </div>
         <div className="grid">
-          {data.items.map((item, i) => (
+          {(data.items ?? []).map((item, i) => (
             <div className="card persona-card" key={i}>
               {item.icon ? <div className="persona-icon">{item.icon}</div> : null}
               <h3>{item.title}</h3>

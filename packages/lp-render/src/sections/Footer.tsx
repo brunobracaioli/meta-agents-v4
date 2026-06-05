@@ -7,7 +7,7 @@ export function Footer() {
   return (
     <footer>
       <div className="container">
-        {messages.footer.links.map((l, i) => (
+        {(messages.footer.links ?? []).map((l, i) => (
           <a key={i} href={l.href}>
             {l.label}
           </a>

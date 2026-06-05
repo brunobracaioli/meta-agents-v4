@@ -13,7 +13,7 @@ export function Faq({ tone }: { tone: Tone }) {
         <div className="section-head">
           <h2>Perguntas frequentes</h2>
         </div>
-        {messages.faq.map((item, i) => (
+        {(messages.faq ?? []).map((item, i) => (
           <div className="faq-item" key={i}>
             <h3>{item.q}</h3>
             <p style={{ margin: 0 }}>{item.a}</p>

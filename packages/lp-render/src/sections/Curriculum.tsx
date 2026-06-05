@@ -16,7 +16,7 @@ export function Curriculum({ tone }: { tone: Tone }) {
           {data.subhead ? <p>{data.subhead}</p> : null}
         </div>
         <div className="grid">
-          {data.modules.map((m, i) => (
+          {(data.modules ?? []).map((m, i) => (
             <div className="card" key={i}>
               <span className="eyebrow">Módulo {i + 1}</span>
               <h3>{m.title}</h3>

@@ -17,7 +17,7 @@ export function Stats() {
           </div>
         ) : null}
         <div className="stats">
-          {data.items.map((item, i) => (
+          {(data.items ?? []).map((item, i) => (
             <div key={i}>
               <div className="stat-value">{item.value}</div>
               <div className="stat-label">{item.label}</div>

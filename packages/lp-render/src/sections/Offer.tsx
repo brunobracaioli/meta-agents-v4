@@ -30,7 +30,7 @@ export function Offer() {
           <h2>{data.heading}</h2>
           {data.bonuses && data.bonuses.length > 0 ? (
             <ul className="bullets" style={{ textAlign: "left", display: "inline-block" }}>
-              {data.bonuses.map((b, i) => (
+              {(data.bonuses ?? []).map((b, i) => (
                 <li key={i}>{b}</li>
               ))}
             </ul>
@@ -44,7 +44,7 @@ export function Offer() {
           {data.guarantee ? <p className="guarantee-line">{data.guarantee}</p> : null}
           {data.payments && data.payments.length > 0 ? (
             <div className="payments">
-              {data.payments.map((p, i) => (
+              {(data.payments ?? []).map((p, i) => (
                 <span className="pay-pill" key={i}>
                   {p}
                 </span>

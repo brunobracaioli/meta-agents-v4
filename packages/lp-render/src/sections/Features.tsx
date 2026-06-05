@@ -20,7 +20,7 @@ export function Features({ tone }: { tone: Tone }) {
           <img className="section-image" src={data.image} alt="" />
         ) : null}
         <div className="grid">
-          {data.items.map((item, i) => (
+          {(data.items ?? []).map((item, i) => (
             <div className="card" key={i}>
               {item.icon ? <div className="card-icon">{item.icon}</div> : null}
               <h3>{item.title}</h3>
