@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | Accepted (Fase 1) / Proposed (Fase 2) |
+| Status | Accepted (Fase 1 + Fase 2); Fase 2 em construção (2026-06-05) |
 | Data | 2026-06-05 |
 | Decidido por | brunobracaioli |
 | Spec | [SPEC-015](../specs/SPEC-015-landing-page-tracking.md) |
@@ -64,7 +64,13 @@ browser-visível. Logo:
 - **Geração**: a skill semeia os arrays dos defaults do cliente em `lista-de-clientes`
   (`META_PIXELS/GA4_IDS/GOOGLE_ADS_IDS`); o operador refina por LP no editor.
 
-### Fase 2 — tagging-server no Cloudflare (desenho aprovado; build posterior)
+### Fase 2 — tagging-server no Cloudflare (em construção desde 2026-06-05)
+
+> Threat model STRIDE da superfície nova:
+> [docs/security/threats/landing-page-tracking.md](../security/threats/landing-page-tracking.md).
+> Contrato concreto: o Worker vive em `worker/track/`; o browser envia ao endpoint o
+> `tracking.server = { endpoint, lp_id }` (campos PÚBLICOS no content-spec) junto do evento.
+
 
 - **Topologia:** um Worker multi-tenant em `track.b2tech.io` (adaptado de `track_feature/`).
   Como toda LP é `*.b2tech.io`, `track.b2tech.io` é **same-site** (mesmo eTLD+1) → cookies

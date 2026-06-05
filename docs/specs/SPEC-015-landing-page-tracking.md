@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | Fase 1 **implementada** (2026-06-05); Fase 2 desenhada (pendente) |
+| Status | Fase 1 **implementada**; Fase 2 **em construção** (2026-06-05) |
 | Data | 2026-06-05 |
 | Autor | brunobracaioli (via Claude Code) |
 | ADR | [0021](../adr/0021-server-side-tracking-cloudflare.md) |
@@ -96,14 +96,73 @@ array (remover ID encolhe a lista).
    ao rolar, `AddToCart`/`InitiateCheckout` no clique do botão de checkout — verificado no
    Meta Pixel Helper / GA4 DebugView, em **todos** os pixels.
 
-## 7. Fase 2 (resumo — detalhe no ADR 0021)
+## 7. Fase 2 — tagging server no Cloudflare (contrato)
 
 Worker multi-tenant `track.b2tech.io` (same-site, cookies first-party `.b2tech.io`) →
-Meta CAPI + GA4 MP + Google Ads ClickConversion com dedup por `event_id`; eventos no D1 +
-espelho `lp_events` no Supabase para o dashboard; segredos em `lp_tracking_secrets` (RLS
-service-role) preenchidos por API write-only no editor. **STRIDE** da superfície pública
-(endpoint de coleta, segredos, PII hasheada) entra no threat model próprio
-(`docs/security/threats/landing-page-tracking.md`) junto com a implementação da Fase 2.
+Meta CAPI + GA4 MP + Google Ads com dedup por `event_id`; eventos no D1 + espelho `lp_events`
+no Supabase para o dashboard; segredos em `lp_tracking_secrets` (RLS service-role) preenchidos
+por API write-only no editor. **STRIDE** da superfície pública:
+[`docs/security/threats/landing-page-tracking.md`](../security/threats/landing-page-tracking.md).
+
+### 7.1 Contrato público (content-spec)
+
+`tracking.server?: { endpoint: string; lp_id: string }` — ambos PÚBLICOS. `endpoint` é a base
+do Worker (`https://track.b2tech.io`); `lp_id` é o UUID da LP. Ausente ⇒ Fase 1 pura (sem POST
+server-side). Semeado no publish a partir da row da LP.
+
+### 7.2 Payload `POST {endpoint}/e` (browser → Worker, `keepalive`, `credentials:include`)
+
+```jsonc
+{
+  "lp_id": "<uuid>",            // resolve o tenant; valida ^[0-9a-f-]{36}$
+  "event_name": "InitiateCheckout",  // allowlist (ver §4)
+  "event_id": "<uuid>",        // MESMO id do Pixel → dedup Pixel↔CAPI
+  "event_source_url": "https://...",
+  "value": 197, "currency": "BRL",
+  "fbp": "...", "fbc": "...", "fbclid": "...", "gclid": "...",
+  "ga_client_id": "...", "utms": { "utm_source": "..." }
+}
+```
+
+Resposta: `{ ok: true, event_id }` (e `Set-Cookie _fbp/_fbc`). **Nunca** devolve segredo nem
+dado de outro tenant. A Fase 1 **não** envia PII (e-mail/telefone) — só os sinais acima; PII
+hasheada server-side é um caminho futuro de formulários on-LP.
+
+### 7.3 Resolução de tenant no Worker
+
+Por `lp_id`, o Worker faz SELECT em `lp_tracking_secrets` (cache curto + negative cache) e
+faz fan-out `Promise.all`: Meta CAPI por pixel (mesmo `event_id`), GA4 MP por measurement id,
+Google Ads quando houver `gclid` + bundle. Grava saúde no D1 e espelha resumo (sem PII) em
+`lp_events`. Service key do Supabase é **secret do Worker** (`wrangler secret put`).
+
+### 7.4 Depósitos de dados (Supabase)
+
+- `lp_tracking_secrets` (RLS deny-by-default; grants revogados): `landing_page_id`, `provider`
+  (`meta|ga4|google_ads`), `public_id`, `secret jsonb`, `test_event_code`. Serializer **nunca** lê.
+- `lp_events` (RLS deny-by-default): espelho sem PII crua — `event_id` único, `landing_page_id`,
+  `event_name`, `event_time`, UTMs, `country`, `value/currency`, status por destino, flags
+  `has_email/has_phone`. Lido pelo dashboard via service_role.
+
+### 7.5 APIs do editor (atrás do gate de sessão)
+
+- `PUT /api/landing-pages/:id/tracking-secrets` — **write-only**: grava/atualiza segredos;
+  responde só `{ ok }`. `GET …/tracking-secrets/status` → `{ configured }` por provider/id
+  (no máximo 4 dígitos mascarados). Nunca devolve o token.
+- `GET /api/landing-pages/:id/tracking-health` — lê `lp_events`: volume, EMQ-proxy
+  (`has_email/has_phone`), status CAPI/GA4/Ads, cobertura UTM.
+
+### 7.6 Critérios de aceite (Fase 2)
+
+1. `lp_tracking_secrets`/`lp_events` criadas com RLS deny-by-default + grants revogados; o
+   serializer não as toca; o schema valida `provider` por CHECK.
+2. Worker: `POST /e` com 2 pixels resolve os 2 tokens e dispara 2 CAPIs com o **mesmo**
+   `event_id` do browser (Meta deduplica em Test Events). Body inválido → 400 sem efeito.
+3. `PUT …/tracking-secrets` grava em `lp_tracking_secrets`; o GET de status **nunca** devolve o
+   valor; `operation_logs` registra a operação sem o segredo.
+4. Template: com `tracking.server` presente e consent dado, cada evento faz **um** POST
+   `keepalive` ao Worker carregando o `event_id` que também foi para o Pixel.
+5. Dashboard: painel de saúde lê `lp_events` e mostra volume + status por destino.
+6. **Nenhum segredo** aparece em content-spec, repo, manifesto, log ou resposta de API.
 
 > **STRIDE — Fase 1 (superfície atual).** A única entrada nova é o conjunto de IDs editáveis.
 > *Tampering/Information disclosure*: mitigados pelo schema `.strict()` + regex (sem `<`/`"`),
