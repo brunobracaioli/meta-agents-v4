@@ -2,17 +2,18 @@ name = "lp-tracking"
 main = "src/index.ts"
 compatibility_date = "2026-05-01"
 
-# Tagging server multi-tenant amarrado a track.b2tech.io. O domínio precisa estar proxied no
-# Cloudflare (nuvem laranja) e SSL/TLS em Full. Same-site de todas as LPs (*.b2tech.io).
+# Tagging server multi-tenant em track.b2tech.io. `custom_domain = true` faz o wrangler
+# provisionar o hostname + DNS automaticamente (proxied/SSL) no deploy — sem passo manual de
+# DNS. Same-site de todas as LPs (*.b2tech.io). Exige escopo Workers Routes + DNS no token.
 [[routes]]
-pattern = "track.b2tech.io/*"
-zone_name = "b2tech.io"
+pattern = "track.b2tech.io"
+custom_domain = true
 
 # D1 (banco de eventos na borda)
 [[d1_databases]]
 binding = "DB"
 database_name = "lp-tracking"
-database_id = "PREENCHER_APOS_d1_create"
+database_id = "1f581e43-ca5d-4c57-8cee-6a6c5324d87e"
 
 # Variáveis NÃO-secretas
 [vars]
