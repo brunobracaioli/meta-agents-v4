@@ -500,7 +500,7 @@ export function LandingPageEditor({
             ) : active === TAB_SETTINGS ? (
               <SettingsEditor settings={doc.settings} landingPageId={meta.id} onChange={onSettingsChange} />
             ) : active === TAB_TRACKING ? (
-              <TrackingEditor tracking={doc.settings.tracking} onChange={onTrackingChange} />
+              <TrackingEditor tracking={doc.settings.tracking} onChange={onTrackingChange} lpId={meta.id} />
             ) : activeSection ? (
               <FieldEditor
                 value={activeSection.fields}
@@ -867,7 +867,15 @@ function IdListField({
   );
 }
 
-function TrackingEditor({ tracking, onChange }: { tracking: Tracking; onChange: (t: Tracking) => void }) {
+function TrackingEditor({
+  tracking,
+  onChange,
+  lpId,
+}: {
+  tracking: Tracking;
+  onChange: (t: Tracking) => void;
+  lpId: string;
+}) {
   // Read with back-compat: if the multi arrays are empty, surface the legacy single field so
   // the operator sees the pixel the page was generated with and can grow the list from there.
   const metaPixels = tracking.meta_pixels?.length
@@ -915,18 +923,153 @@ function TrackingEditor({ tracking, onChange }: { tracking: Tracking; onChange: 
         onChange={(next) => setList("google_ads_ids", next)}
       />
 
-      <div className="space-y-2 rounded-lg border border-white/8 bg-white/[0.015] p-3 opacity-60">
-        <div className="flex items-center justify-between">
-          <span className={PANEL_LABEL}>Conversões server-side (Meta CAPI)</span>
-          <span className="rounded border border-white/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white/40">
-            em breve
-          </span>
+      <CapiSecretsEditor lpId={lpId} metaPixels={metaPixels} />
+    </div>
+  );
+}
+
+// Write-only editor for the server-side conversion SECRETS (Meta CAPI). Tokens are sent to the
+// isolated, RLS-locked store via PUT and are NEVER read back — the status endpoint only tells us
+// which pixels already have a token. Saving activates server-side on the next publish.
+// See ADR 0021 / SPEC-015 §7.5.
+function CapiSecretsEditor({ lpId, metaPixels }: { lpId: string; metaPixels: string[] }) {
+  const [configured, setConfigured] = useState<Set<string>>(new Set());
+  const [tokens, setTokens] = useState<Record<string, string>>({});
+  const [codes, setCodes] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string>("");
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/landing-pages/${lpId}/tracking-secrets/status`);
+      if (!r.ok) return;
+      const d = (await r.json()) as { secrets?: { provider: string; public_id: string }[] };
+      setConfigured(new Set((d.secrets ?? []).filter((s) => s.provider === "meta").map((s) => s.public_id)));
+    } catch {
+      /* status is best-effort */
+    }
+  }, [lpId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const save = async (pixel: string) => {
+    const token = (tokens[pixel] ?? "").trim();
+    if (token.length < 10) {
+      setMsg("Token CAPI muito curto.");
+      return;
+    }
+    setBusy(pixel);
+    setMsg("");
+    try {
+      const entry: Record<string, unknown> = { provider: "meta", public_id: pixel, secret: { capi_token: token } };
+      const code = (codes[pixel] ?? "").trim();
+      if (code) entry.test_event_code = code;
+      const r = await fetch(`/api/landing-pages/${lpId}/tracking-secrets`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ entries: [entry] }),
+      });
+      if (r.ok) {
+        setTokens((t) => ({ ...t, [pixel]: "" }));
+        setMsg("Token salvo. Republique a página para ativar o server-side.");
+        await load();
+      } else {
+        const d = (await r.json().catch(() => ({}))) as { detail?: string };
+        setMsg(d.detail ?? "Falha ao salvar o token.");
+      }
+    } catch {
+      setMsg("Erro de rede ao salvar.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const remove = async (pixel: string) => {
+    setBusy(pixel);
+    setMsg("");
+    try {
+      const r = await fetch(`/api/landing-pages/${lpId}/tracking-secrets`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider: "meta", public_id: pixel }),
+      });
+      setMsg(r.ok ? "Token removido." : "Falha ao remover.");
+      await load();
+    } catch {
+      setMsg("Erro de rede ao remover.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const pixels = metaPixels.filter((p) => p.trim() !== "");
+
+  return (
+    <div className="space-y-3 rounded-lg border border-white/8 bg-white/[0.015] p-3">
+      <span className={PANEL_LABEL}>Conversões server-side (Meta CAPI)</span>
+      <p className="text-[10px] leading-relaxed text-white/35">
+        Envio server-side via Cloudflare (CAPI + dedup por event_id) para EMQ alto. O token é um
+        segredo: vai para um cofre isolado e <strong>nunca</strong> aparece na página nem é
+        devolvido. Salvar ativa no <strong>próximo publish</strong>.
+      </p>
+
+      {pixels.length === 0 && (
+        <p className="text-[11px] text-white/35">Adicione um Meta Pixel acima para configurar o CAPI.</p>
+      )}
+
+      {pixels.map((pixel) => (
+        <div key={pixel} className="space-y-2 rounded border border-white/8 p-2.5">
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-[11px] text-white/70">{pixel}</span>
+            {configured.has(pixel) ? (
+              <span className="rounded border border-emerald-300/30 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-emerald-200/80">
+                configurado
+              </span>
+            ) : (
+              <span className="rounded border border-white/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white/40">
+                sem token
+              </span>
+            )}
+          </div>
+          <input
+            type="password"
+            autoComplete="off"
+            className={PANEL_INPUT}
+            placeholder={configured.has(pixel) ? "Substituir token CAPI…" : "Colar o token CAPI…"}
+            value={tokens[pixel] ?? ""}
+            onChange={(e) => setTokens((t) => ({ ...t, [pixel]: e.target.value }))}
+          />
+          <input
+            className={PANEL_INPUT}
+            placeholder="test_event_code (opcional, só homologação)"
+            value={codes[pixel] ?? ""}
+            onChange={(e) => setCodes((c) => ({ ...c, [pixel]: e.target.value }))}
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => save(pixel)}
+              disabled={busy === pixel}
+              className="rounded border border-white/10 px-2 py-1 text-xs text-white/70 transition hover:border-emerald-200/40 hover:text-emerald-100 disabled:opacity-40"
+            >
+              {busy === pixel ? "Salvando…" : "Salvar token"}
+            </button>
+            {configured.has(pixel) && (
+              <button
+                type="button"
+                onClick={() => remove(pixel)}
+                disabled={busy === pixel}
+                className="rounded border border-white/10 px-2 py-1 text-xs text-white/50 transition hover:border-amber-300/40 hover:text-amber-100 disabled:opacity-40"
+              >
+                Remover
+              </button>
+            )}
+          </div>
         </div>
-        <p className="text-[10px] leading-relaxed text-white/35">
-          Envio server-side via Cloudflare (CAPI + deduplicação por event_id) para EMQ alto.
-          Os tokens são segredos e ficam num cofre isolado — nunca na página. Chega na Fase 2.
-        </p>
-      </div>
+      ))}
+
+      {msg && <p className="text-[10px] text-white/45">{msg}</p>}
     </div>
   );
 }
