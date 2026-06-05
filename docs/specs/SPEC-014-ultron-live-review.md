@@ -2,8 +2,8 @@
 
 | Campo | Valor |
 |---|---|
-| Status | Surface A **implementada** (2026-06-04); Surface B pendente |
-| Data | 2026-06-04 |
+| Status | Surface A **concluída + validada e2e** (2026-06-05); Surface B pendente |
+| Data | 2026-06-04 (validada e2e 2026-06-05) |
 | Autor | brunobracaioli (via Claude Code) |
 | ADR | [0020](../adr/0020-ultron-live-review-client-side.md) |
 | Relacionado | [SPEC-013](SPEC-013-ultron-autonomous-mode.md) (revisão headless, operador AUSENTE), [ADR 0010](../adr/0010-ultron-screen-vision.md) (Ultron vê a tela), [ADR 0017](../adr/0017-shared-lp-render-package.md) (lp-render) |
@@ -52,8 +52,13 @@ configurável). Caso contrário, inerte (não escuta nada). Protocolo (JSON tipa
 | `{type:"review:scrollTo", y}` | (smooth-scroll; ao assentar) `{type:"review:scrolled", y, atBottom}` |
 | `{type:"review:ping"}` | `{type:"review:pong"}` |
 
-- `steps` = posições de scroll por seção (deriva de `contentSpec.sections` + offsets dos elementos;
-  o painel 3D conta como passos extras dado seu `220vh`). `label` = tipo da seção (pra narração).
+- `steps` = paginação do scroll por ~**um viewport** (com ~18% de sobreposição), espaçados
+  uniformemente até o rodapé real; cada passo é rotulado com a seção sob o centro do viewport. O
+  painel 3D conta como dois beats extras (abertura + revelação do logo) dado seu `220vh`. **Por que
+  não um passo por topo de seção** (modelo original): bandas curtas (urgency/stats) ficam a menos de
+  um viewport de distância → o scroll mal andava, a IA recapturava a mesma tela e narrava 2–3× a
+  mesma cena, e uma página longa não chegava ao rodapé dentro do cap. A paginação dá cobertura
+  uniforme, sem frames duplicados (fix 2026-06-05, `a7c6db2`).
 - **Segurança**: checa `event.origin` contra a allowlist; ignora o resto. Só lê o próprio layout e
   rola a si mesmo — **não navega, não executa, não exfiltra**. Sem `eval`.
 
@@ -95,7 +100,11 @@ configurável). Caso contrário, inerte (não escuta nada). Protocolo (JSON tipa
 
 ## 4. Pacing / timing
 - ~10–15 s por passo (scroll + settle + chamada de visão + TTS). Loop pausável/cancelável.
-- Cap duro: máx N passos (ex.: 12) + timeout global (ex.: 4 min) → encerra com fala de fechamento.
+- A paginação do bridge (≈1 viewport/passo, budget `MAX_CONTENT_STEPS=14` + 2 beats do 3D) já dá o
+  número de passos; o passo cresce em páginas muito longas para caber no budget e ainda chegar ao fim.
+- Cap duro (rede de segurança no orquestrador): `MAX_STEPS=18` + timeout global `6 min` → encerra com
+  fala de fechamento. (Era 14 + 4 min; subiu em 2026-06-05 para não truncar páginas longas antes do
+  rodapé — ver §3.1 e o fix `a7c6db2`.)
 
 ## 5. Edge cases
 - **Sem captura de tela**: pede permissão; ou degrada pra "espelho de frame" no dashboard (DOM
@@ -144,14 +153,17 @@ configurável). Caso contrário, inerte (não escuta nada). Protocolo (JSON tipa
 2. ✅ **Endpoint** `POST /api/ultron/review-frame` (`web/lib/ultron/review-frame.ts` + handler em
    `route.ts`): visão one-shot sonnet, 1–2 frases pt-BR, rate-limit `ultronReview`, validação base64.
 3. ✅ **Orquestrador** client: `web/lib/ultron/live-review.ts` (`runLiveReview`, loop cancelável +
-   cap 14 passos + timeout 4 min) e `web/components/ultron/live-review-stage.tsx` (overlay
+   cap 18 passos + timeout 6 min) e `web/components/ultron/live-review-stage.tsx` (overlay
    fullscreen + iframe `/lp-preview/[id]?review=1`, botão de gesto p/ fullscreen+captura).
 4. ✅ **Tool** `request_live_review` (`tools.ts`) + `LiveReviewSignal` (`agent-trigger.ts`) +
    extração/propagação no `chat.ts`/`route.ts`/`pending.ts` + fan-out `publishLiveReviews`
    (`use-ultron-voice.ts`) + montagem do overlay no `ultron-widget.tsx`.
 5. ⬜ **Surface B** (window.open + bridge cross-origin + captura de tela inteira) como variante —
    o ReviewBridge já está pronto no lp-render para habilitá-la (mesmo protocolo).
-6. ⬜ Teste e2e na gravação (operador presente). Threat model §6 já implementado (allowlist + cap).
+6. ✅ Teste e2e (2026-06-05): criação autônoma da LP (modo autônomo, SPEC-013) → auto-trigger do
+   Live Review na conclusão (`f6d66da`) → rolagem ponta-a-ponta narrando seção a seção até o rodapé.
+   Validado após o fix de cobertura de scroll (`a7c6db2`) e o fix de render do `/lp-preview`
+   (`4a1af97`). Threat model §6 implementado (allowlist + cap). Falta apenas a take final de gravação.
 
 ### Notas de implementação (Surface A)
 - **Bridge no lp-render** (decisão do operador): inerte na página publicada normal; só ativa com
@@ -167,3 +179,18 @@ configurável). Caso contrário, inerte (não escuta nada). Protocolo (JSON tipa
 - **Testes**: `tools.test.ts` (request_live_review: happy/404/generating/sem-id) e
   `agent-trigger.test.ts` (contrato `isLiveReviewSignal`/`liveReviewKey`). O loop DOM (`runLiveReview`)
   não tem teste unitário porque o ambiente vitest é `node` (sem jsdom) — coberto no teste e2e manual.
+
+### Atualização (2026-06-05) — Surface A concluída e validada e2e
+
+Dois fixes desbloquearam o e2e e a revisão ponta-a-ponta:
+
+- **Render do `/lp-preview` (`4a1af97`)** — a geração autônoma produzia LPs com arrays opcionais
+  omitidos (ex.: `footer` sem `links`), e o bundle deployado tinha o `.map` sem guarda por causa de
+  um **cache stale do webpack** (ver ADR 0017 §"Implementação (2026-06-05)"). Sem isso, o overlay
+  carregava um iframe que dava 500 e a revisão não começava. Resolvido (guardas + `snapshot.managedPaths`).
+- **Cobertura de scroll (`a7c6db2`)** — o `ReviewBridge` passou de "um passo por topo de seção" para
+  **paginação por ~1 viewport** até o rodapé real (§3.1), e o orquestrador subiu o cap/timeout
+  (§4). Acabou com a narração repetida da mesma cena e com o fim prematuro antes do rodapé.
+
+Resultado: criação autônoma → auto-trigger da revisão → rolagem ponta-a-ponta narrando até o rodapé,
+validado em produção. **Pendente:** Surface B (cross-origin) e a take final de gravação.

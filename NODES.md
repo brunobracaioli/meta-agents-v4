@@ -1,13 +1,15 @@
 # NODES — handoff pós-/compact
 
 > **Leia este arquivo PRIMEIRO** se a conversa foi compactada. Captura o que foi
-> descoberto/decidido/feito nas rodadas recentes. Frente viva agora:
-> 1. **Geração autônoma de landing page — endurecimento da camada de render.** Um teste e2e
->    da criação de LP pelo **modo autônomo** (SPEC-013) expôs uma cadeia de 500s no
->    `/lp-preview`. Todos corrigidos, mergeados e **deployados**. Última peça: um **bug de
->    cache de build** que escondia a correção (ver §0 e ADR 0017).
-> 2. **Pendências de gravação/infra** carry-over: Surface B do Live Review, take de teste,
->    `RESEND_API_KEY` no Fly, SPEC-013 Fase 4. (§7)
+> descoberto/decidido/feito nas rodadas recentes.
+>
+> **✅ CONCLUÍDO (2026-06-05):** o e2e da **geração autônoma de landing page + auto-review ao vivo**
+> foi **validado em produção** ponta a ponta — criação pelo modo autônomo → auto-trigger do Live
+> Review na conclusão → rolagem narrando seção a seção até o rodapé. Exigiu 2 fixes desta rodada
+> (render do `/lp-preview` + cobertura de scroll), ambos mergeados e deployados (ver §0).
+>
+> **Frente aberta (pendências):** Surface B do Live Review (cross-origin), take final de gravação,
+> `RESEND_API_KEY` no Fly + domínio Resend, SPEC-013 Fase 4. (§0)
 >
 > Fontes de verdade: `docs/adr/0017-*` (lp-render + gotchas de build), `docs/specs/SPEC-012-*`
 > (editor), `docs/specs/SPEC-014-*` + `docs/adr/0020-*` (Live Review), `docs/specs/SPEC-013-*`
@@ -17,7 +19,7 @@
 
 ## 0. TL;DR de estado
 
-- **Git: `main` == `origin` (HEAD `4a1af97`).** Sem branches não-mergeadas. Tudo abaixo já
+- **Git: `main` == `origin` (HEAD `a7c6db2`).** Sem branches não-mergeadas. Tudo abaixo já
   está na `main` e **deployado** (Vercel auto-deploy no push).
 - **Camada de render do lp-render = ENDURECIDA (3 correções + 1 de cache), tudo na `main`:**
   1. `dd45b76` **copy-key-drift** — o serializer (`serialize.ts`, `normalizeSectionFields`)
@@ -38,10 +40,11 @@
   editar o `next.config` força invalidação total. **Verificado ao vivo: 200, footer renderiza.**
   Detalhe completo em **ADR 0017 §"Implementação (2026-06-05)"** + memória
   `lp-render-stale-webpack-cache`.
-- **Ultron Live Review (Surface A) = MERGEADO e deployado** (`bde54a6`) + **auto-trigger na
-  conclusão** (`f6d66da`): quando a LP fica pronta, o Live Review abre sozinho (tela já
-  compartilhada) e roda o loop scroll→print→visão→voz. **Falta**: Surface B (cross-origin) e a
-  take de gravação. Ver SPEC-014 §10 (1–4 ✅, 5–6 ⬜).
+- **Ultron Live Review (Surface A) = CONCLUÍDO e validado e2e (2026-06-05).** Mergeado (`bde54a6`)
+  + auto-trigger na conclusão (`f6d66da`) + **fix de cobertura de scroll (`a7c6db2`)**: a revisão
+  agora pagina por ~1 viewport até o rodapé (antes: 1 passo/topo de seção → repetia a mesma cena e
+  parava antes do fim). `MAX_STEPS` 14→18, timeout 4→6 min. Validado ao vivo no e2e autônomo.
+  **Falta**: Surface B (cross-origin) e a take final de gravação. Ver SPEC-014 §10 (1–4,6 ✅, 5 ⬜).
 - **Painel 3D (Stage3D) = na `main` e deployado** (web Vercel + runner Fly). A geração
   autônoma provisiona `.glb` + logo + `settings.stage3d`.
 - **Pendências carry-over**: `fly secrets set RESEND_API_KEY=re_... -a meta-agents-v4` +
