@@ -38,8 +38,11 @@ export type RunLiveReviewArgs = {
   signal: AbortSignal;
 };
 
-const MAX_STEPS = 14; // hard cap regardless of how many sections the bridge reports
-const GLOBAL_TIMEOUT_MS = 4 * 60 * 1000;
+// Hard safety net regardless of what the bridge reports. The bridge paginates the page into
+// ~one-viewport steps (2 optional 3D beats + up to MAX_CONTENT_STEPS content screens + bottom),
+// so this must comfortably exceed that budget or a long page gets cut off before the footer.
+const MAX_STEPS = 18;
+const GLOBAL_TIMEOUT_MS = 6 * 60 * 1000; // headroom for the extra steps (TTS dominates per-step)
 const HELLO_TRIES = 8;
 const HELLO_TIMEOUT_MS = 800;
 const SCROLLED_TIMEOUT_MS = 3000;
