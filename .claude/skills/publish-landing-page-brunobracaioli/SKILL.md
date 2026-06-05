@@ -168,6 +168,23 @@ jq -n \
     rm -rf "${LP_DIR}/out" "${LP_DIR}/.next"
   fi
   ```
+- **Sempre re-sincronize o CÓDIGO do template** (inclusive num republish de `LP_DIR` que já
+  existe), para que melhorias no `_template` — ex.: tracking (`components/Tracking.tsx`,
+  `lib/track.ts`) — cheguem às LPs **já publicadas**. Sem isso, o runner reaproveita o código
+  velho do clone e só os dados (`content-spec.json`) se atualizam. Copia **só código**: não
+  toca `node_modules/`, `public/` (assets da LP), nem os dados (o serializer reescreve
+  `messages`/`content-spec`/`theme.css` no passo seguinte). `package.json` **não** é recopiado
+  (preserva o `node_modules` instalado; deps do template não mudam por-LP). Idempotente:
+  ```bash
+  for item in components lib app next.config.mjs next.config.js tsconfig.json \
+              next-env.d.ts postcss.config.mjs postcss.config.js; do
+    [ -e "${REPO}/landing-pages/_template/${item}" ] \
+      && cp -r "${REPO}/landing-pages/_template/${item}" "${LP_DIR}/"
+  done
+  rm -rf "${LP_DIR}/out" "${LP_DIR}/.next"
+  ```
+  > `app/layout.tsx` é sobrescrito aqui; o import do `theme.css` por-LP é re-adicionado
+  > (idempotente) no Passo 4.
 - **Serializar** (rodando o `tsx` do `_template`, que sempre existe — robusto mesmo se um
   `LP_DIR` antigo não tiver `tsx`). O serializer escreve `messages/pt.json`,
   `content-spec.json` e `app/theme.css` dentro do `LP_DIR`:
