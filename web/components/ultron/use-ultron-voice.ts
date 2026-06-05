@@ -127,6 +127,15 @@ export function useUltronVoice() {
   const narrationSpokenIdsRef = useRef<Set<string>>(new Set());
   const narrationBusyRef = useRef<boolean>(false);
 
+  // Auto-review on completion (SPEC-014 v1): when enabled, poll for a freshly-created landing page
+  // and open the Live Review overlay automatically. Deduped by id (persisted in localStorage) so a
+  // page fires at most once; the first poll after enabling only baselines (an already-ready page is
+  // never reviewed retroactively). autoReviewRef mirrors the toggle for the interval's closure.
+  const [autoReview, setAutoReview] = useState(false);
+  const autoReviewRef = useRef(false);
+  const autoReviewSeedRef = useRef(true);
+  const autoReviewedIdsRef = useRef<Set<string>>(new Set());
+
   // VAD-via-worklet state. `vadMode` is decided once on first mic setup.
   const vadMicRef = useRef<VadMicHandle | null>(null);
   const vadModeRef = useRef<"worklet" | "raf">("raf");
@@ -710,6 +719,54 @@ export function useUltronVoice() {
     else void startShare();
   }, [sharing, startShare, stopShare]);
 
+  const persistAutoReviewed = useCallback(() => {
+    try {
+      localStorage.setItem("ultron_autoreviewed_ids", JSON.stringify([...autoReviewedIdsRef.current]));
+    } catch {
+      // best-effort; dedup degrades to in-memory only
+    }
+  }, []);
+
+  // Polls the auto-review candidate endpoint; on a fresh, never-seen ready page, opens the Live
+  // Review. Gated by the toggle; the first poll after enabling only baselines (marks the current
+  // page seen) so we never review a page that was already done before the operator opted in.
+  const pollLiveReviewCandidate = useCallback(async () => {
+    if (!autoReviewRef.current) return;
+    let candidate: { landingPageId: string; previewUrl: string } | null = null;
+    try {
+      const res = await fetch("/api/ultron/live-review/candidate");
+      if (!res.ok) return;
+      const data = (await res.json()) as { candidate?: { landingPageId?: unknown; previewUrl?: unknown } | null };
+      const c = data.candidate;
+      if (c && typeof c.landingPageId === "string" && typeof c.previewUrl === "string") {
+        candidate = { landingPageId: c.landingPageId, previewUrl: c.previewUrl };
+      }
+    } catch {
+      return; // transient; try again next tick
+    }
+
+    const seeding = autoReviewSeedRef.current;
+    if (seeding) autoReviewSeedRef.current = false;
+
+    if (!candidate) return;
+    const id = candidate.landingPageId;
+    if (autoReviewedIdsRef.current.has(id)) return;
+    autoReviewedIdsRef.current.add(id);
+    persistAutoReviewed();
+    if (seeding) return; // baseline only — don't review a page that was already ready
+
+    publishLiveReviews([{ landingPageId: id, previewUrl: candidate.previewUrl, at: new Date().toISOString() }]);
+  }, [persistAutoReviewed, publishLiveReviews]);
+
+  const toggleAutoReview = useCallback(() => {
+    setAutoReview((v) => {
+      const next = !v;
+      autoReviewRef.current = next;
+      if (next) autoReviewSeedRef.current = true; // baseline on the next poll
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     patch({ wakeSupported: isWakeWordSupported() });
   }, [patch]);
@@ -725,6 +782,25 @@ export function useUltronVoice() {
     const iv = window.setInterval(() => void pollNarrations(), 5000);
     return () => window.clearInterval(iv);
   }, [pollNarrations]);
+
+  // Load the persisted set of already-auto-reviewed landing pages (dedup across reloads).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("ultron_autoreviewed_ids");
+      if (raw) {
+        const arr = JSON.parse(raw) as unknown;
+        if (Array.isArray(arr)) autoReviewedIdsRef.current = new Set(arr.filter((x): x is string => typeof x === "string"));
+      }
+    } catch {
+      // no persisted state; start empty
+    }
+  }, []);
+
+  // Poll for an auto-review candidate (a freshly-created ready landing page) when the toggle is on.
+  useEffect(() => {
+    const iv = window.setInterval(() => void pollLiveReviewCandidate(), 6000);
+    return () => window.clearInterval(iv);
+  }, [pollLiveReviewCandidate]);
 
   // Resume the VAD audio context when the tab becomes visible again — contexts
   // can get suspended after a long time backgrounded on some platforms.
@@ -767,5 +843,8 @@ export function useUltronVoice() {
     startShare,
     captureFrame,
     speak,
+    // Auto-review on completion (SPEC-014 v1).
+    autoReview,
+    toggleAutoReview,
   };
 }
