@@ -33,6 +33,18 @@ const nextConfig: NextConfig = {
   // mirroring the TS-side preserveSymlinks fix. See ADR 0017.
   webpack: (config) => {
     config.resolve.symlinks = false;
+    // With symlinks=false, webpack sees @b2tech/lp-render at its node_modules symlink path,
+    // so Next's persistent webpack cache treats it as a "managed" (immutable) package and
+    // invalidates it ONLY on a version bump — never on source content changes. As a `file:`
+    // workspace dep it changes constantly without a version bump, so cached transpiled modules
+    // were reused across Vercel builds and shipped STALE code (a render-guard fix in
+    // lp-render never reached the deployed bundle → 500 on /lp-preview). Excluding the
+    // package from managedPaths makes webpack content-snapshot it, so it rebuilds whenever
+    // its source changes. See ADR 0017.
+    config.snapshot = {
+      ...(config.snapshot ?? {}),
+      managedPaths: [/^(.+?[\\/]node_modules[\\/](?!@b2tech[\\/]lp-render))/],
+    };
     return config;
   },
 };
