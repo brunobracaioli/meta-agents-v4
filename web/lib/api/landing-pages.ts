@@ -283,6 +283,55 @@ landingPages.delete("/:id/tracking-secrets", async (c) => {
   return c.json({ ok: true });
 });
 
+// ---------- GET tracking health (reads the lp_events mirror; Phase 2) ----------
+// Aggregates the last 7 days of server-side events for the dashboard. Reads only non-PII
+// columns (the mirror has no raw PII by design). Bounded scan, aggregated in-process.
+landingPages.get("/:id/tracking-health", async (c) => {
+  const id = c.req.param("id");
+  const state = await loadEditState(id);
+  if (!state) return c.json({ error: "not_found" }, 404);
+
+  const sinceIso = new Date(Date.now() - 7 * 86400 * 1000).toISOString();
+  const res = await trackingDb()
+    .from("lp_events")
+    .select("event_name, meta_status, has_email, has_phone, utm_source, event_time")
+    .eq("landing_page_id", id)
+    .gte("event_time", sinceIso)
+    .order("event_time", { ascending: false })
+    .limit(2000);
+  if (res.error) throw res.error;
+
+  const rows = res.data ?? [];
+  const total = rows.length;
+  const byName: Record<string, number> = {};
+  let capiAttempted = 0;
+  let capiOk = 0;
+  let email = 0;
+  let phone = 0;
+  let utm = 0;
+  let last: string | null = null;
+  for (const r of rows) {
+    byName[r.event_name] = (byName[r.event_name] ?? 0) + 1;
+    if (typeof r.meta_status === "number" && r.meta_status > 0) {
+      capiAttempted += 1;
+      if (r.meta_status === 200) capiOk += 1;
+    }
+    if (r.has_email) email += 1;
+    if (r.has_phone) phone += 1;
+    if (r.utm_source) utm += 1;
+    if (!last) last = r.event_time;
+  }
+  return c.json({
+    windowDays: 7,
+    total,
+    byName,
+    capi: { attempted: capiAttempted, ok: capiOk },
+    match: { email, phone },
+    utmCoverage: utm,
+    lastEventAt: last,
+  });
+});
+
 // ---------- POST publish (enqueue landing_publish job) ----------
 landingPages.post("/:id/publish", async (c) => {
   const id = c.req.param("id");

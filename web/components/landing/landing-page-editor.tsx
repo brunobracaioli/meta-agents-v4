@@ -924,6 +924,77 @@ function TrackingEditor({
       />
 
       <CapiSecretsEditor lpId={lpId} metaPixels={metaPixels} />
+
+      <TrackingHealth lpId={lpId} />
+    </div>
+  );
+}
+
+// Read-only health panel over the lp_events mirror (last 7d). No PII — only volume, CAPI
+// success rate, match-proxy and UTM coverage. Renders nothing until there are events.
+function TrackingHealth({ lpId }: { lpId: string }) {
+  const [data, setData] = useState<{
+    total: number;
+    byName: Record<string, number>;
+    capi: { attempted: number; ok: number };
+    match: { email: number; phone: number };
+    utmCoverage: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const r = await fetch(`/api/landing-pages/${lpId}/tracking-health`);
+        if (r.ok && alive) setData(await r.json());
+      } catch {
+        /* best-effort */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [lpId]);
+
+  if (!data) return null;
+  if (data.total === 0) {
+    return (
+      <div className="rounded-lg border border-white/8 bg-white/[0.015] p-3">
+        <span className={PANEL_LABEL}>Saúde do tracking (7d)</span>
+        <p className="mt-1 text-[10px] text-white/30">Sem eventos server-side ainda.</p>
+      </div>
+    );
+  }
+  const capiPct = data.capi.attempted ? Math.round((100 * data.capi.ok) / data.capi.attempted) : null;
+  const topEvents = Object.entries(data.byName).sort((a, b) => b[1] - a[1]);
+
+  return (
+    <div className="space-y-2 rounded-lg border border-white/8 bg-white/[0.015] p-3">
+      <span className={PANEL_LABEL}>Saúde do tracking (7d)</span>
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <div className="font-mono text-lg text-white/85">{data.total}</div>
+          <div className="text-[9px] uppercase tracking-[0.1em] text-white/35">Eventos</div>
+        </div>
+        <div>
+          <div className="font-mono text-lg text-white/85">{capiPct === null ? "—" : `${capiPct}%`}</div>
+          <div className="text-[9px] uppercase tracking-[0.1em] text-white/35">CAPI 200</div>
+        </div>
+        <div>
+          <div className="font-mono text-lg text-white/85">
+            {data.total ? Math.round((100 * data.utmCoverage) / data.total) : 0}%
+          </div>
+          <div className="text-[9px] uppercase tracking-[0.1em] text-white/35">UTM</div>
+        </div>
+      </div>
+      <div className="space-y-1 border-t border-white/8 pt-2">
+        {topEvents.map(([name, n]) => (
+          <div key={name} className="flex items-center justify-between text-[11px]">
+            <span className="font-mono text-white/55">{name}</span>
+            <span className="text-white/40">{n}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
