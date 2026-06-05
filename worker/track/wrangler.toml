@@ -1,0 +1,26 @@
+name = "lp-tracking"
+main = "src/index.ts"
+compatibility_date = "2026-05-01"
+
+# Tagging server multi-tenant amarrado a track.b2tech.io. O domínio precisa estar proxied no
+# Cloudflare (nuvem laranja) e SSL/TLS em Full. Same-site de todas as LPs (*.b2tech.io).
+[[routes]]
+pattern = "track.b2tech.io/*"
+zone_name = "b2tech.io"
+
+# D1 (banco de eventos na borda)
+[[d1_databases]]
+binding = "DB"
+database_name = "lp-tracking"
+database_id = "PREENCHER_APOS_d1_create"
+
+# Variáveis NÃO-secretas
+[vars]
+ALLOWED_ORIGIN_SUFFIX = ".b2tech.io"
+META_API_VERSION = "v21.0"
+
+# Segredos -> via `wrangler secret put NOME` (NUNCA aqui):
+#   SUPABASE_URL            (URL do projeto Supabase)
+#   SUPABASE_SERVICE_KEY    (service_role key — lê lp_tracking_secrets, escreve lp_events)
+#   META_TEST_EVENT_CODE    (opcional, só homologação global)
+#   DASHBOARD_TOKEN         (opcional, protege /dash/data de borda)
