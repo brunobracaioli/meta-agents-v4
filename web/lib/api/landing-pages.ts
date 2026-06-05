@@ -150,6 +150,10 @@ landingPages.patch("/:id/settings", async (c) => {
   // Deep-merge the nested objects so a partial seo/cartClosed patch doesn't drop siblings.
   if (patch.seo) merged.seo = { ...((current.seo as object) ?? {}), ...patch.seo };
   if (patch.cartClosed) merged.cartClosed = { ...((current.cartClosed as object) ?? {}), ...patch.cartClosed };
+  // Tracking is shallow-merged (one level) so a patch of the public ID arrays preserves
+  // consent_key + the legacy single fields. Each *_ids array is a whole value, so it REPLACES
+  // the prior array — removing a pixel actually shrinks it. No secrets ever reach here.
+  if (patch.tracking) merged.tracking = { ...((current.tracking as object) ?? {}), ...patch.tracking };
   // Keep the mirrored top-level columns consistent with settings for downstream reads.
   const columnSync: Record<string, unknown> = {};
   if (patch.cart_state !== undefined) columnSync.cart_state = patch.cart_state;

@@ -95,4 +95,30 @@ describe("settingsPatchSchema", () => {
     expect(settingsPatchSchema.safeParse({ seo: { ogImage: url } }).success).toBe(true);
     expect(settingsPatchSchema.safeParse({ logo: "javascript:alert(1)" }).success).toBe(false);
   });
+
+  it("accepts well-formed tracking ID arrays (SPEC-015)", () => {
+    const r = settingsPatchSchema.safeParse({
+      tracking: {
+        meta_pixels: ["653995666521954", "100200300400500"],
+        ga4_ids: ["G-Z60CJ7W2Z8"],
+        google_ads_ids: ["AW-123456789", "AW-123456789/AbC-D_efG"],
+      },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects malformed tracking IDs, oversized arrays and consent_key injection", () => {
+    expect(settingsPatchSchema.safeParse({ tracking: { meta_pixels: ["123"] } }).success).toBe(false);
+    expect(settingsPatchSchema.safeParse({ tracking: { ga4_ids: ["UA-12345"] } }).success).toBe(false);
+    expect(settingsPatchSchema.safeParse({ tracking: { google_ads_ids: ["12345"] } }).success).toBe(false);
+    expect(
+      settingsPatchSchema.safeParse({ tracking: { meta_pixels: ['1234567890123"><script>'] } }).success,
+    ).toBe(false);
+    expect(
+      settingsPatchSchema.safeParse({ tracking: { meta_pixels: new Array(11).fill("653995666521954") } }).success,
+    ).toBe(false);
+    // consent_key (and any secret) is not an accepted key here — the schema is strict.
+    expect(settingsPatchSchema.safeParse({ tracking: { consent_key: "x" } }).success).toBe(false);
+    expect(settingsPatchSchema.safeParse({ tracking: { capi_token: "secret" } }).success).toBe(false);
+  });
 });
