@@ -1,116 +1,115 @@
 # NODES — handoff pós-/compact
 
 > **Leia este arquivo PRIMEIRO** se a conversa foi compactada. Captura o que foi
-> descoberto/decidido/feito nas rodadas recentes. Frentes vivas:
-> 1. **Ultron Live Review — Surface A IMPLEMENTADA** (branch `feat/ultron-live-review`, não
->    mergeada/pushada). SPEC-014 / ADR 0020. Falta: Surface B + teste e2e na gravação.
-> 2. **Painel 3D na landing (Stage3D)** — IMPLEMENTADO + deployado; falta a take de teste.
+> descoberto/decidido/feito nas rodadas recentes. Frente viva agora:
+> 1. **Geração autônoma de landing page — endurecimento da camada de render.** Um teste e2e
+>    da criação de LP pelo **modo autônomo** (SPEC-013) expôs uma cadeia de 500s no
+>    `/lp-preview`. Todos corrigidos, mergeados e **deployados**. Última peça: um **bug de
+>    cache de build** que escondia a correção (ver §0 e ADR 0017).
+> 2. **Pendências de gravação/infra** carry-over: Surface B do Live Review, take de teste,
+>    `RESEND_API_KEY` no Fly, SPEC-013 Fase 4. (§7)
 >
-> Fontes de verdade: `docs/specs/SPEC-014-ultron-live-review.md`, `docs/adr/0020-*.md`,
-> `docs/specs/SPEC-012-*` (landing/editor), `docs/adr/0018-*` (imagens), `docs/specs/SPEC-013-*`
+> Fontes de verdade: `docs/adr/0017-*` (lp-render + gotchas de build), `docs/specs/SPEC-012-*`
+> (editor), `docs/specs/SPEC-014-*` + `docs/adr/0020-*` (Live Review), `docs/specs/SPEC-013-*`
 > + `docs/adr/0019-*` (modo autônomo headless). Memória de projeto carrega sozinha.
 
 ---
 
 ## 0. TL;DR de estado
 
-- **Ultron Live Review (Surface A) = IMPLEMENTADO** na branch `feat/ultron-live-review` (não
-  mergeada). Fatia vertical completa: ReviewBridge (lp-render) + endpoint de visão
-  `/api/ultron/review-frame` + orquestrador (`live-review.ts` + `live-review-stage.tsx`) + tool
-  `request_live_review` + sinal `LiveReviewSignal` + fan-out + overlay no widget. Verde:
-  type-check (lp-render/web/template), build clean-install (gotcha symlink), 122 testes.
-  **Falta**: Surface B (cross-origin), teste e2e na gravação, e o merge/push + deploy.
-  Disparo por voz: *"Ultron, revisa a página comigo"* → tool resolve a LP → overlay sobe em tela
-  cheia → loop scroll→print→visão→voz por seção. Ver **SPEC-014 §10** (itens 1–4 ✅, 5–6 ⬜).
-- **Painel 3D (Stage3D) = IMPLEMENTADO e na `main`** (merge `9d4cd5f` + fixes). Web (Vercel) **verde**
-  (`57b8741` READY) e runner Fly **redeployado** (imagem `01KTAGZG…`, v25). A geração autônoma já
-  provisiona `.glb` + logo + seta `settings.stage3d`.
-- **Build gotcha resolvido**: `three/examples/jsm/*` não resolvia do lp-render symlinkado no clean
-  install (Vercel/Fly) → **`resolve.symlinks=false`** nos dois `next.config` (web + template).
-  Removido `RoomEnvironment` (era código morto). NÃO reverter.
-- **LP `imersao-agencia` no Supabase = DELETADA** (slate limpo p/ a gravação). **Cloudflare intacto**
-  (republish sobrescreve). Foto do instrutor: `.jpg → .png` corrigido em todos os briefs + skill.
-- **Pendente (gravação)**: rodar a **take de teste** da geração da imersão pelo Ultron e verificar
-  `settings.stage3d` + página publicada; depois (SPEC-014) decidir Surface A vs B e implementar.
-- **Carry-over do modo autônomo (SPEC-013)**: falta `fly secrets set RESEND_API_KEY=re_... -a
-  meta-agents-v4` + verificar domínio no Resend (sem isso o email degrada gracioso). Fase 4 não feita.
+- **Git: `main` == `origin` (HEAD `4a1af97`).** Sem branches não-mergeadas. Tudo abaixo já
+  está na `main` e **deployado** (Vercel auto-deploy no push).
+- **Camada de render do lp-render = ENDURECIDA (3 correções + 1 de cache), tudo na `main`:**
+  1. `dd45b76` **copy-key-drift** — o serializer (`serialize.ts`, `normalizeSectionFields`)
+     normaliza drift de chave do LLM (`headline`→`heading`, card `body`→`desc`, bullets
+     objeto→string) no **único boundary** de serialização. Não quebra mais com React #31.
+  2. `6fa40d9` **copy-contract (write-time)** — a skill `create-landing-page` normaliza os
+     `fields` (jq) **antes** de escrever no Supabase, espelhando o serializer. O DB não
+     guarda mais shapes que quebram render. (Roda no **runner Fly**.)
+  3. `deb3422` **guard-maps** — toda seção guarda `.map` com `(data.X ?? []).map(...)`
+     (items/modules/rows/bonuses/payments/credentials/testimonials/bullets/faq/footer.links).
+     LP renderiza a seção **sem** os itens em vez de 500 quando o LLM omite o array.
+  4. `4a1af97` **cache-stale (este round)** — ver abaixo. Era o que mantinha a (3) invisível.
+- **Bug de cache resolvido (`4a1af97`):** `/lp-preview` dava 500 **mesmo no commit certo** —
+  o bundle deployado tinha o `footer.links.map` **sem guarda**. Causa: `resolve.symlinks=false`
+  faz o webpack ver o `@b2tech/lp-render` como **managed path** (imutável, invalidado só por
+  bump de versão) no cache persistente da Vercel → `file:` dep mudava sem bumpar → transpc­ile
+  velho reusado. Fix: excluir o pacote dos `snapshot.managedPaths` (rastreio por conteúdo) +
+  editar o `next.config` força invalidação total. **Verificado ao vivo: 200, footer renderiza.**
+  Detalhe completo em **ADR 0017 §"Implementação (2026-06-05)"** + memória
+  `lp-render-stale-webpack-cache`.
+- **Ultron Live Review (Surface A) = MERGEADO e deployado** (`bde54a6`) + **auto-trigger na
+  conclusão** (`f6d66da`): quando a LP fica pronta, o Live Review abre sozinho (tela já
+  compartilhada) e roda o loop scroll→print→visão→voz. **Falta**: Surface B (cross-origin) e a
+  take de gravação. Ver SPEC-014 §10 (1–4 ✅, 5–6 ⬜).
+- **Painel 3D (Stage3D) = na `main` e deployado** (web Vercel + runner Fly). A geração
+  autônoma provisiona `.glb` + logo + `settings.stage3d`.
+- **Pendências carry-over**: `fly secrets set RESEND_API_KEY=re_... -a meta-agents-v4` +
+  domínio Resend (sem isso o email do modo autônomo degrada gracioso); SPEC-013 Fase 4.
 
-## 1. O que o usuário quer (Live Review — pedido desta rodada)
+## 1. Contexto desta rodada (o bug do preview)
 
-Para **gravar um demo**: quando a landing fica pronta e o **operador está PRESENTE**, o Ultron deve
-fazer a revisão **visível no navegador do operador** (não headless): trazer a página em tela cheia,
-e **loop `print → voz → scroll`** seção a seção até o fim, com o **painel 3D renderizando de verdade
-(GPU)**. É a versão "operador presente" do que a SPEC-013 já faz headless p/ "operador ausente".
+Teste e2e da criação de LP pelo **modo autônomo** gerou a `imersao-agencia`
+(`70b5325f-…`). A página foi criada certa, mas o **visualizador de review** (`/lp-preview/[id]`,
+embutido em iframe no dashboard) dava **500** (`Cannot read properties of undefined (reading
+'map')`). O `footer` dessa LP só tem `{body}` (sem o array opcional `links`) e o `Footer`
+**deployado** fazia `messages.footer.links.map(...)` sem guarda.
 
-Pergunta-chave respondida: **com captura de TELA INTEIRA concedida**, o "print" funciona pra qualquer
-superfície (inclusive aba cross-origin) — é captura de pixels, não DOM. O que **não** dá de graça:
-rolar/printar/fullscreen de uma aba **cross-origin** a partir do dashboard (same-origin policy +
-Fullscreen API exige gesto no alvo).
+A pegadinha: a guarda **já existia** no commit em produção — mas o **bundle** não. Diagnóstico
+decisivo foi baixar o chunk de produção e ver 0 `?? []`. Causa = cache de managed-path (acima).
 
-## 2. Decisão (ADR 0020 / SPEC-014)
+## 2. Diagnóstico replicável (como confirmar de novo)
 
-Revisão **client-side** dirigida por um protocolo **`postMessage`** ("review protocol") entre um
-**orquestrador (dashboard)** e um **`ReviewBridge` (lp-render)**, com **print via captura de tela**
-(getDisplayMedia, ADR 0010). Duas superfícies, mesmo protocolo:
-- **Surface A (DEFAULT, robusto):** preview **same-origin** `/lp-preview/[id]?review=1` embutido em
-  fullscreen no dashboard. Scroll direto, **zero mudança no template**, sem throttling. Visual
-  idêntico ao publicado (mesmo lp-render + Stage3D); só a URL na barra difere.
-- **Surface B:** **nova aba** da página publicada (URL `b2tech.io` autêntica). Scroll via ReviewBridge
-  (postMessage), print via captura de **tela inteira**, fullscreen **manual (F11)**.
+1. `git log` confirma que a correção está na `main` e a Vercel está nesse SHA
+   (`mcp vercel list_deployments` → `meta.githubCommitSha`).
+2. **Não confie no SHA**: baixe o chunk deployado e procure a correção:
+   `curl -s ".../_next/static/chunks/694-*.js?dpl=<id>" | grep -c '??\[\]'`. Zero = bundle stale.
+3. Se stale: o fix de `next.config` (managedPaths) já cobre; um novo deploy reconstrói limpo.
+   Alternativa de emergência: Redeploy **without build cache** no painel da Vercel.
 
-Loop: `scrollTo → settle (espera o 3D pintar) → captura frame → visão (1–2 frases pt-BR) → TTS →
-próximo`, até o rodapé. Cancelável, com cap de passos/timeout.
+## 3. Reuso (não reinventar) — caminhos
 
-## 3. Plano de implementação (SPEC-014 §10)
+- Render compartilhado: `packages/lp-render/src/` — `PageBody`, `sections/*`, `serialize.ts`
+  (boundary único de normalização), `content-*.ts`. Consumido por `web/` (preview) e
+  `landing-pages/_template/` (publish). **ADR 0017** é a fonte de verdade do pacote + build.
+- Preview: `web/app/(preview)/lp-preview/[id]/` (`page.tsx` server + `preview-client.tsx`).
+- Skill de criação: `.claude/skills/create-landing-page-brunobracaioli` (normalização
+  write-time no Passo 4; provisiona `settings.stage3d` no Passo 6).
+- Skill de publish: `.claude/skills/publish-landing-page-brunobracaioli` (serializer no Fly).
+- Live Review: `web/lib/ultron/live-review.ts` + `live-review-stage.tsx` + `ReviewBridge`
+  (lp-render) + `web/app/api/ultron/review-frame`.
+- Modo autônomo: `.claude/skills/autonomous-watch-tick` + `scripts/poll-autonomous-watches.sh`.
 
-1. `ReviewBridge` no **lp-render** (protocolo + allowlist de origem) + teste de origem.
-2. Endpoint `web/app/api/.../review-frame` (visão sobre 1 frame → 1–2 frases) + rate-limit/validação.
-3. **Orquestrador** client (Surface A primeiro: iframe fullscreen same-origin) + loop scroll→print→voz.
-4. **Tool do Ultron** `request_live_review(landing_page_id)` + fan-out (espelhar
-   `web/lib/ultron/agent-trigger.ts`: CustomEvent + BroadcastChannel) → `startLiveReview` no dashboard.
-5. **Surface B** (window.open + bridge cross-origin + captura de tela inteira) como variante.
-6. Hardening (threat model STRIDE da SPEC-014 §6), docs, teste e2e na gravação.
+## 4. Estado do sistema (o que está no ar)
 
-## 4. Reuso (não reinventar) — caminhos
+- **Vercel (web/editor/preview)**: deploy `4a1af97` READY (produção, `meta-agents-v4.vercel.app`).
+  - `resolve.symlinks=false` faz lp-render+three buildar no clean install — **não remover**.
+  - `snapshot.managedPaths` exclui `@b2tech/lp-render` para não shipar bundle stale — **não remover**.
+- **Fly runner `meta-agents-v4`** (machine `286501db9e7e78`, gru): imagem com skills de LP +
+  lp-render + three + `.glb`. Redeploy via `fly deploy`. (Builda limpo, sem o cache da Vercel.)
+- **Supabase**: LP `imersao-agencia` `70b5325f-…` existe e renderiza. `settings.stage3d
+  {model,poster?,rain?,color?,logo?}` é o contrato do painel 3D.
 
-- Captura de frame: getDisplayMedia persistente + `capture_screen` (ADR 0010 / memória
-  `ultron-screen-vision`).
-- Visão + voz: `web/lib/ultron/*` (chat/tools/agent-trigger) + `use-ultron-voice` (TTS).
-- Preview real: `web/app/(preview)/lp-preview/[id]/preview-client.tsx` → lp-render `PageBody` (inclui
-  `packages/lp-render/src/sections/Stage3D.tsx`).
-- Transporte de sinal: `web/lib/ultron/agent-trigger.ts` (`LandingEditSignal`/`AgentTrigger` →
-  espelhar `LiveReviewSignal`).
-- Email de encerramento (opcional): `scripts/send-email.cjs` + fase `notifying` (SPEC-013).
+## 5. Gotchas obrigatórios
 
-## 5. Estado do sistema (o que está no ar)
-
-- **Git**: `main` == `origin` (HEAD `57b8741`). Os docs desta rodada (este NODES + SPEC-014 + ADR 0020)
-  ainda precisam ser commitados (ver §7).
-- **Vercel (web/editor/preview)**: deploy `57b8741` READY (produção). `resolve.symlinks=false` é o
-  que faz o lp-render+three buildar no clean install — **não remover**.
-- **Fly runner `meta-agents-v4`** (machine `286501db9e7e78`, gru): imagem `01KTAGZG…` v25, com skill
-  stage3d + lp-render + `iron_man_rig.glb` (3MB) + three no template. Redeploy via `fly deploy`.
-- **Supabase**: LP `imersao-agencia` deletada. `settings.stage3d {model,poster?,rain?,color?,logo?}`
-  é o contrato do painel; provisionado pela skill `create-landing-page-brunobracaioli` Passo 6.
-
-## 6. Gotchas obrigatórios
-
-- **NUNCA** `git add .` cego aqui: já varreu um **OBS-Installer de 157MB** que o GitHub recusou.
-  `.gitignore` agora cobre `imagens-geradas/`, previews soltos. Stagear **paths explícitos**.
-- **lp-render é file: symlinkado** → builds resolvem suas deps pelo **realpath** (sem node_modules no
-  clean install). TS usa `preserveSymlinks`; webpack usa `resolve.symlinks=false`. Qualquer dep nova
-  do lp-render (ex.: futuras libs do ReviewBridge) tem que estar no **consumidor** (web + template).
-- **WebGL headless é preto/instável** → a revisão Live (SPEC-014) roda no navegador real do operador
-  de propósito. A revisão headless (SPEC-013) é p/ operador ausente.
-- **Cross-origin**: dashboard (`vercel.app`) ≠ landing (`b2tech.io`). Surface B precisa do ReviewBridge
-  + allowlist de origem. Surface A (same-origin) evita tudo isso.
+- **lp-render é `file:` symlinkado.** Builds resolvem deps pelo **realpath** (sem node_modules
+  no clean install). TS usa `preserveSymlinks`; webpack usa `resolve.symlinks=false`. Toda dep
+  nova do lp-render tem que estar no **consumidor** (web + template).
+- **Cache de managed-path (NOVO):** por causa do `symlinks=false`, o webpack trata o lp-render
+  como pacote imutável no cache. O fix `snapshot.managedPaths` resolve, mas se a produção
+  mostrar comportamento antigo **no commit certo**, é cache — confira o **chunk deployado**.
+- **NUNCA** `git add .` cego aqui: já varreu um **OBS-Installer de 157MB** recusado pelo GitHub.
+  Stagear **paths explícitos**.
+- **WebGL headless é preto/instável** → Live Review (SPEC-014) roda no navegador real do
+  operador. A revisão headless (SPEC-013) é p/ operador ausente.
+- **Cross-origin**: dashboard (`vercel.app`) ≠ landing (`b2tech.io`). Surface B precisa do
+  ReviewBridge + allowlist. Surface A (same-origin `/lp-preview`) evita isso.
 - **Supabase headless = REST/curl** (MCP é OAuth-gated no runner). Padrão das skills.
 
-## 7. Próximas ações concretas
+## 6. Próximas ações concretas
 
-1. **Commitar os docs** desta rodada: `NODES.md` + `docs/specs/SPEC-014-*` + `docs/adr/0020-*`
-   (paths explícitos; conventional commit `docs(live-review): SPEC-014 + ADR 0020 + handoff`).
-2. (Gravação) Take de teste: disparar a criação da imersão pelo Ultron → conferir `settings.stage3d`
-   + página com painel/reveal. (Custo: gpt-image-2 do hero/og ~US$0,40; ~14 min.)
-3. Implementar SPEC-014 §10 (passos 1→6). Surface A primeiro.
-4. (Email autônomo) `fly secrets set RESEND_API_KEY=...` + domínio Resend.
+1. (Gravação) Take de teste do fluxo autônomo completo: criar LP pelo Ultron → review (Surface A
+   auto-trigger) → publicar → conferir painel 3D e email. (Custo: gpt-image-2 ~US$0,40; ~14 min.)
+2. **SPEC-014 §10 passos 5–6**: Surface B (cross-origin) + hardening/e2e.
+3. (Email autônomo) `fly secrets set RESEND_API_KEY=... -a meta-agents-v4` + domínio Resend.
+4. SPEC-013 Fase 4 (carry-over do modo autônomo).

@@ -122,3 +122,47 @@ runner Fly, headless, sem etapa de build. Decisões validadas por build local:
   vivo (um `nome` arbitrário poderia colidir). A skill de publish faz o oposto: a LP é
   carregada de `landing_pages` por id/subdomínio → **é dona** do subdomínio → republish é a
   função; sem guarda anti-clobber.
+
+## Implementação (2026-06-05) — cache stale do webpack com `file:` dep symlinkado
+
+Bug em produção: `/lp-preview/[id]` retornava **500** (`Cannot read properties of undefined
+(reading 'map')`) mesmo com a produção rodando o commit que **já continha** a correção
+(guarda `(messages.footer.links ?? []).map(...)`). O chunk **deployado** ainda tinha o
+código antigo sem guarda — confirmado baixando o `694-*.js` de produção (0 ocorrências de
+`?? []`). O dado e o código mergeado estavam corretos; o **bundle** estava velho.
+
+**Causa raiz — interação entre dois ajustes deste ADR.** A Wave 1 usou `resolve.symlinks =
+false` no `next.config` (web + template) para o `three/examples/jsm/*` do Stage3D resolver
+a partir do `node_modules` do consumidor no clean install. Efeito colateral: com symlinks
+desligados, o webpack enxerga `@b2tech/lp-render` pelo **caminho de symlink em
+`node_modules/`**, então o **cache persistente do webpack do Next** (`.next/cache`,
+restaurado entre builds pela Vercel) o trata como **managed path** — pacote imutável,
+invalidado **só por bump de versão**, nunca por conteúdo. Como é um `file:` dep que muda a
+cada commit sem bumpar `0.1.0`, os módulos transpc­ilados em cache foram reusados e as
+correções em `packages/lp-render/src` **nunca chegaram ao bundle deployado**.
+
+Sintoma assimétrico (pista de diagnóstico): correções de lp-render que rodam no **runner
+Fly** (ex.: normalização *write-time* da copy, fix/landing-copy-contract) funcionavam — o
+Fly builda limpo, sem o cache da Vercel. Só as correções **puras de render** (transpc­iladas
+pelo webpack da Vercel) ficavam presas no cache.
+
+**Decisão:** manter `resolve.symlinks = false` (é o que faz o `three` resolver) e
+**excluir `@b2tech/lp-render` dos `managedPaths`** do snapshot do webpack, para o pacote ser
+rastreado por **conteúdo** e rebuildar a cada mudança de fonte:
+
+```js
+config.snapshot = {
+  ...(config.snapshot ?? {}),
+  managedPaths: [/^(.+?[\\/]node_modules[\\/](?!@b2tech[\\/]lp-render))/],
+};
+```
+
+Editar o `next.config` (que é uma *build dependency* do cache do webpack) também força uma
+invalidação total do cache no deploy seguinte, então as guardas já mergeadas finalmente
+subiram. Commit `4a1af97` (branch `fix/lp-render-cache-stale`). **Verificado ao vivo:**
+`/lp-preview/…` voltou a 200, com o `footer` (sem `links`) renderizando limpo.
+
+Regra de diagnóstico (memória `lp-render-stale-webpack-cache`): se após mexer em
+`packages/lp-render/` a produção continuar com comportamento antigo **no commit certo**,
+suspeite do cache de managed-path — confira o chunk **deployado** (não confie no SHA do
+deploy).
