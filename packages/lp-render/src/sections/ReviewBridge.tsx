@@ -36,6 +36,14 @@ interface ReviewStep {
 const STAGE3D_SETTLE_MS = 2200; // let the GPU paint the hologram/reveal before the "print"
 const SECTION_SETTLE_MS = 600;
 const SCROLL_SETTLE_TIMEOUT_MS = 1500;
+// Walk the page by roughly one viewport per step (with a small overlap for continuity) instead
+// of one step per section top: short bands (urgency/stats) sit < 1 screen apart, so anchoring on
+// their tops barely scrolls → the review re-captured the same screen and narrated it 2–3×, and a
+// long page never reached the footer within the step cap. Pagination gives even coverage and no
+// duplicate frames. The step grows on very long pages so the count stays within the budget while
+// still reaching the bottom; MAX_STEPS in the orchestrator is the hard safety net.
+const SCREEN_OVERLAP = 0.18; // keep ~18% of the previous screen in view between steps
+const MAX_CONTENT_STEPS = 14; // pagination budget for the non-3D content (excludes the 3D beats)
 
 function reviewModeEnabled(): boolean {
   if (typeof window === "undefined") return false;
@@ -66,13 +74,18 @@ export function ReviewBridge() {
     const maxScrollY = () =>
       Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
 
-    // Build the ordered scroll "steps". The optional 3D opening (.stage3d-wrap, 220vh) gets
-    // two beats so the cinematic scrub (spin + recede + logo reveal) actually plays. Then one
-    // step per rendered <section>, in document order. Section labels come from the cart-state
-    // filtered spec order (PageBody drops curriculum/features when the cart is closed), zipped
-    // best-effort with the DOM nodes — same assumption the editor's scrollTo already relies on.
+    // Build the ordered scroll "steps". The optional 3D opening (.stage3d-wrap, 220vh) gets two
+    // cinematic beats so the scrub (spin + recede + logo reveal) actually plays; content
+    // pagination then starts AFTER the wrap. The content area is paginated by ~one viewport so
+    // the review walks the whole page top-to-bottom without re-capturing the same screen. Each
+    // step is labeled with the section under the viewport center (zipped best-effort with the
+    // cart-state-filtered spec order — PageBody drops curriculum/features when the cart is closed).
     const buildSteps = (): ReviewStep[] => {
       const steps: ReviewStep[] = [];
+      const vh = window.innerHeight || 800;
+      const max = maxScrollY();
+
+      let startY = 0;
       const stageWrap = document.querySelector<HTMLElement>(".stage3d-wrap");
       if (contentSpec.stage3d?.model && stageWrap) {
         steps.push({ y: 0, label: "abertura 3D (cena cinematográfica)", settleMs: STAGE3D_SETTLE_MS });
@@ -81,18 +94,38 @@ export function ReviewBridge() {
           label: "abertura 3D (revelação do logo)",
           settleMs: STAGE3D_SETTLE_MS,
         });
+        startY = Math.min(stageWrap.offsetTop + stageWrap.offsetHeight, max);
       }
+
       const visible = contentSpec.sections.filter(
         (id) => !(isCartClosed && (id === "curriculum" || id === "features")),
       );
-      const nodes = Array.from(document.querySelectorAll<HTMLElement>("section"));
-      nodes.forEach((node, i) => {
-        steps.push({
-          y: Math.round(node.offsetTop),
-          label: visible[i] ?? "seção",
-          settleMs: SECTION_SETTLE_MS,
-        });
-      });
+      const anchors = Array.from(document.querySelectorAll<HTMLElement>("section")).map(
+        (node, i) => ({ y: node.offsetTop, label: visible[i] ?? "seção" }),
+      );
+      const labelAt = (y: number): string => {
+        const center = y + vh / 2;
+        let label = anchors[0]?.label ?? "seção";
+        for (const a of anchors) {
+          if (a.y <= center) label = a.label;
+          else break;
+        }
+        return label;
+      };
+
+      const range = Math.max(0, max - startY);
+      if (range < 8) {
+        // Page doesn't scroll past the opening — one capture is enough.
+        steps.push({ y: Math.round(startY), label: labelAt(startY), settleMs: SECTION_SETTLE_MS });
+        return steps;
+      }
+      const baseStep = Math.max(vh * (1 - SCREEN_OVERLAP), 320);
+      const n = Math.min(Math.max(1, Math.ceil(range / baseStep)), MAX_CONTENT_STEPS);
+      const step = range / n; // ≥ baseStep only when the budget caps a very long page
+      for (let k = 0; k <= n; k++) {
+        const y = Math.round(Math.min(startY + k * step, max));
+        steps.push({ y, label: labelAt(y), settleMs: SECTION_SETTLE_MS });
+      }
       return steps;
     };
 
