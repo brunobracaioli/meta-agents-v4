@@ -19,7 +19,7 @@ export function Logos({ tone }: { tone: Tone }) {
           </p>
         ) : null}
         <div className="logos">
-          {data.items.map((name, i) => (
+          {(data.items ?? []).map((name, i) => (
             <span className="logo-pill" key={i}>
               {name}
             </span>

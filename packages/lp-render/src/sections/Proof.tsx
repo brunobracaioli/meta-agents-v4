@@ -21,7 +21,7 @@ export function Proof({ tone }: { tone: Tone }) {
         </div>
       ) : null}
       <Marquee>
-        {data.testimonials.map((t, i) => (
+        {(data.testimonials ?? []).map((t, i) => (
           <div className="card" key={i}>
             <p style={{ color: "var(--text)" }}>“{t.quote}”</p>
             <p className="eyebrow" style={{ marginTop: 12, marginBottom: 0 }}>

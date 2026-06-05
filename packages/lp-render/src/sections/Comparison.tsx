@@ -32,7 +32,7 @@ export function Comparison({ tone }: { tone: Tone }) {
             <div className="ours">{data.ours}</div>
             <div className="theirs">{data.theirs}</div>
           </div>
-          {data.rows.map((row, i) => (
+          {(data.rows ?? []).map((row, i) => (
             <div className="compare-row" key={i}>
               <div>{row.label}</div>
               <Cell value={row.ours} kind="ours" />

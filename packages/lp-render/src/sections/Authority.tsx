@@ -25,7 +25,7 @@ export function Authority() {
             <p>{data.bio}</p>
             {data.credentials && data.credentials.length > 0 ? (
               <div className="authority-creds">
-                {data.credentials.map((c, i) => (
+                {(data.credentials ?? []).map((c, i) => (
                   <span className="cred" key={i}>
                     {c}
                   </span>

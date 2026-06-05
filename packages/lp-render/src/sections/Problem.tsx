@@ -15,7 +15,7 @@ export function Problem({ tone }: { tone: Tone }) {
         <p className="lead">{data.body}</p>
         {data.bullets ? (
           <ul className="bullets bullets--arrow">
-            {data.bullets.map((b, i) => (
+            {(data.bullets ?? []).map((b, i) => (
               <li key={i}>{b}</li>
             ))}
           </ul>
