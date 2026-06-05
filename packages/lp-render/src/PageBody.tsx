@@ -5,6 +5,7 @@ import { useContent } from "./content";
 import type { SectionType, Tone } from "./content-types";
 import { Stage3D } from "./sections/Stage3D";
 import { ReviewBridge } from "./sections/ReviewBridge";
+import { SiteHeader } from "./components/SiteHeader";
 import { Hero } from "./sections/Hero";
 import { Urgency } from "./sections/Urgency";
 import { Problem } from "./sections/Problem";
@@ -70,6 +71,8 @@ export function PageBody() {
       {/* Inert unless loaded with ?review=1 from an allowlisted dashboard: answers the Live
           Review postMessage protocol (scroll + layout). See SPEC-014 / ReviewBridge.tsx. */}
       <ReviewBridge />
+      {/* Fixed glass header (wordmark + single anchor CTA to #oferta). Overlays the 3D stage/hero. */}
+      <SiteHeader />
       {/* Optional cinematic 3D panel pinned above the hero (renders nothing without a model). */}
       <Stage3D />
       <main>

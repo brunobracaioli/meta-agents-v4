@@ -66,7 +66,12 @@ The user message contains a JSON object:
     "autoridade": { "name": "...", "bio": "...", "provas": ["..."] },
     "numeros": [{ "value": "...", "label": "..." }],
     "scarcity": "...",
-    "guarantee": "..."
+    "guarantee": "...",
+    // OPTIONAL hero overrides + extra social-proof material:
+    "hero": { "badge": "...", "headline": "...", "headlineAccent": "...", "subhead": "...", "ctaLabel": "...", "terminal": { "title": "...", "prompt": "...", "lines": ["..."] } },
+    "depoimentos": { "eyebrow": "...", "heading": "...", "subhead": "...", "items": [{ "quote": "...", "author": "..." }] },
+    "parceriasLogos": { "heading": "...", "items": ["Meta Tech Provider", "..."] },
+    "garantia": { "heading": "...", "body": "...", "seal": "🛡️" }
   },
   "constraints": {
     "language": "pt-BR",
@@ -85,9 +90,13 @@ If `scrape` AND `product` are both missing, return error `missing_input`. The `p
 - `mecanismo`/`offerDetails` → `solution` + `features` (times/subtimes as feature cards);
   `agenda` → `curriculum`.
 - `numeros` present → `stats`. `persona` present → `persona`. `autoridade` present → `authority`.
-- `scarcity` or `deadline` → `urgency`. `guarantee` present → `guarantee`.
-- Always `hero`, `offer`, `finalCta`, `footer`. `proof`/`logos` only if there's testimonial/
-  brand material (in `scrape` or brief) — otherwise omit (don't fabricate social proof).
+- `scarcity` or `deadline` → `urgency`. `guarantee` or `garantia` present → dedicated `guarantee`
+  section (right after `offer`) — do NOT bury risk-reversal only inside the FAQ.
+- `depoimentos.items` present → `proof` (place before `persona`/`authority`). The brief carries
+  REAL testimonials — include the section. Without `depoimentos`/scrape testimonials, omit `proof`
+  (never fabricate social proof).
+- `parceriasLogos.items` present → `logos` trust strip (place right after `proof` or `authority`).
+- Always `hero`, `offer`, `finalCta`, `footer`.
 
 ---
 

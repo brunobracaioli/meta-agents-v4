@@ -13,6 +13,7 @@ export function Persona({ tone }: { tone: Tone }) {
     <section className={`section section--${tone}`}>
       <FadeIn className="container">
         <div className="section-head">
+          {data.eyebrow ? <span className="eyebrow eyebrow--tick">{data.eyebrow}</span> : null}
           <h2>{data.heading}</h2>
           {data.subhead ? <p>{data.subhead}</p> : null}
         </div>

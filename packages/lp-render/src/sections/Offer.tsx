@@ -8,7 +8,7 @@ export function Offer() {
   const { messages, isCartClosed: closed } = useContent();
   if (closed) {
     return (
-      <section className="section section--dark section--center" id="waitlist">
+      <section className="section section--dark section--center" id="oferta">
         <FadeIn className="container">
           <div className="offer">
             <h2>{messages.cartClosed.headline}</h2>
@@ -24,9 +24,10 @@ export function Offer() {
 
   const data = messages.offer;
   return (
-    <section className="section section--dark section--center">
+    <section className="section section--dark section--center" id="oferta">
       <FadeIn className="container">
         <div className="offer">
+          {data.eyebrow ? <span className="eyebrow eyebrow--tick">{data.eyebrow}</span> : null}
           <h2>{data.heading}</h2>
           {data.bonuses && data.bonuses.length > 0 ? (
             <ul className="bullets" style={{ textAlign: "left", display: "inline-block" }}>

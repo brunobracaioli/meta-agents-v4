@@ -43,7 +43,14 @@ object shaped like `messages/pt.json`. No prose, no markdown, no commentary outs
     "autoridade": { "name": "...", "bio": "...", "provas": ["..."] },
     "numeros": [{ "value": "...", "label": "..." }],
     "scarcity": "...", "guarantee": "...",
-    "faqHints": [{ "q": "...", "a": "..." }]
+    "faqHints": [{ "q": "...", "a": "..." }],
+    /* OPTIONAL hero overrides + extra proof material (use directly when present): */
+    "hero": { "badge": "...", "headline": "...", "headlineAccent": "...", "subhead": "...", "ctaLabel": "...",
+              "terminal": { "title": "...", "prompt": "...", "lines": ["..."] } },
+    "offer": { "eyebrow": "...", "heading": "...", "anchorLabel": "...", "installmentsLabel": "...", "secure": "...", "bonuses": ["..."] },
+    "depoimentos": { "eyebrow": "...", "heading": "...", "subhead": "...", "items": [{ "quote": "...", "author": "..." }] },
+    "parceriasLogos": { "heading": "...", "items": ["..."] },
+    "garantia": { "heading": "...", "body": "...", "seal": "🛡️" }
   },
   "scrape": { /* optional: scrape-extractor output. May be null — the brief is primary. */ },
   "tone": "tech-hacker",
@@ -60,10 +67,21 @@ If `architecture` is missing, return error `missing_architecture`.
 - `comparison` → the `comparison` rows (keep `ours`/`theirs` honest; reuse booleans/strings).
 - `mecanismo.times`/`subtimes`/`offerDetails` → `solution` + `features.items`. `agenda` → `curriculum.modules`.
 - `numeros` → `stats.items` (value+label as given). `persona` → `persona.items`.
-- `autoridade` → `authority` (name, bio, credentials = `provas`). `guarantee` → `guarantee` + `offer.guarantee`.
+- `autoridade` → `authority` (name, bio, credentials = `provas`). `garantia`/`guarantee` → dedicated
+  `guarantee` section (heading/body/seal) + a one-line `offer.guarantee`.
 - `scarcity`/`deadline` → `urgency` (label + scarcity). `prereqs`/`faqHints` → `faq`.
-- `offer`: use `priceCents`→`priceLabel`, `anchorPriceCents`→`anchor`, `payments`→`payments`,
-  `checkoutUrl` is wired by the template (don't output it). `tagline` informs `hero.headline`/`badge`.
+- `offer`: use `priceCents`→`priceLabel`, `anchorPriceCents`/`offer.anchorLabel`→`anchor`,
+  `offer.installmentsLabel`→`installments`, `offer.bonuses`→`bonuses` (value-stack), `offer.eyebrow`,
+  `offer.heading`, `offer.secure`, `payments`→`payments`. `checkoutUrl` is wired by the template (don't output it).
+- **`hero` (when present in brief): use its fields directly** — `badge`, `headline`, `headlineAccent`
+  (the aurora-gradient second line), `subhead`, `ctaLabel`, and `terminal` (`{title, prompt, lines[]}`).
+  Pass `terminal` through as-is. Without a brief `hero`, derive `headline`/`badge` from `tagline`.
+- **`depoimentos` → `proof`**: copy `eyebrow`, `heading`, `subhead` and map `items[]` → `testimonials[]`
+  **VERBATIM** (`quote`+`author`). See testimonial-fidelity rule below.
+- **`parceriasLogos` → `logos`** (`heading` + `items[]` as given — these are partner/brand names).
+- Section eyebrows: when the brief supplies an `eyebrow` (e.g. `depoimentos.eyebrow`, `offer.eyebrow`),
+  pass it through on that section; you MAY add short `// Label` eyebrows to `persona`/`proof`/`offer`
+  for the mono-eyebrow look. Keep them factual, ≤ 24 chars.
 
 ---
 
@@ -72,7 +90,9 @@ If `architecture` is missing, return error `missing_architecture`.
 ```json
 {
   "seo": { "title": "≤ 60", "description": "≤ 155", "ogAlt": "..." },
-  "hero": { "badge": "≤ 32 (optional)", "headline": "...", "subhead": "...", "ctaLabel": "≤ 24" },
+  "hero": { "badge": "≤ 32 (optional)", "headline": "...", "headlineAccent": "(optional aurora 2nd line)",
+            "subhead": "...", "ctaLabel": "≤ 24",
+            "terminal": { "title": "(optional)", "prompt": "...", "lines": ["..."] } },
   "sections": {
     "urgency":    { "label": "≤ 40", "scarcity": "≤ 40 (optional)" },
     "problem":    { "heading": "...", "body": "...", "bullets": ["...", "..."] },
@@ -82,14 +102,14 @@ If `architecture` is missing, return error `missing_architecture`.
     "features":   { "heading": "...", "subhead": "...", "items": [{ "icon": "emoji (optional)", "title": "...", "desc": "..." }] },
     "curriculum": { "heading": "...", "subhead": "...", "modules": [{ "title": "...", "desc": "..." }] },
     "stats":      { "heading": "(optional)", "items": [{ "value": "+2.000", "label": "..." }] },
-    "proof":      { "heading": "...", "subhead": "...", "testimonials": [{ "quote": "...", "author": "..." }] },
+    "proof":      { "eyebrow": "(optional)", "heading": "...", "subhead": "...", "testimonials": [{ "quote": "...", "author": "..." }] },
     "logos":      { "heading": "(optional)", "items": ["Marca", "..."] },
-    "persona":    { "heading": "...", "subhead": "...", "items": [{ "icon": "emoji (optional)", "title": "...", "desc": "..." }] },
+    "persona":    { "eyebrow": "(optional)", "heading": "...", "subhead": "...", "items": [{ "icon": "emoji (optional)", "title": "...", "desc": "..." }] },
     "authority":  { "eyebrow": "(optional)", "name": "...", "bio": "...", "credentials": ["...", "..."] },
     "guarantee":  { "heading": "...", "body": "...", "seal": "emoji (optional)" }
   },
   "offer": {
-    "heading": "...", "priceLabel": "R$ 1.497", "anchor": "De R$ ...", "installments": "ou 12x de R$ ...",
+    "eyebrow": "(optional)", "heading": "...", "priceLabel": "R$ 1.497", "anchor": "De R$ ...", "installments": "ou 12x de R$ ...",
     "bonuses": ["..."], "guarantee": "...", "payments": ["Pix", "Cartão", "Boleto"],
     "secure": "🔒 Pagamento 100% seguro · Acesso imediato", "ctaLabel": "≤ 24"
   },
@@ -172,6 +192,18 @@ Valid error codes: `missing_architecture` · `unsafe_claim_detected` · `prompt_
 - If the scrape/product contains a non-compliant claim, **neutralize** it and add
   `unsafe_claim_neutralized` to `warnings`. If the entire offer is fraudulent, return
   `unsafe_claim_detected`.
+
+### Testimonial fidelity (NON-NEGOTIABLE)
+
+- `proof.testimonials` MUST come from `product.depoimentos.items` (or scrape testimonials).
+  **NEVER invent a testimonial, a name, or a result.** If there are none, omit `proof`.
+- Reproduce each quote **faithfully** to its source. You MAY trim length, but NEVER change the
+  meaning, NEVER add claims the person didn't make, and NEVER attribute product-specific results
+  (e.g. "fechei 10 clientes com a agência de IA") that aren't in the original — putting words in a
+  real person's mouth is fabrication. Keep `author` exactly as given.
+- Carry the brief's `depoimentos.subhead` (e.g. the "resultados variam · sem garantia de resultado
+  financeiro" disclaimer) into `proof.subhead`. If the brief has no disclaimer and quotes imply
+  results, add a neutral one.
 
 ### Price & offer
 

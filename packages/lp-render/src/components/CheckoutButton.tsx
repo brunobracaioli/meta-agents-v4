@@ -11,7 +11,7 @@ export function CheckoutButton({ label, pulse = false }: { label: string; pulse?
   const { contentSpec } = useContent();
   const fallback =
     contentSpec.cart_state === "closed"
-      ? contentSpec.waitlist_url ?? "#waitlist"
+      ? contentSpec.waitlist_url ?? "#oferta"
       : contentSpec.checkout_url;
   const [href, setHref] = useState(fallback);
 

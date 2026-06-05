@@ -37,6 +37,21 @@
 
   --font-title: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-body: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Monospace stack for "code" accents (eyebrows, terminal). System-first so it needs no
+     extra @fontsource bundle in the pre-baked runner node_modules — prefers JetBrains Mono
+     / SF Mono when the visitor has them. Hybrid look imported from claude-code.b2tech.io. */
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* Discreet aurora used only on accent words/labels — orange stays the dominant brand. */
+  --accent-aurora: linear-gradient(135deg, #d3eef4 0%, #f1eec8 42%, var(--orange-hi) 100%);
+
+  /* fixed site header */
+  --header-h: 64px;
+}
+
+/* Anchored CTAs (#oferta from the fixed header) land below the glass bar, not under it. */
+html {
+  scroll-padding-top: calc(var(--header-h) + 16px);
 }
 
 * {
@@ -143,12 +158,27 @@ a {
 .eyebrow {
   display: inline-block;
   color: var(--orange);
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: 0.8rem;
-  letter-spacing: 0.08em;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   margin-bottom: 12px;
+}
+
+/* `// LABEL` prefix — the claude-code mono-eyebrow tell. Decorative, hidden from a11y tree. */
+.eyebrow--tick::before {
+  content: "// ";
+  opacity: 0.55;
+}
+
+/* Aurora text-clip for accent words (hero accent line, key H2 words). Used sparingly. */
+.gradient-text {
+  background: var(--accent-aurora);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
 .lead {
@@ -210,6 +240,156 @@ a {
   100% {
     box-shadow: 0 8px 24px rgba(255, 107, 26, 0.28), 0 0 0 0 rgba(255, 107, 26, 0);
   }
+}
+
+/* ---------- fixed site header (glass) ---------- */
+/* Imported from claude-code.b2tech.io: a translucent, blurred bar pinned to the top with
+   the code-style wordmark on the left and a single anchor CTA on the right. Overlays the
+   dark hero / 3D stage; renders nothing extra for LPs that don't mount <SiteHeader />. */
+.site-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  height: var(--header-h);
+  background: rgba(10, 15, 26, 0.8);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--navy-border);
+}
+
+.site-header-inner {
+  max-width: var(--maxw);
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.site-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+  color: var(--text-invert);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.site-brand .bracket {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--orange);
+}
+
+.site-brand .slash {
+  color: var(--text-invert-dim);
+  margin: 0 4px;
+  font-weight: 600;
+}
+
+.site-header-cta {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-invert);
+  text-decoration: none;
+  border: 1px solid rgba(255, 107, 26, 0.4);
+  background: rgba(255, 107, 26, 0.12);
+  border-radius: var(--radius-pill);
+  padding: 8px 18px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.site-header-cta:hover {
+  background: rgba(255, 107, 26, 0.22);
+  border-color: var(--orange);
+}
+
+@media (max-width: 560px) {
+  .site-header-inner {
+    padding: 0 16px;
+  }
+  .site-header-cta {
+    padding: 7px 14px;
+    font-size: 0.82rem;
+  }
+}
+
+/* ---------- terminal mockup (hero) ---------- */
+/* Optional code-window visual that makes the "agents operating Meta Ads" idea concrete.
+   Renders only when messages.hero.terminal is present (backward-compatible). */
+.terminal {
+  width: 100%;
+  max-width: 560px;
+  margin: 28px auto 0;
+  background: #0a0a0f;
+  border: 1px solid var(--navy-border);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  text-align: left;
+}
+
+/* In the two-column split hero the terminal lives in the left copy column. */
+.hero--split .terminal {
+  margin-left: 0;
+}
+
+.terminal-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  background: #15151c;
+  border-bottom: 1px solid var(--navy-border);
+}
+
+.terminal-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+}
+.terminal-dot--r { background: #ff5f57; }
+.terminal-dot--y { background: #febc2e; }
+.terminal-dot--g { background: #28c840; }
+
+.terminal-title {
+  margin-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-invert-dim);
+}
+
+.terminal-body {
+  padding: 18px 18px 20px;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.7;
+  color: var(--text-invert);
+}
+
+.terminal-prompt > span {
+  color: var(--success);
+  margin-right: 8px;
+}
+
+.terminal-line {
+  color: var(--text-invert-dim);
+}
+
+.terminal-line > span {
+  color: var(--orange-hi);
+  margin-right: 8px;
 }
 
 /* ---------- 3D stage panel (pinned-scroll, above the hero) ---------- */

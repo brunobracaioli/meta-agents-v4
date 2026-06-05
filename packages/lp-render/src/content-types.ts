@@ -63,8 +63,19 @@ export type CompareCell = boolean | string;
 export interface Messages {
   seo: { title: string; description: string; ogAlt: string; ogImage?: string };
   /** `image` = AI-generated hero visual (landscape banner, single-column hero).
-   * `portrait` = optional cut-out portrait that switches the hero to a two-column split. */
-  hero: { badge?: string; headline: string; subhead: string; ctaLabel: string; image?: string; portrait?: string };
+   * `portrait` = optional cut-out portrait that switches the hero to a two-column split.
+   * `headlineAccent` = optional second line rendered with the aurora gradient (claude-code look).
+   * `terminal` = optional code-window mockup (prompt + agent log lines). All optional ⇒ no-op. */
+  hero: {
+    badge?: string;
+    headline: string;
+    headlineAccent?: string;
+    subhead: string;
+    ctaLabel: string;
+    image?: string;
+    portrait?: string;
+    terminal?: { title?: string; prompt: string; lines?: string[] };
+  };
   sections: {
     urgency?: { label: string; scarcity?: string };
     problem?: { heading: string; body: string; bullets?: string[]; image?: string };
@@ -79,13 +90,14 @@ export interface Messages {
     features?: { heading: string; subhead?: string; image?: string; items: { icon?: string; title: string; desc: string }[] };
     curriculum?: { heading: string; subhead?: string; modules: { title: string; desc: string }[] };
     stats?: { heading?: string; items: { value: string; label: string }[] };
-    proof?: { heading: string; subhead?: string; image?: string; testimonials: { quote: string; author: string }[] };
+    proof?: { eyebrow?: string; heading: string; subhead?: string; image?: string; testimonials: { quote: string; author: string }[] };
     logos?: { heading?: string; items: string[] };
-    persona?: { heading: string; subhead?: string; items: { icon?: string; title: string; desc: string }[] };
+    persona?: { eyebrow?: string; heading: string; subhead?: string; items: { icon?: string; title: string; desc: string }[] };
     authority?: { eyebrow?: string; name: string; bio: string; credentials?: string[]; image?: string };
     guarantee?: { heading: string; body: string; seal?: string };
   };
   offer: {
+    eyebrow?: string;
     heading: string;
     priceLabel: string;
     anchor?: string;

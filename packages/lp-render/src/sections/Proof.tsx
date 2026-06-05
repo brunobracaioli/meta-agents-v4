@@ -11,6 +11,7 @@ export function Proof({ tone }: { tone: Tone }) {
   return (
     <section className={`section section--${tone}`}>
       <div className="section-head">
+        {data.eyebrow ? <span className="eyebrow eyebrow--tick">{data.eyebrow}</span> : null}
         <h2>{data.heading}</h2>
         {data.subhead ? <p>{data.subhead}</p> : null}
       </div>
