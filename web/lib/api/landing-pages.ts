@@ -1,9 +1,15 @@
 import { Hono } from "hono";
 import type { Json } from "@/lib/db/types";
 import { db } from "@/lib/db/client";
+import { trackingDb } from "@/lib/db/tracking";
 import { getLandingPageFull } from "@/lib/services/landing-page";
 import { rateLimiters, enforceLimit } from "@/lib/ratelimit";
-import { themeSchema, settingsPatchSchema } from "@/lib/landing/validate";
+import {
+  themeSchema,
+  settingsPatchSchema,
+  trackingSecretsSchema,
+  trackingSecretDeleteSchema,
+} from "@/lib/landing/validate";
 import { validateSection } from "@/lib/landing/section-schemas";
 
 // Editor API for the landing-page DRAFT (SPEC-012 §5). All routes sit behind the session
@@ -165,6 +171,85 @@ landingPages.patch("/:id/settings", async (c) => {
     .update({ settings: merged as Json, ...columnSync })
     .eq("id", id);
   if (upd.error) throw upd.error;
+  return c.json({ ok: true });
+});
+
+// ---------- Tracking SECRETS (write-only; Phase 2 — ADR 0021 / SPEC-015 §7.5) ----------
+// These write to the RLS-locked `lp_tracking_secrets` table, NEVER to settings/content-spec.
+// The Worker (track.b2tech.io) is the only reader. No endpoint here ever returns a secret value.
+
+// GET status: which providers/ids have a secret configured. NEVER returns the secret itself.
+landingPages.get("/:id/tracking-secrets/status", async (c) => {
+  const id = c.req.param("id");
+  const state = await loadEditState(id);
+  if (!state) return c.json({ error: "not_found" }, 404);
+
+  // Select ONLY non-secret columns — the `secret` jsonb is never read here.
+  const res = await trackingDb()
+    .from("lp_tracking_secrets")
+    .select("provider, public_id, test_event_code, updated_at")
+    .eq("landing_page_id", id);
+  if (res.error) throw res.error;
+  const secrets = (res.data ?? []).map((r) => ({
+    provider: r.provider,
+    public_id: r.public_id,
+    configured: true,
+    has_test_code: !!r.test_event_code,
+    updated_at: r.updated_at,
+  }));
+  return c.json({ secrets });
+});
+
+// PUT: upsert one or more secrets. Write-only — responds with a count, never the values.
+landingPages.put("/:id/tracking-secrets", async (c) => {
+  const id = c.req.param("id");
+  const { allowed } = await enforceLimit(rateLimiters.landingEdit(), id, "landing-edit");
+  if (!allowed) return c.json({ error: "rate_limited" }, 429, { "Retry-After": "5" });
+
+  const parsed = trackingSecretsSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "invalid_secrets", detail: parsed.error.issues[0]?.message }, 400);
+
+  const state = await loadEditState(id);
+  if (!state) return c.json({ error: "not_found" }, 404);
+
+  const rows = parsed.data.entries.map((e) => ({
+    landing_page_id: id,
+    provider: e.provider,
+    public_id: e.public_id,
+    secret: e.secret as Json,
+    test_event_code: e.provider === "meta" ? e.test_event_code ?? null : null,
+  }));
+  const upd = await trackingDb()
+    .from("lp_tracking_secrets")
+    .upsert(rows, { onConflict: "landing_page_id,provider,public_id" });
+  if (upd.error) throw upd.error;
+
+  // Audit WITHOUT the secret value (Repudiation/Info-disclosure — STRIDE).
+  const summary = parsed.data.entries.map((e) => `${e.provider}/${e.public_id}`).join(", ");
+  await logLandingOp(state.client_id, id, `tracking secret(s) configurado(s): ${summary}`, "operator");
+  return c.json({ ok: true, count: rows.length });
+});
+
+// DELETE: remove one secret (clean lifecycle — avoids orphan server-only firing).
+landingPages.delete("/:id/tracking-secrets", async (c) => {
+  const id = c.req.param("id");
+  const { allowed } = await enforceLimit(rateLimiters.landingEdit(), id, "landing-edit");
+  if (!allowed) return c.json({ error: "rate_limited" }, 429, { "Retry-After": "5" });
+
+  const parsed = trackingSecretDeleteSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "invalid_request", detail: parsed.error.issues[0]?.message }, 400);
+
+  const state = await loadEditState(id);
+  if (!state) return c.json({ error: "not_found" }, 404);
+
+  const del = await trackingDb()
+    .from("lp_tracking_secrets")
+    .delete()
+    .eq("landing_page_id", id)
+    .eq("provider", parsed.data.provider)
+    .eq("public_id", parsed.data.public_id);
+  if (del.error) throw del.error;
+  await logLandingOp(state.client_id, id, `tracking secret removido: ${parsed.data.provider}/${parsed.data.public_id}`, "operator");
   return c.json({ ok: true });
 });
 

@@ -77,6 +77,64 @@ const trackingPatchSchema = z
   .partial()
   .strict();
 
+// ---------- Tracking SECRETS (write-only; SEPARATE store, never settings/content-spec) ----------
+// Phase 2 (ADR 0021 / SPEC-015 §7.5). These never touch `settings.tracking` — they go to the
+// RLS-locked `lp_tracking_secrets` table via PUT /api/landing-pages/:id/tracking-secrets. The
+// GET status endpoint NEVER returns these values. Tokens are opaque, printable, bounded.
+const secretToken = z.string().min(10).max(4096).regex(/^[\x21-\x7E]+$/, "token inválido (sem espaços)");
+const adsCustomerId = z.string().regex(/^(AW-)?\d{9,12}$/, "customer id inválido (ex.: 1234567890)");
+const testEventCode = z.string().max(40).regex(/^[A-Za-z0-9]+$/, "test_event_code inválido");
+
+const metaSecretEntry = z
+  .object({
+    provider: z.literal("meta"),
+    public_id: metaPixelId,
+    secret: z.object({ capi_token: secretToken }).strict(),
+    test_event_code: testEventCode.optional(),
+  })
+  .strict();
+const ga4SecretEntry = z
+  .object({
+    provider: z.literal("ga4"),
+    public_id: ga4Id,
+    secret: z.object({ api_secret: secretToken }).strict(),
+  })
+  .strict();
+const googleAdsSecretEntry = z
+  .object({
+    provider: z.literal("google_ads"),
+    public_id: adsCustomerId,
+    secret: z
+      .object({
+        developer_token: secretToken,
+        conversion_action: z.string().regex(/^\d{6,20}$/, "conversion action inválida"),
+        login_customer_id: z.string().regex(/^\d{9,12}$/, "login customer id inválido").optional(),
+        client_id: z.string().min(10).max(200),
+        client_secret: secretToken,
+        refresh_token: secretToken,
+      })
+      .strict(),
+  })
+  .strict();
+
+export const trackingSecretsSchema = z
+  .object({
+    entries: z
+      .array(z.discriminatedUnion("provider", [metaSecretEntry, ga4SecretEntry, googleAdsSecretEntry]))
+      .min(1)
+      .max(30),
+  })
+  .strict();
+
+export type TrackingSecretsInput = z.infer<typeof trackingSecretsSchema>;
+
+export const trackingSecretDeleteSchema = z
+  .object({
+    provider: z.enum(["meta", "ga4", "google_ads"]),
+    public_id: z.string().min(1).max(64),
+  })
+  .strict();
+
 export const settingsPatchSchema = z
   .object({
     seo: z
