@@ -42,6 +42,7 @@ const SECTION_LABELS: Record<string, string> = {
 
 const TAB_THEME = "__theme";
 const TAB_SETTINGS = "__settings";
+const TAB_TRACKING = "__tracking";
 
 function withSectionFields(doc: ContentDoc, type: string, fields: Record<string, unknown>): ContentDoc {
   return {
@@ -338,6 +339,46 @@ export function LandingPageEditor({
     [postDoc, schedule, saveSettings],
   );
 
+  // Tracking lives inside settings.tracking, but only the PUBLIC ID arrays are editable
+  // here — consent_key and the legacy single fields are preserved server-side by the
+  // shallow merge. Server-side CAPI secrets never pass through this path (Phase 2).
+  const saveTracking = useCallback(
+    async (tracking: Settings["tracking"]) => {
+      const patch = {
+        tracking: {
+          meta_pixels: tracking.meta_pixels ?? [],
+          ga4_ids: tracking.ga4_ids ?? [],
+          google_ads_ids: tracking.google_ads_ids ?? [],
+        },
+      };
+      setSave({ kind: "saving" });
+      try {
+        const res = await fetch(`/api/landing-pages/${meta.id}/settings`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        setSave(res.ok ? { kind: "saved" } : { kind: "error", msg: "Falha ao salvar o tracking." });
+      } catch {
+        setSave({ kind: "error", msg: "Erro de rede ao salvar." });
+      } finally {
+        dirty.current.delete(SETTINGS_DIRTY_KEY);
+      }
+    },
+    [meta.id],
+  );
+
+  const onTrackingChange = useCallback(
+    (tracking: Settings["tracking"]) => {
+      dirty.current.add(SETTINGS_DIRTY_KEY);
+      const next = { ...docRef.current, settings: { ...docRef.current.settings, tracking } };
+      setDoc(next);
+      postDoc(next);
+      schedule("tracking", () => saveTracking(tracking));
+    },
+    [postDoc, schedule, saveTracking],
+  );
+
   const publish = useCallback(async () => {
     setPublishing(true);
     try {
@@ -441,6 +482,15 @@ export function LandingPageEditor({
             >
               Config
             </button>
+            <button
+              type="button"
+              onClick={() => setActive(TAB_TRACKING)}
+              className={`rounded px-2 py-1 text-xs transition ${
+                active === TAB_TRACKING ? "bg-orange-300/15 text-orange-100" : "text-white/55 hover:bg-white/[0.04] hover:text-white"
+              }`}
+            >
+              Tracking
+            </button>
           </div>
 
           {/* Active panel */}
@@ -449,6 +499,8 @@ export function LandingPageEditor({
               <ThemeEditor theme={doc.theme} onChange={onThemeChange} />
             ) : active === TAB_SETTINGS ? (
               <SettingsEditor settings={doc.settings} landingPageId={meta.id} onChange={onSettingsChange} />
+            ) : active === TAB_TRACKING ? (
+              <TrackingEditor tracking={doc.settings.tracking} onChange={onTrackingChange} lpId={meta.id} />
             ) : activeSection ? (
               <FieldEditor
                 value={activeSection.fields}
@@ -737,6 +789,358 @@ function SettingsEditor({
           onChange={(e) => set({ cartClosed: { ...settings.cartClosed, waitlistCtaLabel: e.target.value } })}
         />
       </div>
+    </div>
+  );
+}
+
+// ---------- Tracking editor ----------
+// Manages the PUBLIC tracking IDs only (Meta pixels, GA4, Google Ads). These get baked into
+// the public static site, so they're never secret. The server-side CAPI tokens / API secrets
+// are a separate, write-only store (Phase 2) — never entered through this object. SPEC-015.
+type Tracking = Settings["tracking"];
+
+// Light client-side format hints (mirror the strict server schema in lib/landing/validate.ts).
+const ID_PATTERNS: Record<"meta_pixels" | "ga4_ids" | "google_ads_ids", RegExp> = {
+  meta_pixels: /^\d{15,16}$/,
+  ga4_ids: /^G-[A-Z0-9]{6,12}$/,
+  google_ads_ids: /^AW-[0-9]{9,12}(\/[A-Za-z0-9_-]{1,40})?$/,
+};
+const MAX_TRACKING_IDS = 10;
+
+function IdListField({
+  label,
+  hint,
+  placeholder,
+  pattern,
+  values,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  placeholder: string;
+  pattern: RegExp;
+  values: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const setAt = (i: number, v: string) => onChange(values.map((x, j) => (j === i ? v : x)));
+  const removeAt = (i: number) => onChange(values.filter((_, j) => j !== i));
+  const add = () => {
+    if (values.length >= MAX_TRACKING_IDS) return;
+    onChange([...values, ""]);
+  };
+  return (
+    <div className="space-y-2">
+      <span className={PANEL_LABEL}>{label}</span>
+      {values.length === 0 && <p className="text-[11px] text-white/35">Nenhum configurado.</p>}
+      {values.map((value, i) => {
+        const invalid = value.trim() !== "" && !pattern.test(value.trim());
+        return (
+          <div key={i} className="flex items-center gap-2">
+            <input
+              className={`${PANEL_INPUT} ${invalid ? "border-amber-300/50" : ""}`}
+              placeholder={placeholder}
+              value={value}
+              onChange={(e) => setAt(i, e.target.value)}
+              aria-invalid={invalid}
+            />
+            <button
+              type="button"
+              onClick={() => removeAt(i)}
+              className="shrink-0 rounded border border-white/10 px-2 py-1.5 text-xs text-white/50 transition hover:border-amber-300/40 hover:text-amber-100"
+              aria-label={`Remover ${label}`}
+            >
+              ✕
+            </button>
+          </div>
+        );
+      })}
+      <button
+        type="button"
+        onClick={add}
+        disabled={values.length >= MAX_TRACKING_IDS}
+        className="rounded border border-white/10 px-2 py-1 text-xs text-white/60 transition hover:border-cyan-200/40 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        + Adicionar
+      </button>
+      <p className="text-[10px] text-white/30">{hint}</p>
+    </div>
+  );
+}
+
+function TrackingEditor({
+  tracking,
+  onChange,
+  lpId,
+}: {
+  tracking: Tracking;
+  onChange: (t: Tracking) => void;
+  lpId: string;
+}) {
+  // Read with back-compat: if the multi arrays are empty, surface the legacy single field so
+  // the operator sees the pixel the page was generated with and can grow the list from there.
+  const metaPixels = tracking.meta_pixels?.length
+    ? tracking.meta_pixels
+    : tracking.fb_pixel_id
+      ? [tracking.fb_pixel_id]
+      : [];
+  const ga4Ids = tracking.ga4_ids?.length ? tracking.ga4_ids : tracking.ga4_id ? [tracking.ga4_id] : [];
+  const googleAdsIds = tracking.google_ads_ids ?? [];
+
+  const setList = (key: "meta_pixels" | "ga4_ids" | "google_ads_ids", next: string[]) =>
+    onChange({ ...tracking, [key]: next });
+
+  return (
+    <div className="space-y-5">
+      <p className="text-[11px] leading-relaxed text-white/40">
+        IDs públicos disparados na página (após o consentimento LGPD). O checkout em si é
+        traqueado pela plataforma (Hubla/Hotmart). Você pode ter mais de um de cada.
+      </p>
+
+      <IdListField
+        label="Meta Pixel"
+        placeholder="653995666521954"
+        hint="ID numérico do Pixel (15–16 dígitos)."
+        pattern={ID_PATTERNS.meta_pixels}
+        values={metaPixels}
+        onChange={(next) => setList("meta_pixels", next)}
+      />
+
+      <IdListField
+        label="Google Analytics 4"
+        placeholder="G-XXXXXXXXXX"
+        hint="Measurement ID do GA4 (começa com G-)."
+        pattern={ID_PATTERNS.ga4_ids}
+        values={ga4Ids}
+        onChange={(next) => setList("ga4_ids", next)}
+      />
+
+      <IdListField
+        label="Google Ads"
+        placeholder="AW-123456789"
+        hint="ID de conversão do Google Ads (AW-…), com label opcional após a barra."
+        pattern={ID_PATTERNS.google_ads_ids}
+        values={googleAdsIds}
+        onChange={(next) => setList("google_ads_ids", next)}
+      />
+
+      <CapiSecretsEditor lpId={lpId} metaPixels={metaPixels} />
+
+      <TrackingHealth lpId={lpId} />
+    </div>
+  );
+}
+
+// Read-only health panel over the lp_events mirror (last 7d). No PII — only volume, CAPI
+// success rate, match-proxy and UTM coverage. Renders nothing until there are events.
+function TrackingHealth({ lpId }: { lpId: string }) {
+  const [data, setData] = useState<{
+    total: number;
+    byName: Record<string, number>;
+    capi: { attempted: number; ok: number };
+    match: { email: number; phone: number };
+    utmCoverage: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const r = await fetch(`/api/landing-pages/${lpId}/tracking-health`);
+        if (r.ok && alive) setData(await r.json());
+      } catch {
+        /* best-effort */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [lpId]);
+
+  if (!data) return null;
+  if (data.total === 0) {
+    return (
+      <div className="rounded-lg border border-white/8 bg-white/[0.015] p-3">
+        <span className={PANEL_LABEL}>Saúde do tracking (7d)</span>
+        <p className="mt-1 text-[10px] text-white/30">Sem eventos server-side ainda.</p>
+      </div>
+    );
+  }
+  const capiPct = data.capi.attempted ? Math.round((100 * data.capi.ok) / data.capi.attempted) : null;
+  const topEvents = Object.entries(data.byName).sort((a, b) => b[1] - a[1]);
+
+  return (
+    <div className="space-y-2 rounded-lg border border-white/8 bg-white/[0.015] p-3">
+      <span className={PANEL_LABEL}>Saúde do tracking (7d)</span>
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <div className="font-mono text-lg text-white/85">{data.total}</div>
+          <div className="text-[9px] uppercase tracking-[0.1em] text-white/35">Eventos</div>
+        </div>
+        <div>
+          <div className="font-mono text-lg text-white/85">{capiPct === null ? "—" : `${capiPct}%`}</div>
+          <div className="text-[9px] uppercase tracking-[0.1em] text-white/35">CAPI 200</div>
+        </div>
+        <div>
+          <div className="font-mono text-lg text-white/85">
+            {data.total ? Math.round((100 * data.utmCoverage) / data.total) : 0}%
+          </div>
+          <div className="text-[9px] uppercase tracking-[0.1em] text-white/35">UTM</div>
+        </div>
+      </div>
+      <div className="space-y-1 border-t border-white/8 pt-2">
+        {topEvents.map(([name, n]) => (
+          <div key={name} className="flex items-center justify-between text-[11px]">
+            <span className="font-mono text-white/55">{name}</span>
+            <span className="text-white/40">{n}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Write-only editor for the server-side conversion SECRETS (Meta CAPI). Tokens are sent to the
+// isolated, RLS-locked store via PUT and are NEVER read back — the status endpoint only tells us
+// which pixels already have a token. Saving activates server-side on the next publish.
+// See ADR 0021 / SPEC-015 §7.5.
+function CapiSecretsEditor({ lpId, metaPixels }: { lpId: string; metaPixels: string[] }) {
+  const [configured, setConfigured] = useState<Set<string>>(new Set());
+  const [tokens, setTokens] = useState<Record<string, string>>({});
+  const [codes, setCodes] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string>("");
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/landing-pages/${lpId}/tracking-secrets/status`);
+      if (!r.ok) return;
+      const d = (await r.json()) as { secrets?: { provider: string; public_id: string }[] };
+      setConfigured(new Set((d.secrets ?? []).filter((s) => s.provider === "meta").map((s) => s.public_id)));
+    } catch {
+      /* status is best-effort */
+    }
+  }, [lpId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const save = async (pixel: string) => {
+    const token = (tokens[pixel] ?? "").trim();
+    if (token.length < 10) {
+      setMsg("Token CAPI muito curto.");
+      return;
+    }
+    setBusy(pixel);
+    setMsg("");
+    try {
+      const entry: Record<string, unknown> = { provider: "meta", public_id: pixel, secret: { capi_token: token } };
+      const code = (codes[pixel] ?? "").trim();
+      if (code) entry.test_event_code = code;
+      const r = await fetch(`/api/landing-pages/${lpId}/tracking-secrets`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ entries: [entry] }),
+      });
+      if (r.ok) {
+        setTokens((t) => ({ ...t, [pixel]: "" }));
+        setMsg("Token salvo. Republique a página para ativar o server-side.");
+        await load();
+      } else {
+        const d = (await r.json().catch(() => ({}))) as { detail?: string };
+        setMsg(d.detail ?? "Falha ao salvar o token.");
+      }
+    } catch {
+      setMsg("Erro de rede ao salvar.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const remove = async (pixel: string) => {
+    setBusy(pixel);
+    setMsg("");
+    try {
+      const r = await fetch(`/api/landing-pages/${lpId}/tracking-secrets`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider: "meta", public_id: pixel }),
+      });
+      setMsg(r.ok ? "Token removido." : "Falha ao remover.");
+      await load();
+    } catch {
+      setMsg("Erro de rede ao remover.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const pixels = metaPixels.filter((p) => p.trim() !== "");
+
+  return (
+    <div className="space-y-3 rounded-lg border border-white/8 bg-white/[0.015] p-3">
+      <span className={PANEL_LABEL}>Conversões server-side (Meta CAPI)</span>
+      <p className="text-[10px] leading-relaxed text-white/35">
+        Envio server-side via Cloudflare (CAPI + dedup por event_id) para EMQ alto. O token é um
+        segredo: vai para um cofre isolado e <strong>nunca</strong> aparece na página nem é
+        devolvido. Salvar ativa no <strong>próximo publish</strong>.
+      </p>
+
+      {pixels.length === 0 && (
+        <p className="text-[11px] text-white/35">Adicione um Meta Pixel acima para configurar o CAPI.</p>
+      )}
+
+      {pixels.map((pixel) => (
+        <div key={pixel} className="space-y-2 rounded border border-white/8 p-2.5">
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-[11px] text-white/70">{pixel}</span>
+            {configured.has(pixel) ? (
+              <span className="rounded border border-emerald-300/30 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-emerald-200/80">
+                configurado
+              </span>
+            ) : (
+              <span className="rounded border border-white/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-white/40">
+                sem token
+              </span>
+            )}
+          </div>
+          <input
+            type="password"
+            autoComplete="off"
+            className={PANEL_INPUT}
+            placeholder={configured.has(pixel) ? "Substituir token CAPI…" : "Colar o token CAPI…"}
+            value={tokens[pixel] ?? ""}
+            onChange={(e) => setTokens((t) => ({ ...t, [pixel]: e.target.value }))}
+          />
+          <input
+            className={PANEL_INPUT}
+            placeholder="test_event_code (opcional, só homologação)"
+            value={codes[pixel] ?? ""}
+            onChange={(e) => setCodes((c) => ({ ...c, [pixel]: e.target.value }))}
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => save(pixel)}
+              disabled={busy === pixel}
+              className="rounded border border-white/10 px-2 py-1 text-xs text-white/70 transition hover:border-emerald-200/40 hover:text-emerald-100 disabled:opacity-40"
+            >
+              {busy === pixel ? "Salvando…" : "Salvar token"}
+            </button>
+            {configured.has(pixel) && (
+              <button
+                type="button"
+                onClick={() => remove(pixel)}
+                disabled={busy === pixel}
+                className="rounded border border-white/10 px-2 py-1 text-xs text-white/50 transition hover:border-amber-300/40 hover:text-amber-100 disabled:opacity-40"
+              >
+                Remover
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {msg && <p className="text-[10px] text-white/45">{msg}</p>}
     </div>
   );
 }

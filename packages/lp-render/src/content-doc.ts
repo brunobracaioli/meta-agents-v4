@@ -31,7 +31,25 @@ export interface Settings {
    * digital-rain backdrop; `color` overrides the hologram/rain hue. Absent → no panel. */
   stage3d?: { model: string; poster?: string; rain?: boolean; color?: string; logo?: string };
   seo: { title: string; description: string; ogAlt: string; ogImage?: string };
-  tracking: { fb_pixel_id: string; ga4_id: string; consent_key: string };
+  /** Pixels/measurement IDs injected into the (consent-gated) page. ALL fields here are
+   * PUBLIC — they end up in content-spec.json, which is built into the public static site.
+   * Server-side secrets (CAPI access token, GA4 API secret) must NEVER live here; they go
+   * to the RLS-locked secrets store the serializer never reads. See ADR 0021 / SPEC-015.
+   * The legacy single `fb_pixel_id`/`ga4_id` stay for back-compat; when the `*_ids` arrays
+   * are present they take precedence (a page may carry more than one of each). */
+  tracking: {
+    fb_pixel_id: string;
+    ga4_id: string;
+    consent_key: string;
+    meta_pixels?: string[];
+    ga4_ids?: string[];
+    google_ads_ids?: string[];
+    /** Phase 2: public config pointing the browser at the multi-tenant tagging server.
+     * `endpoint` is the Worker base (https://track.b2tech.io); `lp_id` is this LP's UUID —
+     * BOTH are public (the Worker holds the secrets, resolved by lp_id). Absent ⇒ Phase-1
+     * client-side only. The serializer never adds secrets here. See ADR 0021 / SPEC-015 §7. */
+    server?: { endpoint: string; lp_id: string };
+  };
   checkout_url: string;
   waitlist_url?: string;
   price_cents: number;

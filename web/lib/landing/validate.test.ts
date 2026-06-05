@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { validateSectionFields, themeSchema, settingsPatchSchema } from "./validate";
+import {
+  validateSectionFields,
+  themeSchema,
+  settingsPatchSchema,
+  trackingSecretsSchema,
+  trackingSecretDeleteSchema,
+} from "./validate";
 
 describe("validateSectionFields", () => {
   it("accepts a normal nested section object", () => {
@@ -94,5 +100,86 @@ describe("settingsPatchSchema", () => {
     expect(settingsPatchSchema.safeParse({ logo: "" }).success).toBe(true); // clear
     expect(settingsPatchSchema.safeParse({ seo: { ogImage: url } }).success).toBe(true);
     expect(settingsPatchSchema.safeParse({ logo: "javascript:alert(1)" }).success).toBe(false);
+  });
+
+  it("accepts well-formed tracking ID arrays (SPEC-015)", () => {
+    const r = settingsPatchSchema.safeParse({
+      tracking: {
+        meta_pixels: ["653995666521954", "100200300400500"],
+        ga4_ids: ["G-Z60CJ7W2Z8"],
+        google_ads_ids: ["AW-123456789", "AW-123456789/AbC-D_efG"],
+      },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects malformed tracking IDs, oversized arrays and consent_key injection", () => {
+    expect(settingsPatchSchema.safeParse({ tracking: { meta_pixels: ["123"] } }).success).toBe(false);
+    expect(settingsPatchSchema.safeParse({ tracking: { ga4_ids: ["UA-12345"] } }).success).toBe(false);
+    expect(settingsPatchSchema.safeParse({ tracking: { google_ads_ids: ["12345"] } }).success).toBe(false);
+    expect(
+      settingsPatchSchema.safeParse({ tracking: { meta_pixels: ['1234567890123"><script>'] } }).success,
+    ).toBe(false);
+    expect(
+      settingsPatchSchema.safeParse({ tracking: { meta_pixels: new Array(11).fill("653995666521954") } }).success,
+    ).toBe(false);
+    // consent_key (and any secret) is not an accepted key here — the schema is strict.
+    expect(settingsPatchSchema.safeParse({ tracking: { consent_key: "x" } }).success).toBe(false);
+    expect(settingsPatchSchema.safeParse({ tracking: { capi_token: "secret" } }).success).toBe(false);
+  });
+});
+
+describe("trackingSecretsSchema (Phase 2 — write-only secrets)", () => {
+  it("accepts well-formed meta/ga4/google_ads secret entries", () => {
+    const r = trackingSecretsSchema.safeParse({
+      entries: [
+        { provider: "meta", public_id: "653995666521954", secret: { capi_token: "EAABsbCS1iHgBA_long_token_value" }, test_event_code: "TEST12345" },
+        { provider: "ga4", public_id: "G-Z60CJ7W2Z8", secret: { api_secret: "abc123_apisecret_value" } },
+        {
+          provider: "google_ads",
+          public_id: "1234567890",
+          secret: {
+            developer_token: "dev_token_1234567890",
+            conversion_action: "987654321",
+            client_id: "1234567890-abc.apps.googleusercontent.com",
+            client_secret: "GOCSPX-secret_value_123",
+            refresh_token: "1//refresh_token_value_123",
+          },
+        },
+      ],
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("rejects unknown keys, malformed ids, and empty/oversized payloads", () => {
+    // extra/unknown key in the entry (.strict)
+    expect(
+      trackingSecretsSchema.safeParse({ entries: [{ provider: "meta", public_id: "653995666521954", secret: { capi_token: "tokenvalue1" }, evil: 1 }] }).success,
+    ).toBe(false);
+    // unknown key inside secret (.strict) — can't smuggle extra fields
+    expect(
+      trackingSecretsSchema.safeParse({ entries: [{ provider: "meta", public_id: "653995666521954", secret: { capi_token: "tokenvalue1", extra: "x" } }] }).success,
+    ).toBe(false);
+    // malformed pixel id
+    expect(
+      trackingSecretsSchema.safeParse({ entries: [{ provider: "meta", public_id: "123", secret: { capi_token: "tokenvalue1" } }] }).success,
+    ).toBe(false);
+    // token with a space (not printable-only)
+    expect(
+      trackingSecretsSchema.safeParse({ entries: [{ provider: "meta", public_id: "653995666521954", secret: { capi_token: "has space" } }] }).success,
+    ).toBe(false);
+    // empty entries
+    expect(trackingSecretsSchema.safeParse({ entries: [] }).success).toBe(false);
+    // wrong secret shape for provider (ga4 needs api_secret, not capi_token)
+    expect(
+      trackingSecretsSchema.safeParse({ entries: [{ provider: "ga4", public_id: "G-Z60CJ7W2Z8", secret: { capi_token: "tokenvalue1" } }] }).success,
+    ).toBe(false);
+  });
+
+  it("validates the delete payload (provider + public_id only)", () => {
+    expect(trackingSecretDeleteSchema.safeParse({ provider: "meta", public_id: "653995666521954" }).success).toBe(true);
+    expect(trackingSecretDeleteSchema.safeParse({ provider: "ga4", public_id: "G-Z60CJ7W2Z8" }).success).toBe(true);
+    expect(trackingSecretDeleteSchema.safeParse({ provider: "facebook", public_id: "x" }).success).toBe(false);
+    expect(trackingSecretDeleteSchema.safeParse({ provider: "meta", public_id: "x", secret: { capi_token: "y" } }).success).toBe(false);
   });
 });
