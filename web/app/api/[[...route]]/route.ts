@@ -16,6 +16,7 @@ import { synthesizeStream } from "@/lib/ultron/tts";
 import { analyzeReviewFrame } from "@/lib/ultron/review-frame";
 import { getEvents, getProcesses } from "@/lib/services/events";
 import { getPendingNarrations, markNarrationSpoken } from "@/lib/services/narrations";
+import { getAutoReviewCandidate } from "@/lib/services/landing-page";
 import { landingPages } from "@/lib/api/landing-pages";
 
 export const runtime = "nodejs";
@@ -262,6 +263,19 @@ app.patch("/ultron/narrations/:id", async (c) => {
   } catch (err) {
     console.error(JSON.stringify({ level: "error", event: "narration_ack_failed", message: errMsg(err) }));
     return c.json({ error: "narration_ack_failed" }, 502);
+  }
+});
+
+// Auto-review on completion (SPEC-014 v1): the dashboard polls this; when a freshly-created
+// landing page is ready, the browser opens the Live Review overlay. Read-only, session-gated by
+// the middleware. Dedup (fire once per id) is the client's job.
+app.get("/ultron/live-review/candidate", async (c) => {
+  try {
+    const candidate = await getAutoReviewCandidate();
+    return c.json({ candidate, now: new Date().toISOString() });
+  } catch (err) {
+    console.error(JSON.stringify({ level: "error", event: "live_review_candidate_failed", message: errMsg(err) }));
+    return c.json({ error: "candidate_failed" }, 502);
   }
 });
 

@@ -293,3 +293,37 @@ export async function getProductWithLandingPages(
     landingPages: (lpRes.data ?? []).map(metaFromRow),
   };
 }
+
+export type AutoReviewCandidate = {
+  landingPageId: string;
+  subdomain: string;
+  previewUrl: string;
+  createdAt: string;
+};
+
+/**
+ * The most recent landing page whose CREATION just finished (draft ready), within a short
+ * window. Powers the "auto-review on completion" trigger (SPEC-014 v1): the dashboard polls
+ * this and, when a fresh candidate appears, opens the Live Review. Bounded by created_at (not
+ * updated_at) so plain draft edits don't re-trigger, and capped to a recent window so old pages
+ * never fire on page load. Dedup by id is the client's responsibility.
+ */
+export async function getAutoReviewCandidate(windowMinutes = 20): Promise<AutoReviewCandidate | null> {
+  const cutoff = new Date(Date.now() - windowMinutes * 60 * 1000).toISOString();
+  const { data, error } = await db()
+    .from("landing_pages")
+    .select("id, subdomain, created_at")
+    .eq("draft_status", "ready")
+    .gte("created_at", cutoff)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    landingPageId: data.id,
+    subdomain: data.subdomain,
+    previewUrl: `/lp-preview/${data.id}?review=1`,
+    createdAt: data.created_at,
+  };
+}

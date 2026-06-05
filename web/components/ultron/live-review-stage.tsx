@@ -117,6 +117,15 @@ export function LiveReviewStage({ startShare, sharing, captureFrame, speak }: Pr
     }
   }, [active, sharing, startShare, captureFrame, speak, teardown]);
 
+  // Auto-start: when the trigger arrives and the operator has ALREADY granted screen capture
+  // (the operator-present premise), begin the loop with zero clicks. No fresh user gesture is
+  // available here, so requestFullscreen rejects — we degrade to the fixed overlay (still
+  // visually fullscreen). If the screen isn't shared yet, we keep the one-click "Iniciar" prompt
+  // (a gesture is required to grant getDisplayMedia).
+  useEffect(() => {
+    if (active && phase === "prompt" && sharing) void begin();
+  }, [active, phase, sharing, begin]);
+
   if (!active) return null;
 
   const caption =
