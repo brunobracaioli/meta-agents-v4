@@ -36,7 +36,6 @@ export function Stage3D() {
     (async () => {
       const THREE = await import("three");
       const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
-      const { RoomEnvironment } = await import("three/examples/jsm/environments/RoomEnvironment.js");
       if (disposed) return;
 
       const RAIN = stage.rain !== false;
@@ -55,9 +54,8 @@ export function Stage3D() {
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0x000000);
       scene.fog = new THREE.FogExp2(0x000000, 0.07);
-
-      const pmrem = new THREE.PMREMGenerator(renderer);
-      scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+      // No env map / PMREM: the model's material is fully overridden by the hologram shader
+      // (gl_FragColor is replaced), so scene.environment + lights are discarded anyway.
 
       const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 200);
       const AIM_Y = 0.75;
@@ -319,7 +317,6 @@ export function Stage3D() {
           mesh.geometry?.dispose();
           (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach((m) => m?.dispose());
         });
-        pmrem.dispose();
         renderer.dispose();
       };
     })();
