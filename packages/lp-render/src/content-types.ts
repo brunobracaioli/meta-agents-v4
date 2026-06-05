@@ -40,10 +40,16 @@ export interface ContentSpec {
   /** ISO 8601 deadline for the countdown in the urgency bar. Omit/past → bar shows scarcity only. */
   deadline?: string;
   sections: SectionType[];
+  /** PUBLIC tracking IDs baked into the static site (see Settings.tracking in content-doc.ts).
+   * Never carries server-side secrets. `*_ids` arrays, when present, take precedence over the
+   * legacy single fields. */
   tracking: {
     fb_pixel_id: string;
     ga4_id: string;
     consent_key: string;
+    meta_pixels?: string[];
+    ga4_ids?: string[];
+    google_ads_ids?: string[];
   };
   seo: { title: string; description: string; ogImage?: string };
 }

@@ -178,4 +178,18 @@ describe("contentDocToFiles", () => {
     const { contentSpec } = contentDocToFiles(ccaDoc());
     expect("logo" in contentSpec).toBe(false);
   });
+
+  it("carries multi-pixel tracking arrays through to content-spec (SPEC-015)", () => {
+    const doc = ccaDoc();
+    doc.settings.tracking.meta_pixels = ["653995666521954", "100200300400500"];
+    doc.settings.tracking.ga4_ids = ["G-Z60CJ7W2Z8", "G-ABC1234567"];
+    doc.settings.tracking.google_ads_ids = ["AW-123456789"];
+    const { contentSpec } = contentDocToFiles(doc);
+    expect(contentSpec.tracking.meta_pixels).toEqual(["653995666521954", "100200300400500"]);
+    expect(contentSpec.tracking.ga4_ids).toEqual(["G-Z60CJ7W2Z8", "G-ABC1234567"]);
+    expect(contentSpec.tracking.google_ads_ids).toEqual(["AW-123456789"]);
+    // legacy single fields remain untouched for back-compat
+    expect(contentSpec.tracking.fb_pixel_id).toBe("653995666521954");
+    expect(contentSpec.tracking.consent_key).toBe("b2tech_consent_v1");
+  });
 });
