@@ -25,6 +25,9 @@ export const rateLimiters = {
   ultronChat: () => limiter("ultron-chat", 20, "1 m"),
   ultronTts: () => limiter("ultron-tts", 30, "1 m"),
   ultronCapture: () => limiter("ultron-capture", 15, "1 m"),
+  // Live Review (SPEC-014) narrates one frame per section (~12/run). Generous but bounded —
+  // each call is a paid vision request, keyed by IP like the other voice endpoints.
+  ultronReview: () => limiter("ultron-review", 60, "1 m"),
   // Write actions are keyed by client slug (not IP): they enqueue real agent work
   // and, for activation, real ad spend. Tight caps are defence-in-depth on top of the
   // two-turn confirmation and the one-job-per-(client,kind) unique index.

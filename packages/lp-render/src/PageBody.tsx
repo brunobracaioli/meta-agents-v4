@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useContent } from "./content";
 import type { SectionType, Tone } from "./content-types";
 import { Stage3D } from "./sections/Stage3D";
+import { ReviewBridge } from "./sections/ReviewBridge";
 import { Hero } from "./sections/Hero";
 import { Urgency } from "./sections/Urgency";
 import { Problem } from "./sections/Problem";
@@ -66,6 +67,9 @@ export function PageBody() {
   let flowIndex = 0;
   return (
     <>
+      {/* Inert unless loaded with ?review=1 from an allowlisted dashboard: answers the Live
+          Review postMessage protocol (scroll + layout). See SPEC-014 / ReviewBridge.tsx. */}
+      <ReviewBridge />
       {/* Optional cinematic 3D panel pinned above the hero (renders nothing without a model). */}
       <Stage3D />
       <main>

@@ -7,6 +7,7 @@ type Result = { data: unknown; error: unknown };
 const state = {
   clients: { data: null as unknown, error: null as unknown } as Result,
   campaigns: { data: null as unknown, error: null as unknown } as Result,
+  landingPages: { data: null as unknown, error: null as unknown } as Result,
   jobInsert: { data: { id: "job-1" } as unknown, error: null as unknown } as Result,
   inserts: [] as Array<{ table: string; row: unknown }>,
 };
@@ -23,7 +24,15 @@ function query(table: string) {
       return q;
     },
     maybeSingle: () =>
-      Promise.resolve(table === "clients" ? state.clients : table === "campaigns" ? state.campaigns : { data: null, error: null }),
+      Promise.resolve(
+        table === "clients"
+          ? state.clients
+          : table === "campaigns"
+            ? state.campaigns
+            : table === "landing_pages"
+              ? state.landingPages
+              : { data: null, error: null },
+      ),
     single: () => Promise.resolve(table === "agent_jobs" ? state.jobInsert : { data: null, error: null }),
   });
   return q;
@@ -46,8 +55,55 @@ function pausedCampaign(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   state.clients = { data: null, error: null };
   state.campaigns = { data: null, error: null };
+  state.landingPages = { data: null, error: null };
   state.jobInsert = { data: { id: "job-1" }, error: null };
   state.inserts = [];
+});
+
+const KNOWN_LANDING = {
+  id: "11111111-1111-1111-1111-111111111111",
+  client_id: "client-uuid",
+  name: "Imersão",
+  subdomain: "imersao-agencia",
+  url: "https://imersao-agencia.b2tech.io",
+  status: "draft",
+  draft_status: "ready",
+  noindex: true,
+  settings: {},
+  theme: {},
+};
+
+describe("request_live_review", () => {
+  it("returns a start_review signal for an existing landing page (no confirmation, no spend)", async () => {
+    state.landingPages = { data: { ...KNOWN_LANDING }, error: null };
+    const out = (await runTool("request_live_review", { landing_page_id: KNOWN_LANDING.id })) as Record<string, unknown>;
+    expect(out.start_review).toBe(true);
+    expect(out.landingPageId).toBe(KNOWN_LANDING.id);
+    expect(out.previewUrl).toBe(`/lp-preview/${KNOWN_LANDING.id}?review=1`);
+    expect(typeof out.at).toBe("string");
+    expect(out.subdomain).toBe("imersao-agencia.b2tech.io");
+    // It must NOT enqueue any job — this is a read-only visual review.
+    expect(state.inserts).toHaveLength(0);
+  });
+
+  it("errors when the landing page does not exist", async () => {
+    state.landingPages = { data: null, error: null };
+    const out = (await runTool("request_live_review", { landing_page_id: KNOWN_LANDING.id })) as Record<string, unknown>;
+    expect(out.error).toBeDefined();
+    expect(out.start_review).toBeUndefined();
+  });
+
+  it("refuses to review while the page is still generating", async () => {
+    state.landingPages = { data: { ...KNOWN_LANDING, draft_status: "generating" }, error: null };
+    const out = (await runTool("request_live_review", { landing_page_id: KNOWN_LANDING.id })) as Record<string, unknown>;
+    expect(out.error).toBeDefined();
+    expect(out.start_review).toBeUndefined();
+  });
+
+  it("requires a landing_page_id", async () => {
+    const out = (await runTool("request_live_review", {})) as Record<string, unknown>;
+    expect(out.error).toBeDefined();
+  });
 });
 
 describe("request_campaign_creation", () => {

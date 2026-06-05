@@ -6,11 +6,16 @@ import {
   AGENT_TRIGGER_EVENT,
   LANDING_EDIT_CHANNEL,
   LANDING_EDIT_EVENT,
+  LIVE_REVIEW_CHANNEL,
+  LIVE_REVIEW_EVENT,
   isAgentTrigger,
   isLandingEditSignal,
+  isLiveReviewSignal,
   landingEditKey,
+  liveReviewKey,
   type AgentTrigger,
   type LandingEditSignal,
+  type LiveReviewSignal,
 } from "@/lib/ultron/agent-trigger";
 import { getSessionId } from "@/lib/ultron/session";
 import { createWakeWord, isWakeWordSupported, type WakeController } from "@/lib/ultron/wake-word";
@@ -71,6 +76,7 @@ type UltronApiResponse = {
   pendingId?: string;
   agentTriggers?: unknown[];
   landingEdits?: unknown[];
+  liveReviews?: unknown[];
 };
 
 function silentOutputBands(): number[] {
@@ -112,6 +118,7 @@ export function useUltronVoice() {
   const armedRef = useRef<boolean>(false);
   const publishedTriggerIdsRef = useRef<Set<string>>(new Set());
   const publishedLandingEditKeysRef = useRef<Set<string>>(new Set());
+  const publishedLiveReviewKeysRef = useRef<Set<string>>(new Set());
 
   // Autonomous-mode narrations (ADR 0019): the headless watch inserts spoken updates; we poll
   // and speak them via the same TTS when the assistant is otherwise idle. statusRef mirrors the
@@ -176,6 +183,33 @@ export function useUltronVoice() {
     if (!("BroadcastChannel" in window)) return;
     try {
       const channel = new BroadcastChannel(LANDING_EDIT_CHANNEL);
+      fresh.forEach((signal) => channel.postMessage(signal));
+      window.setTimeout(() => channel.close(), 0);
+    } catch {
+      // Same-window CustomEvent already delivered the signal; cross-tab delivery is best-effort.
+    }
+  }, []);
+
+  // Live Review (SPEC-014): when request_live_review fires, fan the signal out the same way so
+  // the LiveReviewStage overlay (this tab, or a dashboard in another tab) starts the fullscreen
+  // section-by-section review. Deduped by key so retries/polls don't restart an in-flight review.
+  const publishLiveReviews = useCallback((values: unknown[] | undefined) => {
+    if (!values || values.length === 0) return;
+    const fresh = values.filter(isLiveReviewSignal).filter((signal) => {
+      const key = liveReviewKey(signal);
+      if (publishedLiveReviewKeysRef.current.has(key)) return false;
+      publishedLiveReviewKeysRef.current.add(key);
+      return true;
+    });
+    if (fresh.length === 0) return;
+
+    fresh.forEach((signal) => {
+      window.dispatchEvent(new CustomEvent<LiveReviewSignal>(LIVE_REVIEW_EVENT, { detail: signal }));
+    });
+
+    if (!("BroadcastChannel" in window)) return;
+    try {
+      const channel = new BroadcastChannel(LIVE_REVIEW_CHANNEL);
       fresh.forEach((signal) => channel.postMessage(signal));
       window.setTimeout(() => channel.close(), 0);
     } catch {
@@ -449,6 +483,7 @@ export function useUltronVoice() {
       let data = (await chatRes.json()) as UltronApiResponse;
       publishAgentTriggers(data.agentTriggers);
       publishLandingEdits(data.landingEdits);
+      publishLiveReviews(data.liveReviews);
 
       let hops = 0;
       while (data.status === "need_capture" && data.pendingId && hops++ < MAX_CAPTURE_HOPS) {
@@ -465,10 +500,11 @@ export function useUltronVoice() {
         data = (await capRes.json()) as UltronApiResponse;
         publishAgentTriggers(data.agentTriggers);
         publishLandingEdits(data.landingEdits);
+        publishLiveReviews(data.liveReviews);
       }
       return data.reply ?? CLIENT_FALLBACK;
     },
-    [captureFrame, patch, publishAgentTriggers, publishLandingEdits],
+    [captureFrame, patch, publishAgentTriggers, publishLandingEdits, publishLiveReviews],
   );
 
   const sendPipeline = useCallback(
@@ -726,5 +762,10 @@ export function useUltronVoice() {
     stopSpeaking,
     sharing,
     toggleShare,
+    // Primitives the Live Review overlay (SPEC-014) reuses to drive its own loop without
+    // a second screen-share prompt or a duplicate TTS path.
+    startShare,
+    captureFrame,
+    speak,
   };
 }

@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | Draft (plano de implementação) |
+| Status | Surface A **implementada** (2026-06-04); Surface B pendente |
 | Data | 2026-06-04 |
 | Autor | brunobracaioli (via Claude Code) |
 | ADR | [0020](../adr/0020-ultron-live-review-client-side.md) |
@@ -138,9 +138,32 @@ configurável). Caso contrário, inerte (não escuta nada). Protocolo (JSON tipa
 - Forçar fullscreen em aba cross-origin (impossível pelo browser; F11 manual em Surface B).
 
 ## 10. Plano de implementação (ordem sugerida)
-1. **ReviewBridge** no lp-render (protocolo + allowlist) + type-check + teste de origem.
-2. **Endpoint** `/api/ultron/review-frame` (visão) + rate-limit/validação.
-3. **Orquestrador** client (Surface A primeiro: iframe fullscreen same-origin) + loop scroll→print→voz.
-4. **Tool do Ultron** `request_live_review` + fan-out (BroadcastChannel) + start no dashboard.
-5. **Surface B** (window.open + bridge cross-origin + captura de tela inteira) como variante.
-6. Hardening (threat model §6), docs, e teste e2e na gravação.
+1. ✅ **ReviewBridge** no lp-render (`packages/lp-render/src/sections/ReviewBridge.tsx`): protocolo
+   `review:hello/layout/scrollTo/scrolled/ping/pong`, allowlist de origem (same-origin + `*.vercel.app`),
+   inerte sem `?review=1`. Montado no `PageBody`, exportado no barrel. Settle do 3D por timeout.
+2. ✅ **Endpoint** `POST /api/ultron/review-frame` (`web/lib/ultron/review-frame.ts` + handler em
+   `route.ts`): visão one-shot sonnet, 1–2 frases pt-BR, rate-limit `ultronReview`, validação base64.
+3. ✅ **Orquestrador** client: `web/lib/ultron/live-review.ts` (`runLiveReview`, loop cancelável +
+   cap 14 passos + timeout 4 min) e `web/components/ultron/live-review-stage.tsx` (overlay
+   fullscreen + iframe `/lp-preview/[id]?review=1`, botão de gesto p/ fullscreen+captura).
+4. ✅ **Tool** `request_live_review` (`tools.ts`) + `LiveReviewSignal` (`agent-trigger.ts`) +
+   extração/propagação no `chat.ts`/`route.ts`/`pending.ts` + fan-out `publishLiveReviews`
+   (`use-ultron-voice.ts`) + montagem do overlay no `ultron-widget.tsx`.
+5. ⬜ **Surface B** (window.open + bridge cross-origin + captura de tela inteira) como variante —
+   o ReviewBridge já está pronto no lp-render para habilitá-la (mesmo protocolo).
+6. ⬜ Teste e2e na gravação (operador presente). Threat model §6 já implementado (allowlist + cap).
+
+### Notas de implementação (Surface A)
+- **Bridge no lp-render** (decisão do operador): inerte na página publicada normal; só ativa com
+  `?review=1` + origem allowlistada. O template publicado fica inalterado (validado: type-check +
+  build clean-install com o gotcha do symlink `resolve.symlinks=false`).
+- **Settle do painel 3D**: por timeout (`settleMs` ~2200ms, dois beats), porque o "print" é o
+  composite de GPU via stream de tela — não há readback confiável do canvas WebGL.
+- **Gesto único**: o disparo vem por voz (sem gesto), então o overlay mostra "Iniciar revisão ao
+  vivo"; um clique satisfaz Fullscreen API + getDisplayMedia e arranca o loop. Sem gesto/fullscreen,
+  degrada para overlay `fixed inset-0`.
+- **Reuso de stream/voz**: o overlay reusa `captureFrame`/`speak`/`startShare` expostos pelo
+  `use-ultron-voice` — sem segundo prompt de captura nem caminho de TTS duplicado.
+- **Testes**: `tools.test.ts` (request_live_review: happy/404/generating/sem-id) e
+  `agent-trigger.test.ts` (contrato `isLiveReviewSignal`/`liveReviewKey`). O loop DOM (`runLiveReview`)
+  não tem teste unitário porque o ambiente vitest é `node` (sem jsdom) — coberto no teste e2e manual.

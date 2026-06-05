@@ -1070,6 +1070,39 @@ const tools: Record<string, ToolDef> = {
     },
   },
 
+  request_live_review: {
+    spec: {
+      name: "request_live_review",
+      description:
+        "Inicia uma REVISÃO VISUAL AO VIVO de uma landing page no navegador do operador (operador PRESENTE, ex.: gravação): a página sobe em tela cheia e você percorre seção a seção — rola, olha (visão) e COMENTA por voz — até o rodapé, com o painel 3D renderizando de verdade. Use quando o operador disser algo como 'revisa a página comigo', 'abre a landing e me mostra o que achou', 'faz a revisão ao vivo'. NÃO publica nem edita nada — só abre e narra. Risco baixo, sem gasto de mídia: NÃO precisa de confirmação em dois passos. Pré-requisito: a landing já existe (use list_landing_pages para o id).",
+      input_schema: {
+        type: "object",
+        properties: {
+          landing_page_id: { type: "string", description: "uuid da LP (use list_landing_pages)" },
+        },
+        required: ["landing_page_id"],
+      },
+    },
+    handler: async (input) => {
+      const id = str(input, "landing_page_id");
+      if (!id) return { error: "landing_page_id é obrigatório" };
+      const lp = await resolveLanding(id);
+      if (!lp) return { error: "landing page não encontrada" };
+      if (lp.draft_status === "generating")
+        return { error: "a página ainda está sendo gerada; espere terminar para a gente revisar ao vivo" };
+      // The overlay embeds the same-origin preview with ?review=1 so the ReviewBridge activates.
+      const previewUrl = `/lp-preview/${id}?review=1`;
+      return {
+        start_review: true,
+        landingPageId: id,
+        previewUrl,
+        at: new Date().toISOString(),
+        subdomain: `${lp.subdomain}.b2tech.io`,
+        message: "Beleza, vou abrir a página em tela cheia e revisar com você, seção por seção.",
+      };
+    },
+  },
+
   get_recent_jobs: {
     spec: {
       name: "get_recent_jobs",

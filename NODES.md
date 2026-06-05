@@ -1,8 +1,9 @@
 # NODES — handoff pós-/compact
 
 > **Leia este arquivo PRIMEIRO** se a conversa foi compactada. Captura o que foi
-> descoberto/decidido/feito nas rodadas recentes. Duas frentes vivas:
-> 1. **Ultron Live Review** (PRÓXIMO a implementar — SPEC-014 / ADR 0020). Só docs por enquanto.
+> descoberto/decidido/feito nas rodadas recentes. Frentes vivas:
+> 1. **Ultron Live Review — Surface A IMPLEMENTADA** (branch `feat/ultron-live-review`, não
+>    mergeada/pushada). SPEC-014 / ADR 0020. Falta: Surface B + teste e2e na gravação.
 > 2. **Painel 3D na landing (Stage3D)** — IMPLEMENTADO + deployado; falta a take de teste.
 >
 > Fontes de verdade: `docs/specs/SPEC-014-ultron-live-review.md`, `docs/adr/0020-*.md`,
@@ -13,8 +14,14 @@
 
 ## 0. TL;DR de estado
 
-- **Ultron Live Review = DESENHADO, NÃO implementado.** SPEC-014 + ADR 0020 escritos nesta rodada.
-  Próximo passo: implementar na ordem de **SPEC-014 §10**. Nada de código ainda.
+- **Ultron Live Review (Surface A) = IMPLEMENTADO** na branch `feat/ultron-live-review` (não
+  mergeada). Fatia vertical completa: ReviewBridge (lp-render) + endpoint de visão
+  `/api/ultron/review-frame` + orquestrador (`live-review.ts` + `live-review-stage.tsx`) + tool
+  `request_live_review` + sinal `LiveReviewSignal` + fan-out + overlay no widget. Verde:
+  type-check (lp-render/web/template), build clean-install (gotcha symlink), 122 testes.
+  **Falta**: Surface B (cross-origin), teste e2e na gravação, e o merge/push + deploy.
+  Disparo por voz: *"Ultron, revisa a página comigo"* → tool resolve a LP → overlay sobe em tela
+  cheia → loop scroll→print→visão→voz por seção. Ver **SPEC-014 §10** (itens 1–4 ✅, 5–6 ⬜).
 - **Painel 3D (Stage3D) = IMPLEMENTADO e na `main`** (merge `9d4cd5f` + fixes). Web (Vercel) **verde**
   (`57b8741` READY) e runner Fly **redeployado** (imagem `01KTAGZG…`, v25). A geração autônoma já
   provisiona `.glb` + logo + seta `settings.stage3d`.

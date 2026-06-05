@@ -13,6 +13,7 @@ import { rateLimiters, enforceLimit, clientIp } from "@/lib/ratelimit";
 import { transcribe } from "@/lib/ultron/stt";
 import { runChat, resumeChat } from "@/lib/ultron/chat";
 import { synthesizeStream } from "@/lib/ultron/tts";
+import { analyzeReviewFrame } from "@/lib/ultron/review-frame";
 import { getEvents, getProcesses } from "@/lib/services/events";
 import { getPendingNarrations, markNarrationSpoken } from "@/lib/services/narrations";
 import { landingPages } from "@/lib/api/landing-pages";
@@ -45,6 +46,15 @@ const captureSchema = z.object({
     media_type: z.enum(["image/jpeg", "image/png", "image/webp"]),
     data: z.string().min(1),
   }),
+});
+
+const reviewFrameSchema = z.object({
+  image: z.object({
+    media_type: z.enum(["image/jpeg", "image/png", "image/webp"]),
+    data: z.string().min(1),
+  }),
+  label: z.string().min(1).max(120),
+  landingPageId: z.string().uuid().optional(),
 });
 
 app.post("/auth/login", async (c) => {
@@ -112,6 +122,7 @@ app.post("/ultron/chat", async (c) => {
         usedTools: result.usedTools,
         agentTriggers: result.agentTriggers,
         landingEdits: result.landingEdits,
+        liveReviews: result.liveReviews,
       });
     }
     return c.json({
@@ -119,6 +130,7 @@ app.post("/ultron/chat", async (c) => {
       usedTools: result.usedTools,
       agentTriggers: result.agentTriggers,
       landingEdits: result.landingEdits,
+      liveReviews: result.liveReviews,
     });
   } catch (err) {
     console.error(JSON.stringify({ level: "error", event: "chat_failed", message: errMsg(err) }));
@@ -147,6 +159,7 @@ app.post("/ultron/capture", async (c) => {
         usedTools: result.usedTools,
         agentTriggers: result.agentTriggers,
         landingEdits: result.landingEdits,
+        liveReviews: result.liveReviews,
       });
     }
     return c.json({
@@ -154,10 +167,33 @@ app.post("/ultron/capture", async (c) => {
       usedTools: result.usedTools,
       agentTriggers: result.agentTriggers,
       landingEdits: result.landingEdits,
+      liveReviews: result.liveReviews,
     });
   } catch (err) {
     console.error(JSON.stringify({ level: "error", event: "capture_failed", message: errMsg(err) }));
     return c.json({ error: "chat_failed" }, 502);
+  }
+});
+
+// One frame of the Live Review (SPEC-014): describe + opine on one section in 1–2 spoken
+// sentences. Stateless vision (no chat memory/tools); the browser drives the scroll loop.
+app.post("/ultron/review-frame", async (c) => {
+  const { allowed } = await enforceLimit(rateLimiters.ultronReview(), clientIp(c.req.raw), "ultron-review");
+  if (!allowed) return c.json({ error: "rate_limited" }, 429, { "Retry-After": "60" });
+
+  const parsed = reviewFrameSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "invalid_request" }, 400);
+
+  const { data } = parsed.data.image;
+  if (data.length > MAX_IMAGE_B64) return c.json({ error: "image_too_large" }, 413);
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return c.json({ error: "invalid_request" }, 400);
+
+  try {
+    const analysis = await analyzeReviewFrame({ image: parsed.data.image, label: parsed.data.label });
+    return c.json({ analysis });
+  } catch (err) {
+    console.error(JSON.stringify({ level: "error", event: "review_frame_failed", message: errMsg(err) }));
+    return c.json({ error: "review_failed" }, 502);
   }
 });
 
