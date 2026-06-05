@@ -67,7 +67,7 @@ lookup de `clients WHERE slug='brunobracaioli'` no Supabase (REST) para o `clien
 | Domínio | `<nome>.b2tech.io` (zona `b2tech.io` na conta CF) |
 | Materiais | `.claude/materiais-das-empresas/brunobracaioli/` (logo, mascote, exemplo-de-ads, **produtos/**) |
 | Marca | navy `#0A0F1A`→`#0E1422`, laranja `#FF6B1A` |
-| Tracking | FB Pixel `653995666521954` + GA4 `G-Z60CJ7W2Z8` (consent-gated) |
+| Tracking | IDs públicos (multi) semeados de `lista-de-clientes`: `META_PIXELS`/`GA4_IDS`/`GOOGLE_ADS_IDS`, consent-gated. Segredos CAPI ficam no cofre isolado (Fase 2). Ver ADR 0021 / SPEC-015 |
 
 **Produto — NÃO é hardcoded.** Vem do **catálogo** (skill `lista-de-produtos`, ADR 0014):
 o brief estruturado fica em `${MAT}/produtos/${product}.json` e é lido via `Read` (headless-safe;
@@ -159,7 +159,17 @@ Em uma chamada Bash:
 - **Constantes derivadas:**
   ```bash
   NOINDEX_BOOL=$([ "${noindex:-1}" = "0" ] && echo false || echo true)
-  TRACKING='{"fb_pixel_id":"653995666521954","ga4_id":"G-Z60CJ7W2Z8","consent_key":"b2tech_consent_v1"}'
+  # Tracking = IDs PÚBLICOS apenas (vão pro content-spec.json do site estático). Semeie das
+  # listas do cliente em `lista-de-clientes` (META_PIXELS/GA4_IDS/GOOGLE_ADS_IDS); o operador
+  # refina por LP na aba "Tracking" do editor. Mantém fb_pixel_id/ga4_id = 1º item p/ back-compat.
+  # ⚠️ NUNCA coloque CAPI token / GA4 API secret aqui — são segredos (cofre isolado, Fase 2).
+  META_PIXELS='["653995666521954"]'
+  GA4_IDS='["G-Z60CJ7W2Z8"]'
+  GOOGLE_ADS_IDS='[]'
+  TRACKING=$(jq -cn \
+    --argjson mp "${META_PIXELS}" --argjson g4 "${GA4_IDS}" --argjson ga "${GOOGLE_ADS_IDS}" \
+    '{fb_pixel_id: ($mp[0] // ""), ga4_id: ($g4[0] // ""), consent_key: "b2tech_consent_v1",
+      meta_pixels: $mp, ga4_ids: $g4, google_ads_ids: $ga}')
   ```
 
 > **Helper REST (use em todas as chamadas ao Supabase):** sempre os headers
