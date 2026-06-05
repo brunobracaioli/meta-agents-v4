@@ -26,6 +26,15 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "*.supabase.co" },
     ],
   },
+  // @b2tech/lp-render is a symlinked file: dep. By default webpack resolves it to its realpath
+  // (packages/lp-render/), where a clean Vercel install has NO node_modules — so its deep deps
+  // (three + three/examples/jsm/* addons in Stage3D) fail to resolve. Disabling symlink
+  // resolution makes webpack resolve them from THIS app's node_modules (where three lives),
+  // mirroring the TS-side preserveSymlinks fix. See ADR 0017.
+  webpack: (config) => {
+    config.resolve.symlinks = false;
+    return config;
+  },
 };
 
 export default nextConfig;

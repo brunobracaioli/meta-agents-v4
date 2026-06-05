@@ -27,6 +27,13 @@ const nextConfig: NextConfig = {
   // See ADR 0017.
   typescript: { ignoreBuildErrors: true },
   eslint: { ignoreDuringBuilds: true },
+  // @b2tech/lp-render is a symlinked file: dep; resolve its deep deps (three +
+  // three/examples/jsm/* in Stage3D) from THIS app's node_modules instead of the package's
+  // realpath. Without this the per-LP `next build` fails on the three addon imports. See ADR 0017.
+  webpack: (config) => {
+    config.resolve.symlinks = false;
+    return config;
+  },
 };
 
 export default nextConfig;
