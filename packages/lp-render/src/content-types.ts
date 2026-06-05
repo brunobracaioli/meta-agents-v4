@@ -50,6 +50,9 @@ export interface ContentSpec {
     meta_pixels?: string[];
     ga4_ids?: string[];
     google_ads_ids?: string[];
+    /** Phase 2: PUBLIC config for the multi-tenant tagging server. `endpoint` = Worker base,
+     * `lp_id` = this LP's UUID (the Worker resolves secrets by it). Absent ⇒ Phase-1 only. */
+    server?: { endpoint: string; lp_id: string };
   };
   seo: { title: string; description: string; ogImage?: string };
 }

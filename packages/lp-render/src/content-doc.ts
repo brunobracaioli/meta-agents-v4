@@ -44,6 +44,11 @@ export interface Settings {
     meta_pixels?: string[];
     ga4_ids?: string[];
     google_ads_ids?: string[];
+    /** Phase 2: public config pointing the browser at the multi-tenant tagging server.
+     * `endpoint` is the Worker base (https://track.b2tech.io); `lp_id` is this LP's UUID —
+     * BOTH are public (the Worker holds the secrets, resolved by lp_id). Absent ⇒ Phase-1
+     * client-side only. The serializer never adds secrets here. See ADR 0021 / SPEC-015 §7. */
+    server?: { endpoint: string; lp_id: string };
   };
   checkout_url: string;
   waitlist_url?: string;

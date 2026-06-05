@@ -192,4 +192,14 @@ describe("contentDocToFiles", () => {
     expect(contentSpec.tracking.fb_pixel_id).toBe("653995666521954");
     expect(contentSpec.tracking.consent_key).toBe("b2tech_consent_v1");
   });
+
+  it("carries the public server-tracking endpoint through to content-spec (SPEC-015 §7.1)", () => {
+    const doc = ccaDoc();
+    doc.settings.tracking.server = { endpoint: "https://track.b2tech.io", lp_id: "11111111-2222-3333-4444-555555555555" };
+    const { contentSpec } = contentDocToFiles(doc);
+    expect(contentSpec.tracking.server).toEqual({
+      endpoint: "https://track.b2tech.io",
+      lp_id: "11111111-2222-3333-4444-555555555555",
+    });
+  });
 });
