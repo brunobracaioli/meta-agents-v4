@@ -37,6 +37,68 @@ function orderedEnabledTypes(sections: SectionDoc[]): SectionType[] {
     .map((s) => s.type);
 }
 
+// The copy generator (lp-copywriter) is an LLM, so its section keys can drift from the
+// canonical Messages contract — e.g. `headline` instead of `heading`, card `body` instead of
+// `desc`, or `problem.bullets` as {title,body} objects instead of plain strings. Rendering an
+// object as a React child throws (#31) and 500s the whole page (preview AND static publish
+// build). A landing page must never crash on copy variance, so we normalize the known drifts
+// HERE, at the single serialize boundary. Fully backward-compatible: canonical fields are left
+// untouched (we only fill a field when it's missing / coerce a shape that would otherwise crash).
+function asNonEmptyString(v: unknown): string | null {
+  return typeof v === "string" && v.length > 0 ? v : null;
+}
+
+function coerceCard(item: unknown): unknown {
+  if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+  const c = item as Record<string, unknown>;
+  const body = asNonEmptyString(c.body);
+  if (c.desc == null && body) return { ...c, desc: body };
+  return c;
+}
+
+function normalizeSectionFields(
+  type: SectionType,
+  fields: Record<string, unknown>,
+): Record<string, unknown> {
+  const f: Record<string, unknown> = { ...fields };
+
+  // Middle sections title their block with `heading`; tolerate `headline`.
+  if (f.heading == null) {
+    const headline = asNonEmptyString(f.headline);
+    if (headline) f.heading = headline;
+  }
+
+  if (type === "problem") {
+    // Lead paragraph is `body`; tolerate `subhead`.
+    if (f.body == null) {
+      const subhead = asNonEmptyString(f.subhead);
+      if (subhead) f.body = subhead;
+    }
+    // Bullets must be strings; coerce {title, body} objects to "title — body" so the
+    // <li> never receives an object child.
+    if (Array.isArray(f.bullets)) {
+      f.bullets = f.bullets.map((b) => {
+        if (typeof b === "string") return b;
+        if (b && typeof b === "object") {
+          const o = b as Record<string, unknown>;
+          return [asNonEmptyString(o.title), asNonEmptyString(o.body)].filter(Boolean).join(" — ");
+        }
+        return String(b);
+      });
+    }
+  }
+
+  // Card grids expose `desc`; tolerate `body`.
+  if (type === "features" || type === "persona") {
+    if (Array.isArray(f.items)) f.items = f.items.map(coerceCard);
+  }
+  if (type === "curriculum") {
+    if (Array.isArray(f.modules)) f.modules = f.modules.map(coerceCard);
+  }
+
+  return f;
+}
+
 function buildMessages(doc: ContentDoc): Messages {
   const byType = indexByType(doc.sections);
   const f = (t: SectionType): Record<string, unknown> => byType.get(t)?.fields ?? {};
@@ -44,7 +106,7 @@ function buildMessages(doc: ContentDoc): Messages {
   const middle: Messages["sections"] = {};
   for (const t of MIDDLE_SECTION_TYPES) {
     const s = byType.get(t);
-    if (s) (middle as Record<string, unknown>)[t] = s.fields;
+    if (s) (middle as Record<string, unknown>)[t] = normalizeSectionFields(t, s.fields);
   }
 
   const faqSection = byType.get("faq");
