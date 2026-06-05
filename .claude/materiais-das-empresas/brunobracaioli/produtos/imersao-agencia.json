@@ -23,9 +23,39 @@
     "deadline": "2026-06-20T13:00:00-03:00",
     "payments": ["Pix", "Cartão", "Boleto"],
     "guarantee": "7 dias de garantia — reembolso 100% via email para bruno@b2tech.io.",
-    "scarcity": "Turma ao vivo, 1º lote, vagas limitadas — fecha quando encher."
+    "scarcity": "Turma ao vivo, 1º lote, vagas limitadas — fecha quando encher.",
+    "eyebrow": "// A oferta",
+    "heading": "Entre no 1º lote da Imersão AgêncIA",
+    "anchorLabel": "De R$ 497 (2º lote)",
+    "installmentsLabel": "ou 12x de R$ 14,90 · 1º lote, à vista",
+    "secure": "Pagamento seguro via Hubla · acesso imediato após a compra",
+    "bonuses": [
+      "Sistema de agentes montado e online ao vivo",
+      "Todos os prompts usados na imersão",
+      "Estrutura completa de times + subtimes de agentes",
+      "Cron de otimização 24/7 configurado",
+      "Playbook de replicação por cliente",
+      "Gravação dos 5 blocos pra rever quando quiser"
+    ]
   },
   "whatItIs": "Workshop ao vivo onde o participante monta uma estrutura de agentes de IA que operam uma agência de Meta Ads de forma autônoma. Você sai da imersão com os primeiros times de agentes configurados e 'online', prontos para rodar no automático para múltiplos clientes simultaneamente.",
+  "hero": {
+    "badge": "20/06 · ao vivo · 5h · 1º lote",
+    "headline": "Pare de ser babá de campanha.",
+    "headlineAccent": "Monte uma agência de IA que roda 24/7.",
+    "subhead": "Workshop ao vivo, mão na massa: você monta times de agentes de IA que criam, otimizam e monitoram Meta Ads no automático — e sai com o sistema online, pronto pra escalar pra múltiplos clientes.",
+    "ctaLabel": "Garantir minha vaga",
+    "terminal": {
+      "title": "~/agencia · claude-code",
+      "prompt": "claude \"cria a campanha do cliente X e otimiza sozinho\"",
+      "lines": [
+        "Conectando ao MCP do Facebook…",
+        "Lendo CPA das últimas 72h em 6 conjuntos",
+        "Pausando 2 criativos abaixo da meta · duplicando o vencedor",
+        "Subindo novo conjunto · aguardando sua aprovação no celular"
+      ]
+    }
+  },
   "dores": [
     {
       "title": "Babá de campanha",
@@ -113,6 +143,43 @@
       "9 produtos em produção",
       "3 partner programs"
     ]
+  },
+  "depoimentos": {
+    "eyebrow": "// Depoimentos",
+    "heading": "Quem acompanha o Bruno",
+    "subhead": "Depoimentos reais de quem acompanha o trabalho e o método do Bruno. Resultados variam conforme a aplicação individual — não há garantia de resultado financeiro.",
+    "_fonte": "Verbatim da claude-code.b2tech.io (mesmo instrutor); apenas encurtados, sem alterar o teor. NÃO inventar nem atribuir falas sobre 'agência/tráfego' que a pessoa não disse.",
+    "items": [
+      {
+        "quote": "Os cursos do Bruno foram um divisor de águas na minha trajetória à frente de uma legal tech. A abordagem prática rompe com o uso superficial da IA e mostra como integrar a tecnologia de forma estratégica, com impacto direto na operação e no resultado.",
+        "author": "Eduardo Dias · Fundador, Legal Tech"
+      },
+      {
+        "quote": "Conteúdo técnico denso, validado na prática e aplicado no próprio negócio antes de chegar até nós. Ele não acompanha tendência, ele antecipa. Skin in the game de verdade — recomendo sem hesitar.",
+        "author": "João Vitor Milani · Empresário & Desenvolvedor"
+      },
+      {
+        "quote": "Sou empresário e enxergava a IA como território de desenvolvedor. O conteúdo do Bruno mudou esse jogo: ele descomplica o Claude Code e hoje consigo prototipar ideias que antes dependeriam de um time inteiro.",
+        "author": "Renato Rasim · Empresário"
+      },
+      {
+        "quote": "Acompanho o Bruno desde 2024 e o conteúdo é fora da curva. O diferencial é o skin in the game: ele não ensina teoria rasa, e sim estratégias que ele mesmo validou e usou pra capitalizar no mercado. Recomendo muito!",
+        "author": "Eduardo Tanaka · Empreendedor"
+      },
+      {
+        "quote": "O Bruno está sempre dez passos à frente. Domina desde a base técnica essencial até o mais avançado em IA. É o tipo de conteúdo que separa quem está só 'brincando' no digital de quem realmente escala com tecnologia de ponta.",
+        "author": "Vinicius Vieira · Marketing Digital"
+      }
+    ]
+  },
+  "parceriasLogos": {
+    "heading": "Construído por quem é reconhecido pelas plataformas",
+    "items": ["Meta Tech Provider", "Anthropic Partner Network", "Google for Startups"]
+  },
+  "garantia": {
+    "heading": "Risco zero: 7 dias de garantia total",
+    "body": "Participe da imersão e, se não for pra você, é só pedir o reembolso por email em até 7 dias. Devolvo 100% — sem burocracia, sem formulário, sem ligação de retenção.",
+    "seal": "🛡️"
   },
   "numeros": [
     { "value": "09", "label": "produtos em produção" },

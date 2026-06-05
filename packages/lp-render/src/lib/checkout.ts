@@ -12,7 +12,8 @@ export interface CheckoutConfig {
 
 export function buildCheckoutHref(config: CheckoutConfig): string {
   if (config.cartState === "closed") {
-    return config.waitlistUrl ?? "#waitlist";
+    // No external waitlist target → scroll to the offer/waitlist block (section id="oferta").
+    return config.waitlistUrl ?? "#oferta";
   }
   const utms = getUtms();
   if (Object.keys(utms).length === 0) return config.checkoutUrl;
