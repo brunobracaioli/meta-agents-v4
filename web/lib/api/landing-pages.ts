@@ -27,6 +27,10 @@ const PUBLISH_SKILL_BY_SLUG: Record<string, string> = {
   brunobracaioli: "publish-landing-page-brunobracaioli",
 };
 
+// Public base of the multi-tenant tagging server (ADR 0021). Not a secret — it ends up in the
+// public content-spec. Overridable per environment; defaults to the production Worker.
+const TRACK_ENDPOINT = process.env.TRACK_ENDPOINT ?? "https://track.b2tech.io";
+
 const ASSETS_BUCKET = "landing-assets";
 const MAX_ASSET_BYTES = 5_000_000; // 5MB
 // Raster only. SVG is excluded on purpose: it can embed <script>, and the bucket is public —
@@ -57,6 +61,30 @@ async function loadEditState(id: string) {
     .maybeSingle();
   if (res.error) throw res.error;
   return res.data;
+}
+
+/** Keep settings.tracking.server in sync with whether the LP has ANY server-side secret.
+ * Present ⇒ the published page POSTs events to the tagging server (the serializer passes it
+ * through verbatim; it activates on the next publish). This is the ONLY thing that writes the
+ * public `server` pointer — it never carries a secret. See ADR 0021 / SPEC-015 §7.1. */
+async function syncServerPointer(id: string): Promise<void> {
+  const cnt = await trackingDb()
+    .from("lp_tracking_secrets")
+    .select("id", { count: "exact", head: true })
+    .eq("landing_page_id", id);
+  if (cnt.error) throw cnt.error;
+  const hasSecrets = (cnt.count ?? 0) > 0;
+
+  const cur = await db().from("landing_pages").select("settings").eq("id", id).maybeSingle();
+  if (cur.error) throw cur.error;
+  const settings = (cur.data?.settings ?? {}) as Record<string, unknown>;
+  const tracking = { ...((settings.tracking as Record<string, unknown>) ?? {}) };
+  if (hasSecrets) tracking.server = { endpoint: TRACK_ENDPOINT, lp_id: id };
+  else delete tracking.server;
+  settings.tracking = tracking;
+
+  const upd = await db().from("landing_pages").update({ settings: settings as Json }).eq("id", id);
+  if (upd.error) throw upd.error;
 }
 
 export const landingPages = new Hono();
@@ -227,6 +255,7 @@ landingPages.put("/:id/tracking-secrets", async (c) => {
   // Audit WITHOUT the secret value (Repudiation/Info-disclosure — STRIDE).
   const summary = parsed.data.entries.map((e) => `${e.provider}/${e.public_id}`).join(", ");
   await logLandingOp(state.client_id, id, `tracking secret(s) configurado(s): ${summary}`, "operator");
+  await syncServerPointer(id); // turn on the public server pointer (activates on next publish)
   return c.json({ ok: true, count: rows.length });
 });
 
@@ -250,6 +279,7 @@ landingPages.delete("/:id/tracking-secrets", async (c) => {
     .eq("public_id", parsed.data.public_id);
   if (del.error) throw del.error;
   await logLandingOp(state.client_id, id, `tracking secret removido: ${parsed.data.provider}/${parsed.data.public_id}`, "operator");
+  await syncServerPointer(id); // drop the server pointer if that was the last secret
   return c.json({ ok: true });
 });
 
