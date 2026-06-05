@@ -295,7 +295,24 @@ se `ref-url` for passado (para suplementar tom/visual de uma referência externa
    while IFS= read -r entry; do
      t=$(echo "${entry}" | jq -r '.key')
      [[ "${t}" =~ ^[a-zA-Z]+$ ]] || continue
-     fv=$(echo "${entry}" | jq -c '.value')
+     # Deterministic normalization to the canonical lp-render contract (defense at the write
+     # boundary — the LLM copywriter can drift; the DB must NOT store render-breaking shapes).
+     # Mirrors normalizeSectionFields() in serialize.ts: heading←headline, card desc←body, and
+     # problem.bullets coerced to STRINGS (objects {title,body} crash React #31 and the publish build).
+     fv=$(echo "${entry}" | jq -c --arg t "${t}" '
+       def headingSections: ["problem","comparison","solution","features","curriculum","stats","proof","logos","persona","guarantee","offer"];
+       def coerceCard: if type=="object" and (has("desc")|not) and (.body|type=="string") then .desc=.body else . end;
+       .value
+       | (if (headingSections|index($t)) and has("headline") and (has("heading")|not) then .heading=.headline | del(.headline) else . end)
+       | (if $t=="problem" then
+            (if has("subhead") and (has("body")|not) then .body=.subhead | del(.subhead) else . end)
+            | (if (.bullets|type)=="array"
+                 then .bullets |= map(if type=="string" then . else ([.title,.body]|map(select(type=="string" and .!=""))|join(" — ")) end)
+                 else . end)
+          else . end)
+       | (if ($t=="features" or $t=="persona") and (.items|type)=="array" then .items |= map(coerceCard) else . end)
+       | (if $t=="curriculum" and (.modules|type)=="array" then .modules |= map(coerceCard) else . end)
+     ')
      curl -fsS -X PATCH "${REST}/landing_page_sections?landing_page_id=eq.${LP_ID}&type=eq.${t}" \
        -H "apikey: ${SUPABASE_KEY}" -H "Authorization: Bearer ${SUPABASE_KEY}" \
        -H "Content-Type: application/json" -H "Prefer: return=minimal" --max-time 15 \
