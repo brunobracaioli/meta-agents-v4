@@ -2,10 +2,12 @@
 // (no React) and browser-only — every entry point guards `typeof window`. It is wired up by
 // <Tracking/> ONLY after LGPD consent is granted, and torn down if consent is revoked.
 //
-// Phase 1 fires the events straight into the already-injected Pixel(s)/GA4/Google Ads tags.
-// Each event carries its own `event_id` (passed to the Pixel as `eventID`); Phase 2 will
-// reuse that id on a first-party POST to the Cloudflare Worker so Meta deduplicates the
-// browser Pixel against the server CAPI hit. See ADR 0021.
+// Phase 1 fires events into the already-injected Pixel(s)/GA4/Google Ads tags. Phase 2 adds a
+// deduplicated server-side hit: when contentSpec.tracking.server is present, each standard Meta
+// event also POSTs to the Cloudflare tagging server with the SAME `event_id` the Pixel got, so
+// Meta deduplicates the browser Pixel against the server CAPI hit. The Worker fires only the
+// destinations that have secrets configured (Meta CAPI by default → no double-counting of
+// client-side GA4/Ads). See ADR 0021 / SPEC-015 §7.
 
 import type { ContentSpec } from "@b2tech/lp-render";
 
@@ -46,10 +48,73 @@ function uuid(): string {
   });
 }
 
-function meta(name: string, params: Params, custom = false): void {
-  if (typeof window === "undefined" || !window.fbq) return;
-  // Standard events use `track`; non-standard (e.g. ScrollDepth) must use `trackCustom`.
-  window.fbq(custom ? "trackCustom" : "track", name, params, { eventID: uuid() });
+// Phase 2: the multi-tenant tagging server. Set per-page from contentSpec.tracking.server.
+// When present, each (deduplicable) Meta event also POSTs to the Worker with the SAME
+// event_id the Pixel got, so Meta deduplicates Pixel↔CAPI. See ADR 0021 / SPEC-015 §7.
+let serverCfg: { endpoint: string; lp_id: string } | undefined;
+
+function cookie(name: string): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const m = document.cookie.match(new RegExp("(^|;)\\s*" + name + "\\s*=\\s*([^;]+)"));
+  return m ? decodeURIComponent(m[2]!) : undefined;
+}
+
+function queryParam(name: string): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  return new URLSearchParams(window.location.search).get(name) || undefined;
+}
+
+/** First-party attribution signals the Worker needs (no PII — that stays out of Phase 1). */
+function signals(): Record<string, unknown> {
+  const utms: Record<string, string> = {};
+  for (const k of ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"]) {
+    const v = queryParam(k);
+    if (v) utms[k] = v;
+  }
+  return {
+    event_source_url: typeof window !== "undefined" ? window.location.href : undefined,
+    fbp: cookie("_fbp"),
+    fbc: cookie("_fbc"),
+    fbclid: queryParam("fbclid"),
+    gclid: queryParam("gclid") || cookie("_gcl_aw"),
+    utms: Object.keys(utms).length ? utms : undefined,
+  };
+}
+
+/** Fire a deduplicated server-side hit for a standard Meta event, sharing `eventId`. */
+function postServer(eventName: string, eventId: string, params: Params): void {
+  if (!serverCfg || typeof fetch === "undefined") return;
+  const body = {
+    lp_id: serverCfg.lp_id,
+    event_name: eventName,
+    event_id: eventId,
+    value: params.value,
+    currency: params.currency,
+    ...signals(),
+  };
+  try {
+    void fetch(`${serverCfg.endpoint.replace(/\/+$/, "")}/e`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include", // send/receive the first-party _fbp/_fbc cookies
+      body: JSON.stringify(body),
+      keepalive: true, // survive page unload (navigation to checkout)
+    });
+  } catch {
+    // best-effort: a failed beacon must never break the page
+  }
+}
+
+/**
+ * Fire a Meta event. `custom` → trackCustom (non-standard, e.g. ScrollDepth). `server` (default
+ * true) → also POST to the tagging server with the SAME event_id (dedup). Engagement-only
+ * signals (ScrollDepth) pass `server:false` to keep CAPI volume to conversion-grade events.
+ */
+function meta(name: string, params: Params, opts: { custom?: boolean; server?: boolean } = {}): void {
+  if (typeof window === "undefined") return;
+  const eventId = uuid();
+  if (window.fbq) window.fbq(opts.custom ? "trackCustom" : "track", name, params, { eventID: eventId });
+  if (opts.server !== false) postServer(name, eventId, params);
 }
 
 function ga4(name: string, params: Params): void {
@@ -109,6 +174,9 @@ function sameTarget(href: string, target: string | undefined): boolean {
 export function initEventTracking(spec: ContentSpec, opts: { googleAdsIds: string[] }): () => void {
   if (typeof window === "undefined") return () => {};
 
+  // Phase 2: point the deduplicated server hits at the tagging server, if configured (public).
+  serverCfg = spec.tracking.server?.endpoint && spec.tracking.server.lp_id ? spec.tracking.server : undefined;
+
   const value = spec.price_cents ? spec.price_cents / 100 : undefined;
   const moneyParams: Params = value !== undefined ? { value, currency: "BRL" } : { currency: "BRL" };
   const ads = opts.googleAdsIds;
@@ -129,7 +197,7 @@ export function initEventTracking(spec: ContentSpec, opts: { googleAdsIds: strin
     for (const t of thresholds) {
       if (pct >= t && !fired.has(t)) {
         fired.add(t);
-        meta("ScrollDepth", { depth: t }, true);
+        meta("ScrollDepth", { depth: t }, { custom: true, server: false });
         ga4("scroll", { percent_scrolled: t });
       }
     }
