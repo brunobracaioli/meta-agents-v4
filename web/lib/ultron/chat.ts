@@ -4,7 +4,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import { env } from "@/lib/env";
 import { ULTRON_SYSTEM_PROMPT } from "@/lib/ultron/prompt";
 import { toolSpecs, runTool, CLIENT_TOOLS } from "@/lib/ultron/tools";
-import { isLandingEditSignal, type AgentTrigger, type LandingEditSignal } from "@/lib/ultron/agent-trigger";
+import {
+  isLandingEditSignal,
+  isLiveReviewSignal,
+  type AgentTrigger,
+  type LandingEditSignal,
+  type LiveReviewSignal,
+} from "@/lib/ultron/agent-trigger";
 import { loadMemory, appendExchange, type ChatTurn } from "@/lib/ultron/memory";
 import { savePending, loadPending, deletePending } from "@/lib/ultron/pending";
 
@@ -27,6 +33,7 @@ export type ChatReply = {
   usedTools: string[];
   agentTriggers: AgentTrigger[];
   landingEdits: LandingEditSignal[];
+  liveReviews: LiveReviewSignal[];
 };
 export type ChatNeedCapture = {
   kind: "need_capture";
@@ -34,6 +41,7 @@ export type ChatNeedCapture = {
   usedTools: string[];
   agentTriggers: AgentTrigger[];
   landingEdits: LandingEditSignal[];
+  liveReviews: LiveReviewSignal[];
 };
 export type ChatResult = ChatReply | ChatNeedCapture;
 
@@ -109,6 +117,24 @@ function pushLandingEdit(landingEdits: LandingEditSignal[], signal: LandingEditS
   landingEdits.push(signal);
 }
 
+function liveReviewFromToolResult(toolName: string, result: unknown): LiveReviewSignal | null {
+  if (toolName !== "request_live_review") return null;
+  if (!result || typeof result !== "object" || Array.isArray(result)) return null;
+  if ((result as Record<string, unknown>).start_review !== true) return null;
+
+  const signal = {
+    landingPageId: stringField(result, "landingPageId"),
+    previewUrl: stringField(result, "previewUrl"),
+    at: stringField(result, "at"),
+  };
+  return isLiveReviewSignal(signal) ? signal : null;
+}
+
+function pushLiveReview(liveReviews: LiveReviewSignal[], signal: LiveReviewSignal | null): void {
+  if (!signal) return;
+  liveReviews.push(signal);
+}
+
 /**
  * The bounded Claude tool loop. Runs server-side tools inline. If Claude calls a
  * client-side tool (capture_screen), it CANNOT run here — we persist the in-flight
@@ -119,6 +145,7 @@ async function runLoop(
   usedTools: string[],
   agentTriggers: AgentTrigger[],
   landingEdits: LandingEditSignal[],
+  liveReviews: LiveReviewSignal[],
   startIteration: number,
   ctx: LoopContext,
 ): Promise<ChatResult> {
@@ -132,7 +159,7 @@ async function runLoop(
     });
 
     if (res.stop_reason !== "tool_use") {
-      return { kind: "reply", reply: extractText(res.content) || FALLBACK, usedTools, agentTriggers, landingEdits };
+      return { kind: "reply", reply: extractText(res.content) || FALLBACK, usedTools, agentTriggers, landingEdits, liveReviews };
     }
 
     messages.push({ role: "assistant", content: res.content });
@@ -154,6 +181,7 @@ async function runLoop(
       });
       pushAgentTrigger(agentTriggers, agentTriggerFromToolResult(block.name, result));
       pushLandingEdit(landingEdits, landingEditFromToolResult(block.name, result));
+      pushLiveReview(liveReviews, liveReviewFromToolResult(block.name, result));
       partialResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) });
     }
 
@@ -169,15 +197,16 @@ async function runLoop(
         usedTools,
         agentTriggers,
         landingEdits,
+        liveReviews,
       });
-      return { kind: "need_capture", pendingId, usedTools, agentTriggers, landingEdits };
+      return { kind: "need_capture", pendingId, usedTools, agentTriggers, landingEdits, liveReviews };
     }
 
     messages.push({ role: "user", content: partialResults });
   }
 
   // Exhausted the tool-iteration budget without a final text answer.
-  return { kind: "reply", reply: FALLBACK, usedTools, agentTriggers, landingEdits };
+  return { kind: "reply", reply: FALLBACK, usedTools, agentTriggers, landingEdits, liveReviews };
 }
 
 /**
@@ -191,7 +220,7 @@ export async function runChat(sessionId: string, text: string): Promise<ChatResu
   const messages: Anthropic.MessageParam[] = memory.map((t) => ({ role: t.role, content: t.content }));
   messages.push({ role: "user", content: text });
 
-  const result = await runLoop(messages, [], [], [], 0, { sessionId, priorMemory: memory, userText: text });
+  const result = await runLoop(messages, [], [], [], [], 0, { sessionId, priorMemory: memory, userText: text });
   if (result.kind === "reply") {
     await appendExchange(sessionId, text, result.reply, memory);
   }
@@ -217,6 +246,7 @@ export async function resumeChat(
       usedTools: [],
       agentTriggers: [],
       landingEdits: [],
+      liveReviews: [],
     };
   }
 
@@ -234,6 +264,7 @@ export async function resumeChat(
     pending.usedTools,
     pending.agentTriggers ?? [],
     pending.landingEdits ?? [],
+    pending.liveReviews ?? [],
     pending.iteration,
     {
       sessionId,

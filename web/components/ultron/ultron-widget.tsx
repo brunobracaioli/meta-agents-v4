@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useUltronVoice, type UltronStatus } from "./use-ultron-voice";
 import { UltronVisualizer } from "./ultron-visualizer";
+import { LiveReviewStage } from "./live-review-stage";
 
 const STATUS_LABEL: Record<UltronStatus, string> = {
   idle: "Ocioso",
@@ -39,27 +40,41 @@ export function UltronWidget() {
     stopSpeaking,
     sharing,
     toggleShare,
+    startShare,
+    captureFrame,
+    speak,
   } = useUltronVoice();
   const idleish = state.status === "idle" || state.status === "armed" || state.status === "listening";
   const busy = !idleish && state.status !== "error";
 
+  // The Live Review overlay (SPEC-014) renders independently of the console's open/collapsed
+  // state: it appears in fullscreen when Ultron's request_live_review tool fires.
+  const liveReview = (
+    <LiveReviewStage startShare={startShare} sharing={sharing} captureFrame={captureFrame} speak={speak} />
+  );
+
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="fixed bottom-4 right-4 z-50 grid h-11 w-11 place-items-center rounded-full border border-cyan-300/25 bg-[#06101a]/95 font-mono text-sm font-semibold uppercase text-cyan-100 shadow-[0_18px_55px_rgba(0,0,0,0.45)] backdrop-blur-xl transition hover:border-cyan-200/45 sm:bottom-6 sm:right-6"
-        aria-label="Abrir console Ultron"
-        title="Abrir Ultron"
-      >
-        <span className={`absolute left-1.5 top-1.5 h-2.5 w-2.5 rounded-full ${STATUS_COLOR[state.status]}`} />
-        U
-      </button>
+      <>
+        {liveReview}
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="fixed bottom-4 right-4 z-50 grid h-11 w-11 place-items-center rounded-full border border-cyan-300/25 bg-[#06101a]/95 font-mono text-sm font-semibold uppercase text-cyan-100 shadow-[0_18px_55px_rgba(0,0,0,0.45)] backdrop-blur-xl transition hover:border-cyan-200/45 sm:bottom-6 sm:right-6"
+          aria-label="Abrir console Ultron"
+          title="Abrir Ultron"
+        >
+          <span className={`absolute left-1.5 top-1.5 h-2.5 w-2.5 rounded-full ${STATUS_COLOR[state.status]}`} />
+          U
+        </button>
+      </>
     );
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 max-h-[calc(100vh-2rem)] w-[min(calc(100vw-2rem),24rem)] overflow-y-auto rounded-lg border border-cyan-300/20 bg-[#06101a]/95 p-3 shadow-[0_24px_90px_rgba(0,0,0,0.5)] backdrop-blur-xl sm:bottom-6 sm:right-6">
+    <>
+      {liveReview}
+      <div className="fixed bottom-4 right-4 z-50 max-h-[calc(100vh-2rem)] w-[min(calc(100vw-2rem),24rem)] overflow-y-auto rounded-lg border border-cyan-300/20 bg-[#06101a]/95 p-3 shadow-[0_24px_90px_rgba(0,0,0,0.5)] backdrop-blur-xl sm:bottom-6 sm:right-6">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <span className={`mt-0.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full ${STATUS_COLOR[state.status]}`} />
@@ -194,6 +209,7 @@ export function UltronWidget() {
         <span>PTT</span>
         <span>{sharing ? "Tela ON" : state.wakeActive ? 'Diga "Ultron"' : state.handsFree ? "Mic ativo" : "Manual"}</span>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

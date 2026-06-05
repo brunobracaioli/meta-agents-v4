@@ -10,6 +10,7 @@ export * from "./serialize";
 // and the live web preview). Consumers of this barrel must have React available.
 export * from "./content"; // ContentProvider, useContent, ContentValue, ResolvedContent
 export * from "./PageBody"; // PageBody
+export { ReviewBridge } from "./sections/ReviewBridge"; // Live Review postMessage bridge (SPEC-014)
 
 // Browser helpers reused by the template shell (e.g. <Tracking/> captures UTMs).
 export { captureUtms, getUtms } from "./lib/utm";
