@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import type { Json } from "@/lib/db/types";
 import { db } from "@/lib/db/client";
-import { trackingDb } from "@/lib/db/tracking";
 import { getLandingPageFull } from "@/lib/services/landing-page";
 import { rateLimiters, enforceLimit } from "@/lib/ratelimit";
 import {
@@ -68,7 +67,7 @@ async function loadEditState(id: string) {
  * through verbatim; it activates on the next publish). This is the ONLY thing that writes the
  * public `server` pointer — it never carries a secret. See ADR 0021 / SPEC-015 §7.1. */
 async function syncServerPointer(id: string): Promise<void> {
-  const cnt = await trackingDb()
+  const cnt = await db()
     .from("lp_tracking_secrets")
     .select("id", { count: "exact", head: true })
     .eq("landing_page_id", id);
@@ -213,7 +212,7 @@ landingPages.get("/:id/tracking-secrets/status", async (c) => {
   if (!state) return c.json({ error: "not_found" }, 404);
 
   // Select ONLY non-secret columns — the `secret` jsonb is never read here.
-  const res = await trackingDb()
+  const res = await db()
     .from("lp_tracking_secrets")
     .select("provider, public_id, test_event_code, updated_at")
     .eq("landing_page_id", id);
@@ -247,7 +246,7 @@ landingPages.put("/:id/tracking-secrets", async (c) => {
     secret: e.secret as Json,
     test_event_code: e.provider === "meta" ? e.test_event_code ?? null : null,
   }));
-  const upd = await trackingDb()
+  const upd = await db()
     .from("lp_tracking_secrets")
     .upsert(rows, { onConflict: "landing_page_id,provider,public_id" });
   if (upd.error) throw upd.error;
@@ -271,7 +270,7 @@ landingPages.delete("/:id/tracking-secrets", async (c) => {
   const state = await loadEditState(id);
   if (!state) return c.json({ error: "not_found" }, 404);
 
-  const del = await trackingDb()
+  const del = await db()
     .from("lp_tracking_secrets")
     .delete()
     .eq("landing_page_id", id)
@@ -292,7 +291,7 @@ landingPages.get("/:id/tracking-health", async (c) => {
   if (!state) return c.json({ error: "not_found" }, 404);
 
   const sinceIso = new Date(Date.now() - 7 * 86400 * 1000).toISOString();
-  const res = await trackingDb()
+  const res = await db()
     .from("lp_events")
     .select("event_name, meta_status, has_email, has_phone, utm_source, event_time")
     .eq("landing_page_id", id)

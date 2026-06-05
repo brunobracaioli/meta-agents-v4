@@ -906,6 +906,134 @@ export type Database = {
           },
         ]
       }
+      lp_events: {
+        Row: {
+          ads_status: number | null
+          client_id: string | null
+          country: string | null
+          created_at: string
+          currency: string | null
+          event_id: string
+          event_name: string
+          event_time: string
+          ga_status: number | null
+          has_email: boolean
+          has_phone: boolean
+          id: number
+          landing_page_id: string | null
+          meta_status: number | null
+          source_url: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+          value: number | null
+        }
+        Insert: {
+          ads_status?: number | null
+          client_id?: string | null
+          country?: string | null
+          created_at?: string
+          currency?: string | null
+          event_id: string
+          event_name: string
+          event_time: string
+          ga_status?: number | null
+          has_email?: boolean
+          has_phone?: boolean
+          id?: never
+          landing_page_id?: string | null
+          meta_status?: number | null
+          source_url?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          value?: number | null
+        }
+        Update: {
+          ads_status?: number | null
+          client_id?: string | null
+          country?: string | null
+          created_at?: string
+          currency?: string | null
+          event_id?: string
+          event_name?: string
+          event_time?: string
+          ga_status?: number | null
+          has_email?: boolean
+          has_phone?: boolean
+          id?: never
+          landing_page_id?: string | null
+          meta_status?: number | null
+          source_url?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lp_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lp_events_landing_page_id_fkey"
+            columns: ["landing_page_id"]
+            isOneToOne: false
+            referencedRelation: "landing_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lp_tracking_secrets: {
+        Row: {
+          created_at: string
+          id: string
+          landing_page_id: string
+          provider: string
+          public_id: string
+          secret: Json
+          test_event_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          landing_page_id: string
+          provider: string
+          public_id: string
+          secret?: Json
+          test_event_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          landing_page_id?: string
+          provider?: string
+          public_id?: string
+          secret?: Json
+          test_event_code?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lp_tracking_secrets_landing_page_id_fkey"
+            columns: ["landing_page_id"]
+            isOneToOne: false
+            referencedRelation: "landing_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       metric_snapshots: {
         Row: {
           analysis_id: string
