@@ -20,8 +20,11 @@ export function SiteHeader() {
         <a className="site-brand" href="#top" aria-label={contentSpec.product}>
           <span className="bracket">[</span>
           <span>
-            B2Tech<span className="slash">/</span>
-            <span className="gradient-text">{tail}</span>
+            B2Tech
+            <span className="site-brand-tail">
+              <span className="slash">/</span>
+              <span className="gradient-text">{tail}</span>
+            </span>
           </span>
           <span className="bracket">]</span>
         </a>

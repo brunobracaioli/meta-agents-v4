@@ -274,6 +274,7 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  min-width: 0; /* allow the brand to yield space so the CTA never gets squeezed */
   font-family: var(--font-title);
   font-weight: 800;
   font-size: 1rem;
@@ -281,6 +282,12 @@ a {
   color: var(--text-invert);
   text-decoration: none;
   white-space: nowrap;
+}
+
+/* The "/subdomain" tail of the wordmark — collapses on phones (see media query) so the
+   header keeps the brand + a full, single-line CTA without overflowing. */
+.site-brand-tail {
+  display: inline;
 }
 
 .site-brand .bracket {
@@ -298,6 +305,8 @@ a {
 .site-header-cta {
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0; /* never let the CTA shrink/collapse */
+  white-space: nowrap; /* keep the label on one line inside the pill */
   font-family: var(--font-title);
   font-weight: 700;
   font-size: 0.9rem;
@@ -322,6 +331,13 @@ a {
   .site-header-cta {
     padding: 7px 14px;
     font-size: 0.82rem;
+  }
+}
+
+/* Phones: drop the long "/subdomain" tail so "[ B2Tech ]" + the full CTA fit one line. */
+@media (max-width: 480px) {
+  .site-brand-tail {
+    display: none;
   }
 }
 
