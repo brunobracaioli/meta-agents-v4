@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Script from "next/script";
 import { contentSpec } from "@/lib/content";
-import { captureUtms } from "@b2tech/lp-render";
+import { captureUtms, captureAffiliate } from "@b2tech/lp-render";
 import { CONSENT_EVENT, getConsent, type ConsentRecord } from "@/lib/consent";
 import { initEventTracking, resolveTrackingIds } from "@/lib/track";
 
@@ -20,6 +20,9 @@ export function Tracking() {
 
   useEffect(() => {
     captureUtms();
+    // Affiliate token (?aff=) is functional/essential (checkout routing), not tracking,
+    // so it is captured regardless of consent. See @b2tech/lp-render lib/affiliate.ts.
+    captureAffiliate();
     setGranted(getConsent()?.granted === true);
     const onConsent = (e: Event) => {
       const detail = (e as CustomEvent<ConsentRecord>).detail;
