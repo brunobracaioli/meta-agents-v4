@@ -14,4 +14,10 @@ export { ReviewBridge } from "./sections/ReviewBridge"; // Live Review postMessa
 
 // Browser helpers reused by the template shell (e.g. <Tracking/> captures UTMs).
 export { captureUtms, getUtms } from "./lib/utm";
+export {
+  captureAffiliate,
+  getAffiliate,
+  AFFILIATE_URL_PARAM,
+  AFFILIATE_CHECKOUT_PARAM,
+} from "./lib/affiliate";
 export { buildCheckoutHref, type CheckoutConfig } from "./lib/checkout";
