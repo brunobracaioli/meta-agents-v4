@@ -4,6 +4,7 @@ import { setCookie, deleteCookie } from "hono/cookie";
 import { z } from "zod";
 import { env } from "@/lib/env";
 import { verifyPassword } from "@/lib/auth/password";
+import { verifyTurnstile } from "@/lib/auth/turnstile";
 import {
   SESSION_COOKIE,
   createSessionToken,
@@ -29,6 +30,10 @@ const app = new Hono().basePath("/api");
 
 const loginSchema = z.object({
   password: z.string().min(1).max(200),
+  // Cloudflare Turnstile token (cf-turnstile-response). Optional in the schema so the
+  // endpoint still works when Turnstile is not configured; enforced below when the
+  // secret key is present.
+  turnstileToken: z.string().min(1).max(4096).optional(),
 });
 
 const chatSchema = z.object({
@@ -69,6 +74,20 @@ app.post("/auth/login", async (c) => {
   const parsed = loginSchema.safeParse(body);
   if (!parsed.success) {
     return c.json({ error: "invalid_request" }, 400);
+  }
+
+  // Bot / brute-force gate: when Turnstile is configured, reject before we ever
+  // touch the password so automated attempts never reach the credential check.
+  const turnstileSecret = env.turnstileSecretKey();
+  if (turnstileSecret) {
+    const token = parsed.data.turnstileToken;
+    if (!token) {
+      return c.json({ error: "captcha_required" }, 400);
+    }
+    const human = await verifyTurnstile(token, turnstileSecret, ip);
+    if (!human) {
+      return c.json({ error: "captcha_failed" }, 403);
+    }
   }
 
   const ok = await verifyPassword(parsed.data.password, env.dashboardPasswordHash());
