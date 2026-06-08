@@ -4,13 +4,18 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/session";
 // Routes that must NOT require a session.
 const PUBLIC_API = ["/api/auth/login"];
 
+// Cloudflare Turnstile (login captcha) loads a script and renders its challenge in an
+// <iframe>, and the widget makes XHRs back to this host — so it needs script/frame/connect.
+const CF_TURNSTILE = "https://challenges.cloudflare.com";
+
 function buildCsp(nonce: string, isProd: boolean, allowSameOriginFrame: boolean): string {
   // In prod we use a per-request nonce + 'strict-dynamic' so Next.js's inline
   // bootstrap/hydration scripts run WITHOUT 'unsafe-inline'. In dev, HMR needs
-  // 'unsafe-inline'/'unsafe-eval', so we relax there only.
+  // 'unsafe-inline'/'unsafe-eval', so we relax there only. The Turnstile host is listed
+  // for browsers that don't honor 'strict-dynamic' (and for dev, which has no nonce).
   const scriptSrc = isProd
-    ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`
-    : "script-src 'self' 'unsafe-eval' 'unsafe-inline'";
+    ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' ${CF_TURNSTILE}`
+    : `script-src 'self' 'unsafe-eval' 'unsafe-inline' ${CF_TURNSTILE}`;
   // The landing-page preview is embedded in an <iframe> by the dashboard editor on the
   // SAME origin, so it must permit same-origin framing; every other route stays 'none'.
   const frameAncestors = allowSameOriginFrame ? "frame-ancestors 'self'" : "frame-ancestors 'none'";
@@ -18,9 +23,10 @@ function buildCsp(nonce: string, isProd: boolean, allowSameOriginFrame: boolean)
     "default-src 'self'",
     "img-src 'self' https://*.supabase.co data: blob:",
     "media-src 'self' blob:",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+    `connect-src 'self' https://*.supabase.co wss://*.supabase.co ${CF_TURNSTILE}`,
     scriptSrc,
     "style-src 'self' 'unsafe-inline'",
+    `frame-src ${CF_TURNSTILE}`,
     "worker-src 'self' blob:",
     "font-src 'self'",
     "object-src 'none'",
