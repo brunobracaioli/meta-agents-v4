@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AGENT_TRIGGER_CHANNEL, AGENT_TRIGGER_EVENT, isAgentTrigger } from "@/lib/ultron/agent-trigger";
+import { ArcReactorOverlay } from "./hud/arc-reactor-overlay";
 import { HudCorners, HudPanel } from "./hud/hud-panel";
 import { NeuralCoreScene } from "./neural-core-scene";
 import { deriveNeuralCoreState, type LiveEvent, type LiveProcess } from "./neural-core-state";
@@ -197,6 +198,7 @@ export function LiveFeed() {
       <section className="relative grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="hud-boot relative overflow-hidden border border-cyan-200/20 bg-[#030712] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_24px_80px_rgba(0,0,0,0.34)]">
           <NeuralCoreScene state={coreState} />
+          <ArcReactorOverlay mode={coreState.mode} />
           <div
             aria-hidden
             className="pointer-events-none absolute left-3 top-3 z-10 font-hud text-[10px] uppercase tracking-[0.24em] text-cyan-100/70"
