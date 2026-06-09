@@ -6,8 +6,10 @@ import { ActivitySparkline } from "./hud/activity-sparkline";
 import { AnimatedCounter } from "./hud/animated-counter";
 import { ArcGauge } from "./hud/arc-gauge";
 import { ArcReactorOverlay } from "./hud/arc-reactor-overlay";
+import { TypeOn, useBootSequence } from "./hud/boot-sequence";
 import { HudConnectors } from "./hud/hud-connectors";
 import { HudCorners, HudPanel } from "./hud/hud-panel";
+import { RadarSweep } from "./hud/radar-sweep";
 import { SpectrumBars } from "./hud/spectrum-bars";
 import { bucketEventsPerMinute, eventsPerMinuteNow, eventTypeCounts } from "./live-metrics";
 import { NeuralCoreScene } from "./neural-core-scene";
@@ -171,6 +173,7 @@ export function LiveFeed() {
   const eventsPerMinute = useMemo(() => eventsPerMinuteNow(events, metricsNowMs), [events, metricsNowMs]);
   const gaugeMax = Math.max(10, ...activityBuckets);
   const sessionStartMsRef = useRef<number>(Date.now());
+  const bootPhase = useBootSequence();
   const coreState = useMemo(() => deriveNeuralCoreState(events, nowMs, liveProcesses), [events, nowMs, liveProcesses]);
   const feedEvents = useMemo(() => events.slice(-MAX_FEED).reverse(), [events]);
   const latestEvent = feedEvents[0] ?? null;
@@ -182,11 +185,13 @@ export function LiveFeed() {
         : "stand-by";
 
   return (
-    <div className="space-y-5">
+    <div data-boot={bootPhase} className="relative space-y-5">
+      <RadarSweep />
       <div className="hud-boot flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="font-hud text-xs uppercase tracking-[0.3em] text-cyan-200/70">
-            U.L.T.R.O.N <span className="text-cyan-200/35">//</span> Neural Core Interface
+            <TypeOn text="U.L.T.R.O.N // NEURAL CORE ONLINE" letterSpacingEm={0.3} />
+            <span aria-hidden className="hud-caret ml-1 text-cyan-300">▌</span>
           </p>
           <h1 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">Operação ao vivo</h1>
           <p className="mt-1 max-w-2xl text-sm text-white/48">
