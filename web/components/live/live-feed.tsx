@@ -223,7 +223,7 @@ export function LiveFeed() {
 
       <section className="relative grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <HudConnectors />
-        <div className="hud-boot relative overflow-hidden border border-cyan-200/20 bg-[#030712] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_24px_80px_rgba(0,0,0,0.34)]">
+        <div className="hud-boot hud-scan-host relative overflow-hidden border border-cyan-200/20 bg-[#030712] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_24px_80px_rgba(0,0,0,0.34)]">
           <NeuralCoreScene state={coreState} />
           <ArcReactorOverlay mode={coreState.mode} />
           <div

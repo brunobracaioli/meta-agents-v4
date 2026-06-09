@@ -60,7 +60,7 @@ function ArcReactorOverlayBase({ mode }: ArcReactorOverlayProps) {
       data-mode={mode}
       viewBox="0 0 1000 1000"
       preserveAspectRatio="xMidYMid meet"
-      className="pointer-events-none absolute inset-0 z-10 h-full w-full opacity-60 transition-opacity duration-700 data-[mode=activated]:opacity-95"
+      className="pointer-events-none absolute inset-0 z-10 h-full w-full opacity-80 transition-opacity duration-700 data-[mode=activated]:opacity-100"
     >
       {/* Outer dashed ring, slow clockwise */}
       <g className="hud-ring-cw">
@@ -70,7 +70,7 @@ function ArcReactorOverlayBase({ mode }: ArcReactorOverlayProps) {
           r={432}
           fill="none"
           stroke={CYAN}
-          strokeOpacity={0.32}
+          strokeOpacity={0.5}
           strokeWidth={2}
           strokeDasharray="4 12"
         />
@@ -88,10 +88,10 @@ function ArcReactorOverlayBase({ mode }: ArcReactorOverlayProps) {
       {/* Segmented mid ring, counter-clockwise */}
       <g className="hud-ring-ccw">
         {SEGMENT_ARCS.map((d) => (
-          <path key={d} d={d} fill="none" stroke={CYAN} strokeOpacity={0.42} strokeWidth={3.5} />
+          <path key={d} d={d} fill="none" stroke={CYAN} strokeOpacity={0.6} strokeWidth={3.5} />
         ))}
         {ACCENT_ARCS.map((d) => (
-          <path key={d} d={d} fill="none" stroke={CYAN} strokeOpacity={0.18} strokeWidth={1.5} />
+          <path key={d} d={d} fill="none" stroke={CYAN} strokeOpacity={0.28} strokeWidth={1.5} />
         ))}
       </g>
 
@@ -105,14 +105,14 @@ function ArcReactorOverlayBase({ mode }: ArcReactorOverlayProps) {
             x2={tick.x2}
             y2={tick.y2}
             stroke={CYAN}
-            strokeOpacity={tick.major ? 0.5 : 0.22}
+            strokeOpacity={tick.major ? 0.65 : 0.32}
             strokeWidth={tick.major ? 2 : 1}
           />
         ))}
       </g>
 
       {/* Static degree numerals */}
-      <g className="font-hud" fill={CYAN} fillOpacity={0.38} fontSize={17} textAnchor="middle">
+      <g className="font-hud" fill={CYAN} fillOpacity={0.55} fontSize={17} textAnchor="middle">
         {DEGREE_LABELS.map((item) => (
           <text key={item.key} x={item.x} y={item.y} dominantBaseline="central">
             {item.label}

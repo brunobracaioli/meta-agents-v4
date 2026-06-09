@@ -8,8 +8,8 @@ const GLOW = "#bff7ff";
 // "none" stretches the curves with the container; non-scaling-stroke keeps the
 // 1px line crisp.
 const PATHS = [
-  { id: "hud-conn-1", d: "M 600 252 C 650 252, 650 130, 706 130", startX: 600, startY: 252, dotBegin: "0s" },
-  { id: "hud-conn-2", d: "M 600 308 C 650 308, 650 430, 706 430", startX: 600, startY: 308, dotBegin: "1.7s" },
+  { id: "hud-conn-1", d: "M 700 252 C 745 252, 745 130, 784 130", startX: 700, startY: 252, dotBegin: "0s" },
+  { id: "hud-conn-2", d: "M 700 308 C 745 308, 745 430, 784 430", startX: 700, startY: 308, dotBegin: "1.7s" },
 ];
 
 /**
