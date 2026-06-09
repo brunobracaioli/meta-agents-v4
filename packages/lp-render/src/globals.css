@@ -220,6 +220,16 @@ a {
   animation: pulse 2.4s infinite;
 }
 
+/* Secondary checkout (e.g. Hotmart "Compra internacional") — outlined, quieter than the primary. */
+.cta--secondary {
+  background: transparent;
+  color: var(--orange-hi);
+  border: 1.5px solid var(--orange);
+  font-size: 0.95rem;
+  padding: 13px 32px;
+  box-shadow: none;
+}
+
 .cta-note {
   margin: 14px 0 0;
   font-size: 0.85rem;

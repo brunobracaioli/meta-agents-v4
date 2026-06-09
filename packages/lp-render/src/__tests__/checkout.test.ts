@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { buildCheckoutHref } from "../lib/checkout";
+import { buildCheckoutHref, buildInternationalCheckoutHref } from "../lib/checkout";
 import { captureUtms } from "../lib/utm";
 
 // buildCheckoutHref reads UTMs and the affiliate token from `window` at call time, so we
@@ -9,6 +9,8 @@ import { captureUtms } from "../lib/utm";
 const CHECKOUT = "https://pay.hub.la/YftyuP6fkiKfL2daF0o1";
 const WAITLIST = "https://wa.me/5500000000000?text=quero";
 const AFF = "Gj8LqsTsGarzucZ48XHr";
+const HOTMART = "https://pay.hotmart.com/A106205617B?checkoutMode=10";
+const HMT = "N106235919G";
 
 function browser(search: string): void {
   const store = new Map<string, string>();
@@ -57,5 +59,77 @@ describe("buildCheckoutHref — affiliate router", () => {
     buildCheckoutHref({ checkoutUrl: CHECKOUT, cartState: "open" });
     (globalThis as { window: { location: { search: string } } }).window.location.search = "";
     expect(buildCheckoutHref({ checkoutUrl: CHECKOUT, cartState: "open" })).toBe(`${CHECKOUT}?ref=${AFF}`);
+  });
+});
+
+describe("buildCheckoutHref — Hotmart affiliate route (?hmt=)", () => {
+  it("swaps the primary CTA to the Hotmart checkout with ref=<hmt>, keeping existing params", () => {
+    browser(`?hmt=${HMT}`);
+    const href = new URL(
+      buildCheckoutHref({ checkoutUrl: CHECKOUT, cartState: "open", internationalCheckoutUrl: HOTMART }),
+    );
+    expect(href.origin + href.pathname).toBe("https://pay.hotmart.com/A106205617B");
+    expect(href.searchParams.get("checkoutMode")).toBe("10");
+    expect(href.searchParams.get("ref")).toBe(HMT);
+  });
+
+  it("hmt wins over aff when both are present", () => {
+    browser(`?aff=${AFF}&hmt=${HMT}`);
+    const href = new URL(
+      buildCheckoutHref({ checkoutUrl: CHECKOUT, cartState: "open", internationalCheckoutUrl: HOTMART }),
+    );
+    expect(href.hostname).toBe("pay.hotmart.com");
+    expect(href.searchParams.get("ref")).toBe(HMT);
+  });
+
+  it("ignores hmt when no international checkout is configured — never forwards it to Hubla", () => {
+    browser(`?hmt=${HMT}`);
+    expect(buildCheckoutHref({ checkoutUrl: CHECKOUT, cartState: "open" })).toBe(CHECKOUT);
+  });
+
+  it("appends UTMs to the Hotmart checkout as well", () => {
+    browser(`?utm_source=ig&hmt=${HMT}`);
+    captureUtms();
+    const href = new URL(
+      buildCheckoutHref({ checkoutUrl: CHECKOUT, cartState: "open", internationalCheckoutUrl: HOTMART }),
+    );
+    expect(href.searchParams.get("utm_source")).toBe("ig");
+    expect(href.searchParams.get("ref")).toBe(HMT);
+  });
+
+  it("persists hmt in sessionStorage across in-page navigation", () => {
+    browser(`?hmt=${HMT}`);
+    buildCheckoutHref({ checkoutUrl: CHECKOUT, cartState: "open", internationalCheckoutUrl: HOTMART });
+    (globalThis as { window: { location: { search: string } } }).window.location.search = "";
+    const href = new URL(
+      buildCheckoutHref({ checkoutUrl: CHECKOUT, cartState: "open", internationalCheckoutUrl: HOTMART }),
+    );
+    expect(href.searchParams.get("ref")).toBe(HMT);
+  });
+
+  it("still goes to the waitlist in closed-cart mode", () => {
+    browser(`?hmt=${HMT}`);
+    expect(
+      buildCheckoutHref({
+        checkoutUrl: CHECKOUT,
+        cartState: "closed",
+        waitlistUrl: WAITLIST,
+        internationalCheckoutUrl: HOTMART,
+      }),
+    ).toBe(WAITLIST);
+  });
+});
+
+describe("buildInternationalCheckoutHref — secondary CTA (always Hotmart)", () => {
+  it("attaches ref=<hmt> when the visitor arrived via ?hmt=", () => {
+    browser(`?hmt=${HMT}`);
+    const href = new URL(buildInternationalCheckoutHref(HOTMART));
+    expect(href.searchParams.get("ref")).toBe(HMT);
+    expect(href.searchParams.get("checkoutMode")).toBe("10");
+  });
+
+  it("never attaches the Hubla ?aff= token to the Hotmart URL", () => {
+    browser(`?aff=${AFF}`);
+    expect(buildInternationalCheckoutHref(HOTMART)).toBe(HOTMART);
   });
 });
