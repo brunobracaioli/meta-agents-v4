@@ -1,3 +1,5 @@
+import "@fontsource/share-tech-mono";
+
 import { LiveFeed } from "@/components/live/live-feed";
 
 export const dynamic = "force-dynamic";

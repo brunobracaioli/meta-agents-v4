@@ -2,6 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AGENT_TRIGGER_CHANNEL, AGENT_TRIGGER_EVENT, isAgentTrigger } from "@/lib/ultron/agent-trigger";
+import { ActivitySparkline } from "./hud/activity-sparkline";
+import { AnimatedCounter } from "./hud/animated-counter";
+import { ArcGauge } from "./hud/arc-gauge";
+import { ArcReactorOverlay } from "./hud/arc-reactor-overlay";
+import { TypeOn, useBootSequence } from "./hud/boot-sequence";
+import { HudConnectors } from "./hud/hud-connectors";
+import { HudCorners, HudPanel } from "./hud/hud-panel";
+import { RadarSweep } from "./hud/radar-sweep";
+import { SpectrumBars } from "./hud/spectrum-bars";
+import { bucketEventsPerMinute, eventsPerMinuteNow, eventTypeCounts } from "./live-metrics";
 import { NeuralCoreScene } from "./neural-core-scene";
 import { deriveNeuralCoreState, type LiveEvent, type LiveProcess } from "./neural-core-state";
 import {
@@ -47,6 +57,14 @@ function statusDotClass(state: "activated" | "stand-by" | "success" | "error"): 
   if (state === "success") return "bg-emerald-300 shadow-[0_0_14px_rgba(110,231,183,0.75)]";
   if (state === "error") return "bg-red-400 shadow-[0_0_14px_rgba(248,113,113,0.75)]";
   return "bg-white/25";
+}
+
+function formatUptime(elapsedMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
+  const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${hours}:${minutes}:${seconds}`;
 }
 
 function processSummary(process: LiveProcess | null, nowMs: number): string {
@@ -148,6 +166,14 @@ export function LiveFeed() {
     () => mergeLiveProcesses(processes, optimisticProcesses, nowMs),
     [optimisticProcesses, processes, nowMs],
   );
+  // Metrics are sampled on a 15s grid so the 1s clock tick doesn't recompute them.
+  const metricsNowMs = Math.floor(nowMs / 15_000) * 15_000;
+  const activityBuckets = useMemo(() => bucketEventsPerMinute(events, metricsNowMs), [events, metricsNowMs]);
+  const spectrumCounts = useMemo(() => eventTypeCounts(events, metricsNowMs), [events, metricsNowMs]);
+  const eventsPerMinute = useMemo(() => eventsPerMinuteNow(events, metricsNowMs), [events, metricsNowMs]);
+  const gaugeMax = Math.max(10, ...activityBuckets);
+  const sessionStartMsRef = useRef<number>(Date.now());
+  const bootPhase = useBootSequence();
   const coreState = useMemo(() => deriveNeuralCoreState(events, nowMs, liveProcesses), [events, nowMs, liveProcesses]);
   const feedEvents = useMemo(() => events.slice(-MAX_FEED).reverse(), [events]);
   const latestEvent = feedEvents[0] ?? null;
@@ -159,10 +185,14 @@ export function LiveFeed() {
         : "stand-by";
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div data-boot={bootPhase} className="relative space-y-5">
+      <RadarSweep />
+      <div className="hud-boot flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="font-mono text-xs uppercase tracking-[0.24em] text-cyan-200/55">Neural Core Interface</p>
+          <p className="font-hud text-xs uppercase tracking-[0.3em] text-cyan-200/70">
+            <TypeOn text="U.L.T.R.O.N // NEURAL CORE ONLINE" letterSpacingEm={0.3} />
+            <span aria-hidden className="hud-caret ml-1 text-cyan-300">▌</span>
+          </p>
           <h1 className="mt-1 text-2xl font-semibold text-white sm:text-3xl">Operação ao vivo</h1>
           <p className="mt-1 max-w-2xl text-sm text-white/48">
             Estado baseado em `agent_jobs` e lifecycle de `run-skill.sh`; `agent_events` alimenta o feed de passos.
@@ -170,7 +200,7 @@ export function LiveFeed() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span
-            className={`inline-flex items-center gap-2 rounded border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] ${
+            className={`hud-clip-sm inline-flex items-center gap-2 border px-3 py-2 font-hud text-[10px] uppercase tracking-[0.16em] ${
               connected
                 ? "border-emerald-300/25 bg-emerald-400/10 text-emerald-200"
                 : "border-red-300/25 bg-red-500/10 text-red-200"
@@ -178,10 +208,10 @@ export function LiveFeed() {
             title={connected ? "conectado" : "reconectando"}
           >
             <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-300" : "bg-red-400"}`} />
-            {connected ? "Conectado" : "Reconectando"}
+            {connected ? "Uplink ativo" : "Reconectando"}
           </span>
           <span
-            className={`inline-flex items-center gap-2 rounded border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] ${statusClass(
+            className={`hud-clip-sm inline-flex items-center gap-2 border px-3 py-2 font-hud text-[10px] uppercase tracking-[0.16em] ${statusClass(
               displayState,
             )}`}
           >
@@ -191,42 +221,66 @@ export function LiveFeed() {
         </div>
       </div>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="overflow-hidden rounded-lg border border-cyan-200/20 bg-[#030712] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_24px_80px_rgba(0,0,0,0.34)]">
+      <section className="relative grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <HudConnectors />
+        <div className="hud-boot hud-scan-host relative overflow-hidden border border-cyan-200/20 bg-[#030712] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_24px_80px_rgba(0,0,0,0.34)]">
           <NeuralCoreScene state={coreState} />
+          <ArcReactorOverlay mode={coreState.mode} />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute left-3 top-3 z-10 font-hud text-[10px] uppercase tracking-[0.24em] text-cyan-100/70"
+          >
+            <span className="mr-2 inline-block border border-cyan-300/30 bg-cyan-400/10 px-1.5 py-0.5 text-cyan-200/90">
+              01
+            </span>
+            Arc Reactor
+          </div>
+          <HudCorners />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-          <section className="tech-panel rounded-lg p-4">
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-100/45">Core telemetry</p>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <div className="rounded border border-white/10 bg-white/[0.025] p-3">
-                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/35">Processos ativos</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{coreState.activeProcessCount}</p>
+          <HudPanel index="02" title="Core Telemetry" bootStep={1}>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="border border-white/10 bg-white/[0.025] p-3">
+                <p className="font-hud text-[10px] uppercase tracking-[0.14em] text-white/35">Processos ativos</p>
+                <p className="mt-2 font-hud text-2xl text-white">
+                  <AnimatedCounter value={coreState.activeProcessCount} />
+                </p>
               </div>
-              <div className="rounded border border-white/10 bg-white/[0.025] p-3">
-                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/35">Subagents 120s</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{coreState.activeSubagents.length}</p>
+              <div className="border border-white/10 bg-white/[0.025] p-3">
+                <p className="font-hud text-[10px] uppercase tracking-[0.14em] text-white/35">Subagents 120s</p>
+                <p className="mt-2 font-hud text-2xl text-white">
+                  <AnimatedCounter value={coreState.activeSubagents.length} />
+                </p>
               </div>
             </div>
-            <div className="mt-4 rounded border border-cyan-200/10 bg-cyan-300/[0.035] p-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-cyan-100/45">Processo</p>
+            <div className="mt-4 flex items-center justify-between gap-3 border border-cyan-200/10 bg-cyan-300/[0.035] p-3">
+              <ArcGauge label="evt/min" value={eventsPerMinute} max={gaugeMax} />
+              <div className="text-right">
+                <p className="font-hud text-[10px] uppercase tracking-[0.14em] text-white/35">Uptime sessão</p>
+                <p className="mt-1 font-hud text-lg text-white">{formatUptime(nowMs - sessionStartMsRef.current)}</p>
+                <p className="mt-2 font-hud text-[10px] uppercase tracking-[0.14em] text-cyan-100/45">
+                  {events.length} evt no buffer
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 border border-cyan-200/10 bg-cyan-300/[0.035] p-3">
+              <p className="font-hud text-[10px] uppercase tracking-[0.16em] text-cyan-100/45">Processo</p>
               <p className="mt-2 text-sm text-white/80">{processSummary(coreState.lastProcess, nowMs)}</p>
             </div>
-            <div className="mt-3 rounded border border-cyan-200/10 bg-cyan-300/[0.035] p-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-cyan-100/45">Último passo</p>
+            <div className="mt-3 border border-cyan-200/10 bg-cyan-300/[0.035] p-3">
+              <p className="font-hud text-[10px] uppercase tracking-[0.16em] text-cyan-100/45">Último passo</p>
               <p className="mt-2 text-sm text-white/80">
                 {latestEvent ? `${latestEvent.agent_name} · ${ageOf(latestEvent.ts, nowMs)} atrás` : "Sem atividade carregada"}
               </p>
             </div>
-          </section>
+          </HudPanel>
 
-          <section className="tech-panel rounded-lg p-4">
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-100/45">Subagents online</p>
-            <div className="mt-4 space-y-2">
+          <HudPanel index="03" title="Subagents Online" bootStep={2}>
+            <div className="space-y-2">
               {coreState.activeSubagents.length > 0 ? (
                 coreState.activeSubagents.map((subagent) => (
-                  <div key={subagent.name} className="flex items-center justify-between gap-3 rounded border border-white/10 bg-white/[0.025] px-3 py-2">
+                  <div key={subagent.name} className="flex items-center justify-between gap-3 border border-white/10 bg-white/[0.025] px-3 py-2">
                     <span className="flex min-w-0 items-center gap-2">
                       <span
                         className="h-2.5 w-2.5 shrink-0 rounded-full shadow-[0_0_14px_currentColor]"
@@ -234,36 +288,35 @@ export function LiveFeed() {
                       />
                       <span className="truncate text-sm text-white/82">{subagent.name}</span>
                     </span>
-                    <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] text-white/35">
+                    <span className="shrink-0 font-hud text-[10px] uppercase tracking-[0.12em] text-white/35">
                       {subagent.eventCount} evt
                     </span>
                   </div>
                 ))
               ) : (
-                <p className="rounded border border-white/10 bg-white/[0.025] px-3 py-3 text-sm text-white/45">
+                <p className="border border-white/10 bg-white/[0.025] px-3 py-3 text-sm text-white/45">
                   Nenhum subagent com evento nos últimos 120s.
                 </p>
               )}
               {coreState.overflowSubagentCount > 0 ? (
-                <div className="flex items-center justify-between gap-3 rounded border border-white/10 bg-white/[0.02] px-3 py-2">
+                <div className="flex items-center justify-between gap-3 border border-white/10 bg-white/[0.02] px-3 py-2">
                   <span className="truncate text-sm text-white/55">Subagents em overflow visual</span>
-                  <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] text-cyan-100/45">
+                  <span className="shrink-0 font-hud text-[10px] uppercase tracking-[0.12em] text-cyan-100/45">
                     +{coreState.overflowSubagentCount}
                   </span>
                 </div>
               ) : null}
             </div>
-          </section>
+          </HudPanel>
         </div>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <div className="tech-panel rounded-lg p-4">
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-100/45">Fluxo de dados</p>
-          <div className="mt-4 space-y-3">
+        <HudPanel index="04" title="Data Flow" bootStep={3}>
+          <div className="space-y-3">
             {["agent_jobs/lifecycle state", "agent_events stream", "HUD render"].map((label, index) => (
               <div key={label} className="flex items-center gap-3">
-                <span className="grid h-7 w-7 shrink-0 place-items-center rounded border border-cyan-200/15 bg-cyan-300/10 font-mono text-[10px] text-cyan-100/70">
+                <span className="grid h-7 w-7 shrink-0 place-items-center border border-cyan-200/15 bg-cyan-300/10 font-hud text-[10px] text-cyan-100/70">
                   {index + 1}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -280,43 +333,52 @@ export function LiveFeed() {
               </div>
             ))}
           </div>
-        </div>
+          <div className="mt-4 space-y-4 border-t border-white/10 pt-4">
+            <ActivitySparkline buckets={activityBuckets} />
+            <SpectrumBars counts={spectrumCounts} />
+          </div>
+        </HudPanel>
 
-        <div className="tech-panel rounded-lg p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-100/45">Feed recente</p>
-            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/32">
+        <HudPanel
+          index="05"
+          title="Event Stream"
+          bootStep={4}
+          actions={
+            <span className="font-hud text-[10px] uppercase tracking-[0.14em] text-white/32">
               {events.length} eventos carregados
             </span>
-          </div>
-
+          }
+        >
           {feedEvents.length === 0 ? (
-            <p className="mt-4 rounded border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white/50">
+            <p className="border border-white/10 bg-white/[0.025] px-4 py-3 text-sm text-white/50">
               Aguardando atividade dos agents. Quando uma skill rodar, os passos aparecem aqui em tempo real.
             </p>
           ) : (
-            <ol className="mt-4 max-h-[460px] space-y-1.5 overflow-y-auto pr-1">
+            <ol className="max-h-[460px] space-y-1.5 overflow-y-auto pr-1">
               {feedEvents.map((e) => (
-                <li key={e.id} className="flex items-start gap-3 rounded border border-white/10 bg-white/[0.025] px-4 py-3">
+                <li
+                  key={e.id}
+                  className="flex items-start gap-3 border border-white/10 border-l-2 border-l-cyan-300/30 bg-white/[0.025] px-4 py-3"
+                >
                   <span className={`mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full ${EVENT_DOT[e.event_type] ?? "bg-white/30"}`} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-white/85">
                       <span className="font-medium text-white">{e.agent_name}</span>
                       {e.summary ? <span className="text-white/60"> - {e.summary}</span> : null}
                     </p>
-                    <p className="text-xs text-white/35">
+                    <p className="font-hud text-xs text-white/35">
                       {e.event_type}
                       {e.tool_name ? ` · ${e.tool_name}` : ""} · {timeOf(e.ts)}
                     </p>
                   </div>
-                  <span className="hidden shrink-0 rounded border border-white/10 bg-white/[0.03] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-white/35 sm:inline">
+                  <span className="hidden shrink-0 border border-white/10 bg-white/[0.03] px-2 py-1 font-hud text-[10px] uppercase tracking-[0.12em] text-white/35 sm:inline">
                     {e.agent_type}
                   </span>
                 </li>
               ))}
             </ol>
           )}
-        </div>
+        </HudPanel>
       </section>
     </div>
   );
