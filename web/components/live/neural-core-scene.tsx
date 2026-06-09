@@ -111,29 +111,33 @@ type SceneHandles = {
 
 const LOOK = {
   activated: {
-    nodeOpacity: 0.88,
-    filamentOpacity: 0.58,
-    particleOpacity: 0.46,
-    shellOpacity: 0.028,
+    nodeOpacity: 0.66,
+    filamentOpacity: 0.4,
+    particleOpacity: 0.28,
+    shellOpacity: 0.022,
     speed: 1,
   },
   "stand-by": {
-    nodeOpacity: 0.34,
-    filamentOpacity: 0.18,
-    particleOpacity: 0.17,
-    shellOpacity: 0.008,
+    nodeOpacity: 0.24,
+    filamentOpacity: 0.1,
+    particleOpacity: 0.1,
+    shellOpacity: 0.006,
     speed: 0.34,
   },
 } as const;
 
 const PULSE_MS = 2200;
 const BRANCH_FADE_MS = 1800;
-const AMBIENT_PARTICLE_COUNT = 520;
-const SYNAPSE_NODE_COUNT = 128;
-const INTERNAL_LINK_COUNT = 96;
-const FILAMENT_COUNT = 72;
+// Arc-reactor look: a clean glowing core inside flat coplanar rings + a coil.
+// Counts are deliberately low — the old "hairball" used 520/128/96/72.
+const AMBIENT_PARTICLE_COUNT = 150;
+const SYNAPSE_NODE_COUNT = 42;
+const INTERNAL_LINK_COUNT = 22;
+const FILAMENT_COUNT = 14;
 const FILAMENT_SEGMENTS = 86;
-const SIGNAL_PARTICLE_COUNT = 136;
+const SIGNAL_PARTICLE_COUNT = 60;
+const COIL_SEGMENT_COUNT = 10;
+const COIL_RADIUS = 1.13;
 const BRANCH_CLUSTER_COUNT = 34;
 const BRANCH_PACKET_COUNT = 8;
 const GOLDEN_ANGLE = 2.399963229728653;
@@ -296,10 +300,10 @@ function makeSynapseWeb(): SynapseWeb {
   return { line, geometry, material };
 }
 
+// Monochrome ice-cyan palette — the arc reactor reads as one light source.
 function filamentColor(index: number): string {
-  if (index % 17 === 0) return "#f0abfc";
-  if (index % 11 === 0) return "#facc15";
-  if (index % 7 === 0) return "#6ee7b7";
+  if (index % 5 === 0) return "#bff7ff";
+  if (index % 3 === 0) return "#a5f3fc";
   return "#67e8f9";
 }
 
@@ -310,7 +314,7 @@ function makeEnergyFilaments(): EnergyFilament[] {
     const angle = i * GOLDEN_ANGLE;
     const y = 1 - (i / Math.max(FILAMENT_COUNT - 1, 1)) * 2;
     const ring = Math.sqrt(Math.max(0, 1 - y * y));
-    const reach = 2.5 + ((i * 31) % 100) / 90;
+    const reach = 1.75 + ((i * 31) % 100) / 160;
     const end = new THREE.Vector3(
       Math.cos(angle) * ring * reach,
       y * 1.44 + Math.sin(angle * 1.7) * 0.32,
@@ -483,7 +487,7 @@ function makeSessionRing(radius: number, tube: number, color: string, rotation: 
       mesh,
       material,
       baseRotation: rotation.clone(),
-      baseOpacity: 0.16,
+      baseOpacity: 0.34,
       phase,
       speed: 0.12 + phase * 0.04,
     },
@@ -504,7 +508,7 @@ function makeOrbitBeam(index: number): { beam: OrbitBeam; disposables: Disposabl
 
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
   const material = new THREE.LineBasicMaterial({
-    color: index % 3 === 0 ? "#a5f3fc" : index % 3 === 1 ? "#c4b5fd" : "#6ee7b7",
+    color: index % 2 === 0 ? "#a5f3fc" : "#67e8f9",
     transparent: true,
     opacity: 0.12,
     blending: THREE.AdditiveBlending,
@@ -529,6 +533,30 @@ function makeOrbitBeam(index: number): { beam: OrbitBeam; disposables: Disposabl
     },
     disposables: [geometry, material],
   };
+}
+
+// The iconic Stark-reactor coil: flat ring of rectangular windings facing the
+// camera, sitting between the inner and outer session rings.
+function makeReactorCoil(): { group: THREE.Group; material: THREE.MeshBasicMaterial; disposables: Disposable[] } {
+  const group = new THREE.Group();
+  const material = new THREE.MeshBasicMaterial({
+    color: "#9beefc",
+    transparent: true,
+    opacity: 0.3,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const geometry = new THREE.BoxGeometry(0.34, 0.14, 0.05);
+  for (let i = 0; i < COIL_SEGMENT_COUNT; i += 1) {
+    const angle = (i / COIL_SEGMENT_COUNT) * Math.PI * 2;
+    const segment = new THREE.Mesh<THREE.BoxGeometry, THREE.MeshBasicMaterial>(geometry, material);
+    segment.position.set(Math.cos(angle) * COIL_RADIUS, Math.sin(angle) * COIL_RADIUS, 0);
+    segment.rotation.z = angle + Math.PI / 2;
+    segment.renderOrder = 9;
+    group.add(segment);
+  }
+  return { group, material, disposables: [geometry, material] };
 }
 
 function branchEndpoint(name: string): { angle: number; end: THREE.Vector3 } {
@@ -784,12 +812,12 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
       depthWrite: false,
     });
     const core = new THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>(coreGeometry, coreMaterial);
-    const coreWireGeometry = new THREE.IcosahedronGeometry(0.72, 2);
+    const coreWireGeometry = new THREE.IcosahedronGeometry(0.62, 2);
     const coreWireMaterial = new THREE.MeshBasicMaterial({
       color: "#67e8f9",
       wireframe: true,
       transparent: true,
-      opacity: 0.34,
+      opacity: 0.18,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
@@ -838,28 +866,31 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
     }
 
     const signalFields = [
-      makeSignalField(filaments, "#e7ffff", SIGNAL_PARTICLE_COUNT, 3, 0.92, 0.24, 0.044),
-      makeSignalField(filaments, "#facc15", Math.floor(SIGNAL_PARTICLE_COUNT * 0.34), 19, 0.5, 0.08, 0.055),
-      makeSignalField(filaments, "#f0abfc", Math.floor(SIGNAL_PARTICLE_COUNT * 0.24), 31, 0.45, 0.07, 0.05),
+      makeSignalField(filaments, "#e7ffff", SIGNAL_PARTICLE_COUNT, 3, 0.85, 0.2, 0.044),
     ];
     for (const field of signalFields) {
       neuralGroup.add(field.points);
       disposables.push(field.geometry, field.material);
     }
 
+    // Flat, coplanar rings facing the camera — the reactor housing.
     const sessionRings: SessionRing[] = [];
     [
-      makeSessionRing(1.05, 0.009, "#67e8f9", new THREE.Euler(Math.PI / 2, 0.25, 0.2), 0.2),
-      makeSessionRing(1.58, 0.007, "#a5f3fc", new THREE.Euler(0.35, Math.PI / 2, -0.38), 0.7),
-      makeSessionRing(2.13, 0.006, "#c4b5fd", new THREE.Euler(0.82, -0.28, Math.PI / 2), 1.1),
+      makeSessionRing(0.92, 0.014, "#67e8f9", new THREE.Euler(0, 0, 0), 0.2),
+      makeSessionRing(1.34, 0.009, "#a5f3fc", new THREE.Euler(0, 0, 1.1), 0.7),
+      makeSessionRing(1.62, 0.006, "#67e8f9", new THREE.Euler(0, 0, 2.2), 1.1),
     ].forEach(({ ring, disposables: ringDisposables }) => {
       sessionRings.push(ring);
       neuralGroup.add(ring.mesh);
       disposables.push(...ringDisposables);
     });
 
+    const reactorCoil = makeReactorCoil();
+    neuralGroup.add(reactorCoil.group);
+    disposables.push(...reactorCoil.disposables);
+
     const orbitBeams: OrbitBeam[] = [];
-    for (let i = 0; i < 5; i += 1) {
+    for (let i = 0; i < 2; i += 1) {
       const { beam, disposables: beamDisposables } = makeOrbitBeam(i);
       orbitBeams.push(beam);
       neuralGroup.add(beam.group);
@@ -899,8 +930,10 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
       const activity = 0.28 + visual.active * 0.9 + pulse * 0.56;
       frame += dt * motionScale * (0.44 + look.speed + pulse * 0.22);
 
-      neuralGroup.rotation.y = frame * 0.045 + Math.sin(frame * 0.12) * 0.055;
-      neuralGroup.rotation.x = Math.sin(frame * 0.09) * 0.046;
+      // Bounded sway (no full revolution): the reactor housing must keep facing
+      // the viewer; OrbitControls still allows manual orbiting.
+      neuralGroup.rotation.y = Math.sin(frame * 0.12) * 0.16;
+      neuralGroup.rotation.x = Math.sin(frame * 0.09) * 0.06;
       neuralGroup.rotation.z = Math.cos(frame * 0.07) * 0.032;
 
       coreGroup.scale.setScalar(1 + visual.active * 0.055 + pulse * 0.09 + Math.sin(frame * 3.1) * 0.012);
@@ -923,7 +956,7 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
 
       synapseWeb.line.rotation.y = -frame * 0.13;
       synapseWeb.line.rotation.x = Math.sin(frame * 0.26) * 0.055;
-      synapseWeb.material.opacity = THREE.MathUtils.lerp(synapseWeb.material.opacity, 0.1 + visual.active * 0.2 + pulse * 0.12, 0.08);
+      synapseWeb.material.opacity = THREE.MathUtils.lerp(synapseWeb.material.opacity, 0.05 + visual.active * 0.12 + pulse * 0.1, 0.08);
 
       synapseNodes.rotation.y = frame * 0.19;
       synapseNodes.rotation.x = Math.sin(frame * 0.5) * 0.08;
@@ -941,17 +974,27 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
         shell.wireMaterial.opacity = THREE.MathUtils.lerp(shell.wireMaterial.opacity, shellOpacity * 2.2, 0.08);
       });
 
+      // Reactor rings spin in-plane (alternating directions) with only a gentle
+      // 3D wobble, so the housing keeps facing the viewer.
       sessionRings.forEach((ring, index) => {
         ring.mesh.rotation.set(
-          ring.baseRotation.x + Math.sin(frame * ring.speed + ring.phase) * 0.2,
-          ring.baseRotation.y + frame * (0.12 + index * 0.02),
-          ring.baseRotation.z + Math.cos(frame * ring.speed + ring.phase) * 0.18,
+          ring.baseRotation.x + Math.sin(frame * ring.speed + ring.phase) * 0.07,
+          ring.baseRotation.y + Math.cos(frame * ring.speed * 0.8 + ring.phase) * 0.07,
+          ring.baseRotation.z + frame * (0.16 + index * 0.06) * (index % 2 === 0 ? 1 : -1),
         );
-        const targetOpacity = ring.baseOpacity * (0.34 + visual.active * 1.25) + pulse * 0.14;
+        const targetOpacity = ring.baseOpacity * (0.4 + visual.active * 1.1) + pulse * 0.14;
         ring.material.opacity = THREE.MathUtils.lerp(ring.material.opacity, targetOpacity, 0.08);
         const scale = 1 + visual.active * 0.03 + pulse * 0.08 + Math.sin(frame * 1.2 + ring.phase) * 0.012;
         ring.mesh.scale.setScalar(scale);
       });
+
+      reactorCoil.group.rotation.z = -frame * 0.2;
+      reactorCoil.group.rotation.x = Math.sin(frame * 0.21) * 0.05;
+      reactorCoil.material.opacity = THREE.MathUtils.lerp(
+        reactorCoil.material.opacity,
+        0.18 + visual.active * 0.34 + pulse * 0.2,
+        0.08,
+      );
 
       orbitBeams.forEach((beam, index) => {
         beam.group.rotation.x += Math.sin(beam.phase + frame * 0.4) * 0.0008 * motionScale;
