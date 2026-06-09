@@ -119,6 +119,17 @@ consent_key:"b2tech_consent_v1" }, seo }`.
   ao checkout (`lib/checkout.ts`) e aos eventos de pixel.
 - `lib/checkout.ts`: monta URL Hubla + UTMs; em `cart_state='closed'` troca o CTA para o
   fluxo de waitlist (WhatsApp).
+- **Roteador de afiliados** (`lib/affiliate.ts` + `lib/checkout.ts`): pass-through, sem
+  cadastro de afiliado no código — o token vem da URL da LP e é validado pela plataforma.
+  - `?aff=<token>` (Hubla): re-anexado ao checkout Hubla como `ref=<token>`.
+  - `?hmt=<código>` (Hotmart): o CTA primário **troca** para o checkout Hotmart
+    (`offer.secondaryCtaHref`) com `ref=<código>` (o código do hotlink, exibido como "REF"
+    no rodapé do checkout Hotmart). Tem precedência sobre `aff` quando ambos presentes;
+    ignorado se a LP não tem `secondaryCtaHref` (nunca vaza pra Hubla).
+  - Ambos persistem em `sessionStorage` (`b2tech_aff_v1` / `b2tech_hmt_v1`) e sobrevivem a
+    navegação por âncora; UTMs continuam sendo anexadas em todos os casos.
+  - CTA secundário "Compra internacional" (`offer.secondaryCtaHref/Label`, opcional):
+    sempre Hotmart; só anexa `ref` quando há `hmt` (token Hubla nunca vai pra Hotmart).
 
 ## 7. Etapas (resumo — detalhe no SKILL.md, Passos P0–P12)
 

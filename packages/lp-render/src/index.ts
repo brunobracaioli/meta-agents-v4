@@ -17,7 +17,13 @@ export { captureUtms, getUtms } from "./lib/utm";
 export {
   captureAffiliate,
   getAffiliate,
+  getHotmartAffiliate,
   AFFILIATE_URL_PARAM,
+  HOTMART_URL_PARAM,
   AFFILIATE_CHECKOUT_PARAM,
 } from "./lib/affiliate";
-export { buildCheckoutHref, type CheckoutConfig } from "./lib/checkout";
+export {
+  buildCheckoutHref,
+  buildInternationalCheckoutHref,
+  type CheckoutConfig,
+} from "./lib/checkout";

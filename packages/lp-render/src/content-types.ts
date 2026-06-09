@@ -107,6 +107,10 @@ export interface Messages {
     payments?: string[];
     secure?: string;
     ctaLabel: string;
+    /** Optional secondary checkout (e.g. Hotmart "Compra internacional"). Both fields must be
+     * present to render. Also the base URL for the ?hmt= affiliate route (see lib/checkout.ts). */
+    secondaryCtaHref?: string;
+    secondaryCtaLabel?: string;
   };
   faq: { q: string; a: string }[];
   finalCta: { headline: string; ctaLabel: string };

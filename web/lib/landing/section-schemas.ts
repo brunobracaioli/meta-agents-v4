@@ -98,6 +98,7 @@ export const SECTION_SCHEMAS: Record<SectionType, z.ZodTypeAny> = {
   guarantee: z.object({ heading: txt.optional(), body: txt.optional(), seal: txt.optional() }).strict(),
   offer: z
     .object({
+      eyebrow: txt.optional(),
       heading: txt.optional(),
       priceLabel: txt.optional(),
       anchor: txt.optional(),
@@ -107,6 +108,8 @@ export const SECTION_SCHEMAS: Record<SectionType, z.ZodTypeAny> = {
       payments: arr(txt).optional(),
       secure: txt.optional(),
       ctaLabel: txt.optional(),
+      secondaryCtaHref: href.optional(),
+      secondaryCtaLabel: txt.optional(),
     })
     .strict(),
   faq: z.object({ items: arr(z.object({ q: txt.optional(), a: txt.optional() }).strict()).optional() }).strict(),

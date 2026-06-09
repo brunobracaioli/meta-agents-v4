@@ -1,7 +1,7 @@
 "use client";
 
 import { useContent } from "../content";
-import { CheckoutButton } from "../components/CheckoutButton";
+import { CheckoutButton, InternationalCheckoutButton } from "../components/CheckoutButton";
 import { FadeIn } from "../components/FadeIn";
 
 export function Offer() {
@@ -42,6 +42,7 @@ export function Offer() {
           <div style={{ marginTop: 20 }}>
             <CheckoutButton label={data.ctaLabel} pulse />
           </div>
+          <InternationalCheckoutButton />
           {data.guarantee ? <p className="guarantee-line">{data.guarantee}</p> : null}
           {data.payments && data.payments.length > 0 ? (
             <div className="payments">
