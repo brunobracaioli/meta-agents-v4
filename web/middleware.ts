@@ -26,7 +26,9 @@ function buildCsp(nonce: string, isProd: boolean, allowSameOriginFrame: boolean)
     `connect-src 'self' https://*.supabase.co wss://*.supabase.co ${CF_TURNSTILE}`,
     scriptSrc,
     "style-src 'self' 'unsafe-inline'",
-    `frame-src ${CF_TURNSTILE}`,
+    // 'self' is required for the dashboard editor's same-origin /lp-preview iframe;
+    // an explicit frame-src REPLACES the default-src fallback, so it must be listed.
+    `frame-src 'self' ${CF_TURNSTILE}`,
     "worker-src 'self' blob:",
     "font-src 'self'",
     "object-src 'none'",
