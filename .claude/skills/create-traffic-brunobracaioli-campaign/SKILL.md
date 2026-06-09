@@ -122,13 +122,30 @@ Senão, gere os 3 criativos (cadeia de subagentes, igual ao `/create-campaign`):
      configHints:{brandName:"Claude Code Architect", angle:<ângulo>}}` → `headline`
      (≤40), `primaryText` (≤250), `description` (≤30), `callToActionType`
      (force `LEARN_MORE`).
+   - **Refs canônicas (OBRIGATÓRIO usar as 6, nesta ordem)** — set pré-redimensionado
+     ≤1MB em `REFS_DIR=.claude/materiais-das-empresas/brunobracaioli/refs-canonicas/`:
+     `01-logo.png`, `02-bruno-retrato.jpg`, `03-estilo-meta-team-agents.jpg`,
+     `04-estilo-pipeline-equipe-tecnica.jpg`, `05-estilo-pipeline-equipe-conteudo.jpg`,
+     `06-estilo-comunidade-fomo.jpg`. NÃO use os originais de `logo/` e
+     `exemplo-de-ads/` (excedem 1MB e são descartados pelo validador).
    - `Agent(subagent_type="image-prompt-generator")` com `{scrape, aspectRatio:"1080x1080",
-     referenceImagePaths:[ logo.png, foto-do-infoprodutor/*.jpg, exemplo-de-ads/* ],
-     configHints:{brandName:"Claude Code Architect"}}` → `prompt`. (O agente já tem o
-     preset de marca brunobracaioli: navy `#0A0F1A`→`#0E1422` + laranja `#FF6B1A`.)
+     referenceImagePaths:[ as 6 refs canônicas acima, na ordem ],
+     configHints:{brandName:"Claude Code Architect"}}` → `prompt`. (O agente tem o
+     preset de marca brunobracaioli: navy `#0A0F1A`→`#0E1422` + laranja `#FF6B1A`,
+     rosto do Bruno + 3-6 bichinhos pixel-art laranja trabalhando + headline forte
+     são OBRIGATÓRIOS em todo criativo.)
    - `Skill(skill="image-generate", args="prompt-file=<prompt> aspect=1:1
-     out-dir=${ADS_DIR} out-name=ad-v<N>-<ângulo>")` → PNG 1024×1024. Salve também
-     `prompt-vN.txt` e `log-vN.txt`.
+     refs=<as mesmas 6 refs canônicas, separadas por vírgula, na ordem>
+     out-dir=${ADS_DIR} out-name=ad-v<N>-<ângulo>")` → PNG 1024×1024. As refs vão
+     pro `/v1/images/edits` do gpt-image-2 — sem elas o modelo não tem o rosto do
+     Bruno nem o padrão visual dos exemplos, e o criativo sai off-brand. Salve
+     também `prompt-vN.txt` e `log-vN.txt`.
+   - **Gate visual antes do upload**: `Read` o PNG gerado e confira: rosto do Bruno
+     presente e fiel; 3+ bichinhos laranja visíveis; paleta navy/preto + laranja
+     (NUNCA verde/vermelho/azul dominante); headline legível; faixa/botão CTA
+     laranja. Se falhar qualquer item, regere 1× (mesmo prompt). Se falhar de novo,
+     regere com prompt reforçado no item ausente. Máx 3 tentativas por criativo;
+     persista a melhor e anote o desvio no manifest.
 3. **Upload para o bucket público `ad-ingest`** (o fetcher do Meta NÃO baixa bucket
    privado — ADR 0003). Para cada PNG, com `RAND=$(openssl rand -hex 10)` por dia:
    ```bash
