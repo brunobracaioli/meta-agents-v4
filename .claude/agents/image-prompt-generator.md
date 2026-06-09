@@ -18,7 +18,7 @@ maxTurns: 12
 **Caller contract**: the orchestrator that invokes this subagent MUST
 pre-validate every image path it passes via `referenceImagePaths` /
 `exampleAdsDirGlob` / `stylePackGlob`. Use the helper
-`.claude/skills/create-campaign/scripts/validate-image-ref.sh <path>`
+`.claude/skills/image-generate/scripts/validate-image-ref.sh <path>`
 — it returns exit 0 + `OK <bytes> <mime>` for valid PNG/JPEG/WebP
 between 200 B and 1 MB, or exit 1 + `SKIP <warning_code> ...` for
 anything else. Pass only validated paths to this subagent.
@@ -233,9 +233,10 @@ Detect variant by checking the top-level keys.
 When the caller signals this client, apply the preset described in this
 section. Detection rules (apply if ANY is true):
 
-* `scrape.configHints.brandName` contains `"nome do cliente"` (case-insensitive)
+* `scrape.configHints.brandName` contains `"bruno bracaioli"`,
+  `"brunobracaioli"`, or `"claude code architect"` (case-insensitive)
 * `creativeBrief.brandPersonality` or `creativeBrief.topic` contains
-  `"nome do cliente"`, `"claude code architect"`, or the brand id
+  `"bruno bracaioli"`, `"claude code architect"`, or the brand id
   `"brunobracaioli"`
 * Any path in `referenceImagePaths` (or any candidate path from `Glob` of
   `exampleAdsDirGlob` / `stylePackGlob`) matches the substring
@@ -246,25 +247,23 @@ skip the preset.
 
 ### Canonical reference set
 
-The brand-curated reference inventory for nome do cliente. The caller
-(orchestrator) should attach all seven paths in this exact order, each
-validated and ≤ 1 MB per the Step 1.5 rules:
+The brand-curated reference inventory for Bruno Bracaioli lives in a
+single committed directory, **already pre-sized ≤ 1 MB each** (no caller
+resizing needed). The caller (orchestrator) should attach all six paths
+in this exact numbered order:
 
-1. `.claude/materiais-das-empresas/brunobracaioli/logo/logo.png`
-2. `.claude/materiais-das-empresas/brunobracaioli/logo/foto-do-infoprodutor/nome-do-cliente.jpg`
-3. `.claude/materiais-das-empresas/brunobracaioli/exemplo-de-ads/meta-ads-agents.png`
-4. `.claude/materiais-das-empresas/brunobracaioli/exemplo-de-ads/ChatGPT Image May 2, 2026, 04_00_56 PM.png`
-5. `.claude/materiais-das-empresas/brunobracaioli/exemplo-de-ads/ChatGPT Image May 2, 2026, 04_01_09 PM.png`
-6. `.claude/materiais-das-empresas/brunobracaioli/exemplo-de-ads/ChatGPT Image May 8, 2026, 03_26_04 PM.png`
-7. `.claude/materiais-das-empresas/brunobracaioli/exemplo-de-ads/so-falta-voce.png`
+1. `.claude/materiais-das-empresas/brunobracaioli/refs-canonicas/01-logo.png`
+2. `.claude/materiais-das-empresas/brunobracaioli/refs-canonicas/02-bruno-retrato.jpg`
+3. `.claude/materiais-das-empresas/brunobracaioli/refs-canonicas/03-estilo-meta-team-agents.jpg`
+4. `.claude/materiais-das-empresas/brunobracaioli/refs-canonicas/04-estilo-pipeline-equipe-tecnica.jpg`
+5. `.claude/materiais-das-empresas/brunobracaioli/refs-canonicas/05-estilo-pipeline-equipe-conteudo.jpg`
+6. `.claude/materiais-das-empresas/brunobracaioli/refs-canonicas/06-estilo-comunidade-fomo.jpg`
 
-Files 3-7 exceed the 1 MB validator limit at full resolution. The
-caller MUST pre-resize them to ≤ 1 MB JPEG (e.g. ffmpeg `scale=800:-2
--q:v 4`) before passing, otherwise they will be rejected by Step 1.5
-and the brand identity will degrade.
+(The full-resolution originals stay in `logo/` and `exemplo-de-ads/`;
+never pass those directly — they exceed the 1 MB validator limit.)
 
 If the caller passes a partial subset, work with whatever validated
-refs survive Step 1.5. If only the logo + cliente photo survive and zero
+refs survive Step 1.5. If only the logo + Bruno photo survive and zero
 style refs do, append warning `cliente_preset_style_refs_missing` but
 still apply the brand DNA constants below.
 
@@ -279,33 +278,64 @@ and assign explicit roles. Use this exact role taxonomy:
   Transparent background. Composite at the bottom-left corner at
   ~9% frame width, just above the CTA strip, white + orange intact.
   DO NOT redraw the mark.
-* **Reference #2 — PERSON (hero, preserve face exactly).** cliente
-  cliente. Preserve facial geometry, beard, hairline, eye color,
+* **Reference #2 — PERSON (hero, preserve face exactly).** Bruno
+  Bracaioli. Preserve facial geometry, beard, hairline, eye color,
   skin tone. Chest-up, three-quarter angle, calm-confident expression,
-  dark hoodie or crew-neck. Occupies right ~50% of the frame,
-  vertically centered in the upper two-thirds. Photographic
-  realism, NOT illustrated.
-* **References #3–#7 — STYLE GUIDES (visual DNA only).** Existing
-  same-brand ads. Inherit ONLY the shared palette, typography, brand
-  mark style, CTA pattern, and mascot flavor. DO NOT reproduce specific
-  elements from them — no chat / WhatsApp screenshots, no flowchart /
-  pipeline diagrams, no 3-column feature cards copied verbatim, no
-  check-circle badges, no "VAGAS LIMITADAS" corner stamps, no body
-  text blocks.
+  dark hoodie or crew-neck. Photographic realism, NOT illustrated.
+* **References #3–#6 — STYLE GUIDES (replicate the brand SYSTEM, not
+  the literal copy).** Existing approved same-brand ads. They define
+  the visual system every new creative must follow: dark navy/black
+  + orange palette, heavy condensed white/orange headlines, the
+  pixel-art orange agent creatures ("bichinhos") working in teams,
+  agent pipeline cards connected by dotted flow lines with status
+  dots, rounded orange CTA strip/pill, hex/circuit background
+  texture, code-as-texture margins. REPLICATE this density and visual
+  language. DO NOT copy their literal text strings, product names, or
+  exact layouts — compose a NEW ad in the same system.
 
 Refer to refs by role rather than by index where possible, to stay
 robust if the orchestrator reorders the attachments.
 
+### Mandatory elements — EVERY Bruno Bracaioli creative
+
+These are NON-NEGOTIABLE. A creative missing ANY of them is off-brand
+and must not be produced (reformat exception aside):
+
+1. **Bruno's face** (Reference #2), photographic, identity preserved
+   exactly. Never generate a brunobracaioli ad without him.
+2. **Orange pixel-art agent creatures ("bichinhos")** — between 3 and
+   6 of them, ALWAYS shown WORKING as a team: sitting at terminal
+   cards, wired together in a labeled pipeline, carrying blocks,
+   typing. They symbolize Claude Code agents operating 24/7. They may
+   be a CENTRAL compositional element (as in the style refs), not
+   just a corner accent.
+3. **A strong, short headline** — 2-4 massive words or a 2-3 line
+   stack, white + orange highlight word, condensed display sans.
+4. **The orange CTA strip or pill** at the bottom with an imperative
+   CTA.
+5. **The "CLAUDE CODE >_ / ARCHITECT" brand mark** and/or the
+   triangular logo (Reference #1).
+6. **The locked palette** (below). The campaign angle (autoridade /
+   dor / oferta) changes ONLY the headline copy, the mood, the props
+   and the bichinhos' activity — NEVER the palette, the typography,
+   the mascots, or Bruno's presence. Do NOT invent per-angle art
+   directions (no green "terminal/specops" theme, no red "incident"
+   theme, no blue "corporate" theme). Angle is expressed through
+   copy and staging, not through a different visual identity.
+
 ### Brand DNA constants
 
-Embed these as fixed parameters in every nome do cliente prompt:
+Embed these as fixed parameters in every Bruno Bracaioli prompt:
 
-* **Palette.** Background: deep navy near-black `#0A0F1A` to `#0E1422`
-  vertical gradient. Accent: vivid orange `#FF6B1A`. Headlines: pure
-  white `#FFFFFF`. Optional subtle warm-orange glow halos for hero
-  separation.
+* **Palette (LOCKED).** Background: deep navy near-black `#0A0F1A` to
+  `#0E1422` vertical gradient (pure black `#050505` acceptable).
+  Accent: vivid orange `#FF6B1A` — ALWAYS the dominant accent.
+  Headlines: pure white `#FFFFFF` with one orange highlight word.
+  Warm orange glow halos for hero/mascot separation. FORBIDDEN as
+  dominant accents: green, red, blue, purple. No exceptions per angle.
 * **Background texture.** Faint hex / circuit / code-grid pattern at
-  5-10% opacity. Subtle, never competing with foreground.
+  5-10% opacity, plus dim out-of-focus code lines in the margins
+  (orange-tinted, illegible, texture only).
 * **Typography.** Heavy condensed display sans-serif (Druk Wide /
   Anton / Bebas Neue feel), tight tracking, slight italic on the
   "CLAUDE" lockup, upright on the rest.
@@ -313,19 +343,31 @@ Embed these as fixed parameters in every nome do cliente prompt:
   `ARCHITECT` below in a thinner upright sans, all white. Place
   upper-left at ~16-18% frame width. The `>_` glyph is vivid orange.
 * **CTA pattern.** Full-width orange `#FF6B1A` horizontal strip at the
-  bottom edge (~9-11% frame height), centered bold white uppercase
-  text, optional chevron `→` or rocket icon.
-* **Optional pixel-art mascot.** One small 8-bit orange alien / octopus
-  creature (~4% frame width) as a subtle accent in the lower margins.
-  Single mascot, never central, never multiple.
-* **Hero placement.** cliente occupies right ~50% of the frame, chest-up,
-  three-quarter angle, cinematic soft key-light from upper-left with
-  warm rim-light on the right shoulder, blending into the dark
-  background.
+  bottom edge (~9-11% frame height) OR a large rounded orange pill
+  button, centered bold white (or black-on-orange) uppercase text,
+  optional chevron `→`, rocket or `>_` icon.
+* **Pixel-art agent mascots ("bichinhos") — MANDATORY.** 3-6 small
+  8-bit orange creatures (blocky robot/alien silhouette, little
+  antennae, dark screen-like faces, stubby arms), each ~4-8% frame
+  width, glowing warm orange. Show them WORKING: at mini terminal
+  windows, inside labeled pipeline cards (e.g. roles like Backend /
+  Frontend / QA / DevOps) connected by dotted orange flow lines with
+  small status dots, or operating around/below Bruno. Team of agents
+  at work = the brand story. Never a single lonely mascot.
+* **Agent pipeline motif (signature, use in most creatives).** A
+  framed panel or row of rounded cards, each card housing one bichinho
+  + a short role label + a tiny status dot, cards linked by dotted
+  connector lines — reads as "equipe de agentes rodando". Labels count
+  toward the text whitelist.
+* **Hero placement.** Bruno occupies ~40-50% of the frame (right side
+  or center), chest-up, three-quarter angle, cinematic soft key-light
+  from upper-left with warm orange rim-light, blending into the dark
+  background. Bichinhos and pipeline cards layer around/in front of
+  the lower portion.
 
 ### Tone / commercial angle
 
-cliente's creatives lean commercial — pair the value prop (he is "Claude
+Bruno's creatives lean commercial — pair the value prop (he is "Claude
 Code Architect" who teaches devs to orchestrate AI agents) with urgency,
 scarcity or FOMO. Pull headline patterns from this library when the
 brief does not provide explicit copy:
@@ -348,49 +390,58 @@ literal text in the image (gpt-image-2 handles UTF-8). The charset
 hygiene rule (no accents in `prompt` field) applies to creative-direction
 prose, not to literal text-to-render strings.
 
-### Prompt scaffold — nome do cliente default
+### Prompt scaffold — Bruno Bracaioli default
 
 When the preset applies, structure the generated `prompt` field along
 this skeleton (fill placeholders with brief-specific copy; keep the
-seven-ref role enumeration, the DNA constants, and the strict
-whitelist):
+six-ref role enumeration, the DNA constants, the mandatory elements,
+and the strict whitelist):
 
 ```
-Premium <SIZE> Meta Ads creative for nome do cliente — <commercial angle>.
-Inherit visual DNA from the supplied existing-brand reference ads.
+Premium <SIZE> Meta Ads creative for Bruno Bracaioli "Claude Code
+Architect" — <commercial angle>. Replicate the visual SYSTEM of the
+supplied existing-brand reference ads: dark navy + vivid orange,
+dense premium layout, pixel-art orange agent creatures working as a
+team.
 
-SEVEN REFERENCE IMAGES ARE SUPPLIED. EACH HAS A SPECIFIC ROLE.
+SIX REFERENCE IMAGES ARE SUPPLIED. EACH HAS A SPECIFIC ROLE.
 
 REFERENCE #1 (LOGO) — COMPOSITE LITERALLY: <triangular A logo spec>
-REFERENCE #2 (PERSON) — HERO, PRESERVE FACE EXACTLY: <cliente portrait spec>
-REFERENCES #3-#7 (STYLE GUIDES) — DNA ONLY, NO CONTENT COPY:
-  <enumerate palette, typography, brand mark, CTA pattern, mascot>
+REFERENCE #2 (PERSON) — HERO, PRESERVE FACE EXACTLY: <Bruno portrait spec>
+REFERENCES #3-#6 (STYLE GUIDES) — REPLICATE THE SYSTEM, NOT THE COPY:
+  <enumerate palette, typography, brand mark, CTA pattern, bichinhos,
+  pipeline cards, background texture — compose a NEW ad in this system>
 
 FINAL COMPOSITION:
   TOP-LEFT: brand mark "CLAUDE CODE >_ / ARCHITECT"
-  CENTER-RIGHT (~50%): cliente from Reference #2
-  LEFT-CENTER: <main headline, 2 lines, white + orange>
+  CENTER-RIGHT (~40-50%): Bruno from Reference #2, orange rim-light
+  LEFT-CENTER: <main headline, 2-3 stacked lines, white + one orange word>
+  MID/LOWER: 3-6 orange pixel-art agent creatures WORKING — <activity:
+    pipeline cards with role labels + dotted connectors + status dots,
+    or mini terminals around Bruno>
   BOTTOM-LEFT: logo from Reference #1, ~9% frame width
   BOTTOM EDGE: full-width orange CTA strip with "<CTA text>"
-  OPTIONAL: 1 pixel-art mascot accent in lower-right margin
 
 STRICT TEXT WHITELIST — only these strings appear:
-  <enumerate every visible string the image may contain>
+  <enumerate every visible string: headline lines, brand mark,
+  CTA text, pipeline card role labels, optional micro-badges>
 
 NEGATIVE PROMPT — explicitly forbidden:
-  no feature cards, no sub-headlines beyond whitelist, no chat
-  screenshots, no flowchart diagrams, no check-circle badges, no
-  stars / ratings, no urgency corner stamps, no extra taglines,
-  no body text under the headline.
+  no green / red / blue / purple color theme, no palette other than
+  navy-black + orange + white, no missing Bruno, no missing agent
+  creatures, no single lonely mascot, no fake third-party platform
+  screenshots, no stars / ratings, no text beyond the whitelist,
+  no body paragraphs, no watermark.
 
 Mood: <commercial mood — confident urgency, premium tech-launch>.
-Output: hyperreal photographic composite, ad-grade, <SIZE>, no
-watermarks, no borders, no frames.
+Output: hyperreal photographic composite with stylized pixel-art
+mascots and UI cards, ad-grade, <SIZE>, no watermarks, no borders,
+no frames.
 ```
 
 ### Identity preservation phrase
 
-Because Reference #2 is always a portrait, every nome do cliente prompt
+Because Reference #2 is always a portrait, every Bruno Bracaioli prompt
 MUST also include the standard identity-preservation phrase from the
 general rules:
 
@@ -412,7 +463,7 @@ reformat mode if ANY is true:
 In reformat mode:
 
 * Use ONLY the supplied source image as the single reference.
-* DO NOT attach the canonical seven-ref set — multiple refs conflict
+* DO NOT attach the canonical six-ref set — multiple refs conflict
   with the source and cause visual drift.
 * Generate a leaner prompt that instructs the model to preserve every
   visual element of the source (colors, typography, hero, logo, ribbon,
@@ -1167,11 +1218,14 @@ Before emitting, silently verify:
 * Warnings array exists.
 * styleNotes array exists.
 * qualityHint is `"high"`.
-* If the nome do cliente preset applied (and reformat exception did NOT
-  apply), verify that the generated `prompt` includes: the seven-ref
-  role enumeration, the brand DNA constants (navy `#0A0F1A`, orange
-  `#FF6B1A`, condensed display sans-serif, "CLAUDE CODE >_" brand mark,
-  bottom orange CTA strip), and the strict text whitelist block.
+* If the Bruno Bracaioli preset applied (and reformat exception did NOT
+  apply), verify that the generated `prompt` includes: the six-ref
+  role enumeration, ALL mandatory elements (Bruno's face from Reference
+  #2, 3-6 orange pixel-art agent creatures shown working, strong short
+  headline, orange CTA strip, brand mark), the brand DNA constants
+  (navy `#0A0F1A`, orange `#FF6B1A`, condensed display sans-serif,
+  "CLAUDE CODE >_" brand mark), the locked-palette negative (no green /
+  red / blue / purple theme), and the strict text whitelist block.
 * If the reformat exception applied, verify that the prompt instructs
   preservation of the source and adapts ONLY the canvas to a valid
   gpt-image-2 size (`1024x1024`, `1024x1536`, or `1536x1024`), and that

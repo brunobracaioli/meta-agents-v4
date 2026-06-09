@@ -78,7 +78,10 @@ Qualquer outro `aspect` → falhar com `unsupported_aspect:<value>`.
 Em UMA chamada Bash:
 
 ```bash
-set -a && eval "$(tr -d '\r' < /mnt/c/agents_team_meta_ads_v2/.env.local)" && set +a
+# Carrega .env.local da raiz do repo se existir (no Fly runner as env vars
+# já vêm de fly secrets — o arquivo não existe lá e o load é pulado).
+ENV_FILE="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.env.local"
+[ -f "$ENV_FILE" ] && { set -a && eval "$(tr -d '\r' < "$ENV_FILE")" && set +a; }
 test -n "${OPENAI_API_KEY:-}" || { echo "MISSING_ENV: OPENAI_API_KEY"; exit 1; }
 echo "Pre-flight OK"
 ```
