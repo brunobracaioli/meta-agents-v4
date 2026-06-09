@@ -6,6 +6,7 @@ import { ActivitySparkline } from "./hud/activity-sparkline";
 import { AnimatedCounter } from "./hud/animated-counter";
 import { ArcGauge } from "./hud/arc-gauge";
 import { ArcReactorOverlay } from "./hud/arc-reactor-overlay";
+import { HudConnectors } from "./hud/hud-connectors";
 import { HudCorners, HudPanel } from "./hud/hud-panel";
 import { SpectrumBars } from "./hud/spectrum-bars";
 import { bucketEventsPerMinute, eventsPerMinuteNow, eventTypeCounts } from "./live-metrics";
@@ -216,6 +217,7 @@ export function LiveFeed() {
       </div>
 
       <section className="relative grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <HudConnectors />
         <div className="hud-boot relative overflow-hidden border border-cyan-200/20 bg-[#030712] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_24px_80px_rgba(0,0,0,0.34)]">
           <NeuralCoreScene state={coreState} />
           <ArcReactorOverlay mode={coreState.mode} />
