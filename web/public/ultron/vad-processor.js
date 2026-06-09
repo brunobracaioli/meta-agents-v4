@@ -15,8 +15,8 @@
 const DEFAULTS = {
   speechRms: 0.025, // onset threshold
   silenceRms: 0.015, // below this counts as silence
-  silenceMs: 900, // stop after this much trailing silence
-  maxClipMs: 12000, // hard cap per utterance
+  silenceMs: 1800, // stop after this much trailing silence
+  maxClipMs: 45000, // hard cap per utterance
   onsetDebounceMs: 50, // sustained speech required before onset (kills transients)
 };
 

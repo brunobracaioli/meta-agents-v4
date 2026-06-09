@@ -51,10 +51,10 @@ const WAKE_WORD = "ultron";
 // public/ultron/vad-processor.js) so it survives tab backgrounding; these are the
 // authoritative thresholds passed to the worklet. The rAF path below reuses them
 // as a fallback for browsers without AudioWorklet.
-const SILENCE_MS = 900; // stop after this much trailing silence
+const SILENCE_MS = 1800; // stop after this much trailing silence; 900ms cut natural mid-sentence pauses
 const SPEECH_RMS = 0.025; // onset threshold
 const SILENCE_RMS = 0.015; // below this counts as silence
-const MAX_CLIP_MS = 12_000; // hard cap per utterance
+const MAX_CLIP_MS = 45_000; // hard cap per utterance; spoken campaign instructions easily exceed 12s
 const OUTPUT_BAND_COUNT = 18;
 const OUTPUT_FRAME_MS = 48;
 const MAX_CAPTURE_HOPS = 4; // bound client-side capture round-trips per turn
@@ -104,6 +104,7 @@ export function useUltronVoice() {
   const rafRef = useRef<number | null>(null);
   const silenceStartRef = useRef<number | null>(null);
   const clipStartRef = useRef<number>(0);
+  const pendingStopRef = useRef<boolean>(false); // speech-end arrived before the recorder existed
   const speechSeenRef = useRef<boolean>(false);
   const playerRef = useRef<HTMLAudioElement | null>(null);
   const speechDoneRef = useRef<(() => void) | null>(null);
@@ -364,7 +365,14 @@ export function useUltronVoice() {
 
   const finalizeRecording = useCallback(() => {
     const recorder = recorderRef.current;
-    if (recorder && recorder.state !== "inactive") recorder.stop();
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+      return;
+    }
+    // speech-end can land while beginRecording is still setting up the MediaRecorder
+    // (very short utterances). Remember it so the recorder stops as soon as it starts —
+    // the worklet self-disarmed on speech-end, so otherwise nothing would ever stop it.
+    pendingStopRef.current = true;
   }, []);
 
   // rAF fallback only: stop on trailing silence or max-clip timeout. In worklet
@@ -466,6 +474,12 @@ export function useUltronVoice() {
     );
     if (!next || typeof next.id !== "string" || typeof next.text !== "string") return;
 
+    // Re-check after the await above: the operator may have started a turn (wake hit or
+    // onset) while the fetch was in flight — speaking now would play TTS over their
+    // recording and, via speak()'s finally, re-arm the VAD mid-utterance.
+    const statusNow = statusRef.current;
+    if (statusNow !== "idle" && statusNow !== "armed") return;
+
     // Mark spoken locally + server-side BEFORE speaking so a concurrent poll can't replay it.
     narrationSpokenIdsRef.current.add(next.id);
     void fetch(`/api/ultron/narrations/${next.id}`, { method: "PATCH" }).catch(() => {});
@@ -554,6 +568,7 @@ export function useUltronVoice() {
   // begins recording only after the worklet's onset event.
   const beginRecording = useCallback(
     async (withVad: boolean, armWorklet = false) => {
+      pendingStopRef.current = false; // a stale flag must not kill this fresh recording
       const stream = await ensureMic();
       chunksRef.current = [];
       speechSeenRef.current = false;
@@ -571,6 +586,14 @@ export function useUltronVoice() {
       };
       recorder.start();
       patch({ status: "recording", error: null });
+
+      if (pendingStopRef.current) {
+        // The endpoint fired during setup — close out now; sendPipeline drops tiny blobs
+        // and restores the listening/idle state.
+        pendingStopRef.current = false;
+        recorder.stop();
+        return;
+      }
 
       if (vadModeRef.current === "worklet") {
         if (!withVad) vadMicRef.current?.disarm();
