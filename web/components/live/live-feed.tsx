@@ -2,8 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AGENT_TRIGGER_CHANNEL, AGENT_TRIGGER_EVENT, isAgentTrigger } from "@/lib/ultron/agent-trigger";
+import { ActivitySparkline } from "./hud/activity-sparkline";
+import { AnimatedCounter } from "./hud/animated-counter";
+import { ArcGauge } from "./hud/arc-gauge";
 import { ArcReactorOverlay } from "./hud/arc-reactor-overlay";
 import { HudCorners, HudPanel } from "./hud/hud-panel";
+import { SpectrumBars } from "./hud/spectrum-bars";
+import { bucketEventsPerMinute, eventsPerMinuteNow, eventTypeCounts } from "./live-metrics";
 import { NeuralCoreScene } from "./neural-core-scene";
 import { deriveNeuralCoreState, type LiveEvent, type LiveProcess } from "./neural-core-state";
 import {
@@ -49,6 +54,14 @@ function statusDotClass(state: "activated" | "stand-by" | "success" | "error"): 
   if (state === "success") return "bg-emerald-300 shadow-[0_0_14px_rgba(110,231,183,0.75)]";
   if (state === "error") return "bg-red-400 shadow-[0_0_14px_rgba(248,113,113,0.75)]";
   return "bg-white/25";
+}
+
+function formatUptime(elapsedMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
+  const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${hours}:${minutes}:${seconds}`;
 }
 
 function processSummary(process: LiveProcess | null, nowMs: number): string {
@@ -150,6 +163,13 @@ export function LiveFeed() {
     () => mergeLiveProcesses(processes, optimisticProcesses, nowMs),
     [optimisticProcesses, processes, nowMs],
   );
+  // Metrics are sampled on a 15s grid so the 1s clock tick doesn't recompute them.
+  const metricsNowMs = Math.floor(nowMs / 15_000) * 15_000;
+  const activityBuckets = useMemo(() => bucketEventsPerMinute(events, metricsNowMs), [events, metricsNowMs]);
+  const spectrumCounts = useMemo(() => eventTypeCounts(events, metricsNowMs), [events, metricsNowMs]);
+  const eventsPerMinute = useMemo(() => eventsPerMinuteNow(events, metricsNowMs), [events, metricsNowMs]);
+  const gaugeMax = Math.max(10, ...activityBuckets);
+  const sessionStartMsRef = useRef<number>(Date.now());
   const coreState = useMemo(() => deriveNeuralCoreState(events, nowMs, liveProcesses), [events, nowMs, liveProcesses]);
   const feedEvents = useMemo(() => events.slice(-MAX_FEED).reverse(), [events]);
   const latestEvent = feedEvents[0] ?? null;
@@ -216,11 +236,25 @@ export function LiveFeed() {
             <div className="grid grid-cols-2 gap-3">
               <div className="border border-white/10 bg-white/[0.025] p-3">
                 <p className="font-hud text-[10px] uppercase tracking-[0.14em] text-white/35">Processos ativos</p>
-                <p className="mt-2 font-hud text-2xl text-white">{coreState.activeProcessCount}</p>
+                <p className="mt-2 font-hud text-2xl text-white">
+                  <AnimatedCounter value={coreState.activeProcessCount} />
+                </p>
               </div>
               <div className="border border-white/10 bg-white/[0.025] p-3">
                 <p className="font-hud text-[10px] uppercase tracking-[0.14em] text-white/35">Subagents 120s</p>
-                <p className="mt-2 font-hud text-2xl text-white">{coreState.activeSubagents.length}</p>
+                <p className="mt-2 font-hud text-2xl text-white">
+                  <AnimatedCounter value={coreState.activeSubagents.length} />
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-3 border border-cyan-200/10 bg-cyan-300/[0.035] p-3">
+              <ArcGauge label="evt/min" value={eventsPerMinute} max={gaugeMax} />
+              <div className="text-right">
+                <p className="font-hud text-[10px] uppercase tracking-[0.14em] text-white/35">Uptime sessão</p>
+                <p className="mt-1 font-hud text-lg text-white">{formatUptime(nowMs - sessionStartMsRef.current)}</p>
+                <p className="mt-2 font-hud text-[10px] uppercase tracking-[0.14em] text-cyan-100/45">
+                  {events.length} evt no buffer
+                </p>
               </div>
             </div>
             <div className="mt-4 border border-cyan-200/10 bg-cyan-300/[0.035] p-3">
@@ -291,6 +325,10 @@ export function LiveFeed() {
                 </div>
               </div>
             ))}
+          </div>
+          <div className="mt-4 space-y-4 border-t border-white/10 pt-4">
+            <ActivitySparkline buckets={activityBuckets} />
+            <SpectrumBars counts={spectrumCounts} />
           </div>
         </HudPanel>
 
