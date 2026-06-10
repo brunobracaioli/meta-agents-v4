@@ -87,8 +87,20 @@ export function LiveFeed() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const sinceRef = useRef<string | undefined>(undefined);
   const seenRef = useRef<Set<string>>(new Set());
+  // Event/process timestamps are minted on the server, so every time window must
+  // be measured on the server clock — a skewed browser clock makes events flap
+  // in and out of the 60s/120s windows. The poll measures the skew; the 1s tick
+  // reuses it instead of trusting Date.now() directly.
+  const clockSkewMsRef = useRef(0);
+  const pollSeqRef = useRef(0);
+  const appliedSeqRef = useRef(0);
+  const sessionStartMsRef = useRef<number>(Date.now());
+  const sessionAnchoredRef = useRef(false);
+
+  const serverNow = useCallback(() => Date.now() + clockSkewMsRef.current, []);
 
   const poll = useCallback(async () => {
+    const seq = ++pollSeqRef.current;
     try {
       const url = sinceRef.current
         ? `/api/dashboard/events?since=${encodeURIComponent(sinceRef.current)}`
@@ -96,8 +108,18 @@ export function LiveFeed() {
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error("poll");
       const data = (await res.json()) as { events: LiveEvent[]; processes?: LiveProcess[]; now: string };
+      // A slow response can land after a newer one; applying it would rewind state.
+      if (seq <= appliedSeqRef.current) return;
+      appliedSeqRef.current = seq;
       const nextProcesses = data.processes ?? [];
       const serverNowMs = Date.parse(data.now);
+      clockSkewMsRef.current = serverNowMs - Date.now();
+      if (!sessionAnchoredRef.current) {
+        // Session start was stamped with the browser clock; shift it onto the
+        // server clock once so uptime doesn't inherit the skew.
+        sessionAnchoredRef.current = true;
+        sessionStartMsRef.current += clockSkewMsRef.current;
+      }
       setConnected(true);
       setNowMs(serverNowMs);
       setProcesses(nextProcesses);
@@ -115,20 +137,21 @@ export function LiveFeed() {
         sinceRef.current = data.now;
       }
     } catch {
-      setConnected(false);
+      // Only the newest in-flight poll decides connectivity.
+      if (seq === pollSeqRef.current) setConnected(false);
     }
   }, []);
 
   const addOptimisticProcess = useCallback((value: unknown) => {
     if (!isAgentTrigger(value)) return;
-    const receivedAtMs = Date.now();
+    const receivedAtMs = serverNow();
     const process = liveProcessFromAgentTrigger(value, receivedAtMs);
     setNowMs(receivedAtMs);
     setOptimisticProcesses((prev) => [
       process,
       ...pruneOptimisticProcesses([], prev, receivedAtMs).filter((item) => item.id !== process.id),
     ].slice(0, 12));
-  }, []);
+  }, [serverNow]);
 
   useEffect(() => {
     void poll();
@@ -137,9 +160,9 @@ export function LiveFeed() {
   }, [poll]);
 
   useEffect(() => {
-    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    const id = setInterval(() => setNowMs(serverNow()), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [serverNow]);
 
   useEffect(() => {
     setOptimisticProcesses((prev) => pruneOptimisticProcesses(processes, prev, nowMs));
@@ -183,7 +206,6 @@ export function LiveFeed() {
       }),
     [events],
   );
-  const sessionStartMsRef = useRef<number>(Date.now());
   const bootPhase = useBootSequence();
   const coreState = useMemo(() => deriveNeuralCoreState(events, nowMs, liveProcesses), [events, nowMs, liveProcesses]);
   const feedEvents = useMemo(() => events.slice(-MAX_FEED).reverse(), [events]);
