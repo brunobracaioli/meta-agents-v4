@@ -11,6 +11,8 @@ import type { ActiveSubagent, NeuralCoreState } from "./neural-core-state";
 
 type NeuralCoreSceneProps = {
   state: NeuralCoreState;
+  /** Height utilities for the canvas host; layout-only, never touches the 3D build. */
+  heightClassName?: string;
 };
 
 type Disposable = { dispose: () => void };
@@ -740,7 +742,10 @@ function setBranchOpacity(branch: SubagentBranch, opacity: number, pulse: number
   branch.flowMaterial.opacity = 0.4 * opacity + 0.36 * pulse;
 }
 
-export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
+export function NeuralCoreScene({
+  state,
+  heightClassName = "h-[390px] min-h-[340px] sm:h-[620px]",
+}: NeuralCoreSceneProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const stateRef = useRef(state);
   const handlesRef = useRef<SceneHandles | null>(null);
@@ -1169,7 +1174,7 @@ export function NeuralCoreScene({ state }: NeuralCoreSceneProps) {
   return (
     <div
       ref={hostRef}
-      className="h-[390px] min-h-[340px] w-full overflow-hidden rounded-md bg-black sm:h-[620px]"
+      className={`w-full overflow-hidden rounded-md bg-black ${heightClassName}`}
       aria-label={`Neural Core ${state.mode}`}
     />
   );
