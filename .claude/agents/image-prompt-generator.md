@@ -168,10 +168,23 @@ Used by `/create-campaign`.
     "preferDarkMode": true,
     "preferCleanLayout": true,
     "brandName": "...",
-    "forbiddenElements": ["..."]
+    "forbiddenElements": ["..."],
+    "lastApprovedPrompt": "<prompt completo do último criativo APROVADO do mesmo ângulo, opcional>"
   }
 }
 ```
+
+### `configHints.lastApprovedPrompt` (âncora de qualidade)
+
+When present, treat it as the quality bar the new prompt must match or exceed:
+
+* Preserve the same LEVEL of art direction — composition density, lighting
+  language, camera/framing vocabulary, palette discipline, mandatory brand
+  elements — that made the approved prompt work.
+* Do NOT copy it verbatim and do NOT reuse its exact scene. Produce a fresh
+  scene/concept at the same craft level (creative variety fights ad fatigue).
+* If the approved prompt conflicts with the brand preset or with these rules,
+  the preset and these rules win.
 
 > **Nota**: o campo era `referenceImagePath` (singular) até v1.0.
 > Agora é `referenceImagePaths` (array, 0..16 elementos).
