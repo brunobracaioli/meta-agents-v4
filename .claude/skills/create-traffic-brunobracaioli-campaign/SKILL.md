@@ -109,12 +109,28 @@ Em uma chamada Bash:
 - Se a conta/página não responder ou MCP estiver indisponível → gravar manifest
   `verified:false` com o erro e sair (nada criado, custo zero).
 
-### Passo 2 — Criativos (gerar fresco + reusar no mesmo dia)
-**Idempotência:** se `${ADS_DIR}` já tem `ad-v1-autoridade.png`, `ad-v2-dor.png`,
-`ad-v3-oferta.png` **e** `public-urls.txt` → **reuse**: leia as URLs públicas e a copy
-(`prompt-vN.txt` / registros no Supabase) e pule para o Passo 3. Não regere.
+### Passo 2 — Criativos (gerar fresco + reusar SOMENTE no mesmo dia)
+**Idempotência (vale apenas para o diretório de HOJE):** se `${ADS_DIR}` já tem
+`ad-v1-autoridade.png`, `ad-v2-dor.png`, `ad-v3-oferta.png` **e** `public-urls.txt`
+→ **reuse**: leia as URLs públicas e a copy (`prompt-vN.txt` / registros no Supabase)
+e pule para o Passo 3. Não regere. **Telemetria do reuse (obrigatória)** — o HUD ao
+vivo só mostra atividade que vira `agent_events`; ao pular a cadeia, insira 1 evento
+sintético para a interface não ficar cega:
+```bash
+curl -sS -X POST "${SUPABASE_URL}/rest/v1/agent_events" \
+  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "Content-Type: application/json" -H "Prefer: return=minimal" \
+  -d "{\"run_id\":\"${AGENT_JOB_ID:-cron-${STAMP}}\",\"agent_name\":\"criativos\",\"agent_type\":\"skill\",\"event_type\":\"step\",\"summary\":\"reusando os criativos já aprovados de hoje (idempotência)\"}"
+```
 
-Senão, gere os 3 criativos (cadeia de subagentes, igual ao `/create-campaign`):
+Senão, a cadeia de subagentes abaixo é **OBRIGATÓRIA** (igual ao `/create-campaign`)
+— rode os itens 1–3 completos. **NUNCA pule a cadeia reaproveitando copy/prompt de
+dias anteriores** (de `generated-ads/cca-*` antigos ou dos registros no Supabase):
+isso cega o HUD ao vivo (sem chamada `Task` no stream → nenhum subagent aparece na
+interface) e congela os criativos, acelerando fadiga. Material de dias anteriores
+entra só como ÂNCORA DE QUALIDADE no item de prompt abaixo — nunca como substituto
+da cadeia.
 1. `Agent(subagent_type="scrape-extractor")` com a `url` → `scrape.json` (tema, value
    prop, CTA, tom, paleta).
 2. Para cada ângulo (`autoridade`, `dor`, `oferta`):
@@ -130,7 +146,10 @@ Senão, gere os 3 criativos (cadeia de subagentes, igual ao `/create-campaign`):
      `exemplo-de-ads/` (excedem 1MB e são descartados pelo validador).
    - `Agent(subagent_type="image-prompt-generator")` com `{scrape, aspectRatio:"1080x1080",
      referenceImagePaths:[ as 6 refs canônicas acima, na ordem ],
-     configHints:{brandName:"Claude Code Architect"}}` → `prompt`. (O agente tem o
+     configHints:{brandName:"Claude Code Architect", lastApprovedPrompt:<conteúdo do
+     `prompt-vN.txt` do MESMO ângulo no `generated-ads/cca-*` mais recente, se
+     existir — âncora de qualidade: manter o mesmo nível de direção de arte e os
+     elementos que funcionaram, SEM copiar verbatim>}}` → `prompt`. (O agente tem o
      preset de marca brunobracaioli: navy `#0A0F1A`→`#0E1422` + laranja `#FF6B1A`,
      rosto do Bruno + 3-6 bichinhos pixel-art laranja trabalhando + headline forte
      são OBRIGATÓRIOS em todo criativo.)
