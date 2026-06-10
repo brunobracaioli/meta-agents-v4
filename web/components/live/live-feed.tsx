@@ -7,7 +7,6 @@ import { AnimatedCounter } from "./hud/animated-counter";
 import { ArcGauge } from "./hud/arc-gauge";
 import { ArcReactorOverlay } from "./hud/arc-reactor-overlay";
 import { TypeOn, useBootSequence } from "./hud/boot-sequence";
-import { HudConnectors } from "./hud/hud-connectors";
 import { HudCorners, HudPanel } from "./hud/hud-panel";
 import { RadarSweep } from "./hud/radar-sweep";
 import { SpectrumBars } from "./hud/spectrum-bars";
@@ -185,7 +184,14 @@ export function LiveFeed() {
         : "stand-by";
 
   return (
-    <div data-boot={bootPhase} className="relative space-y-5">
+    // Full-bleed cockpit: breaks out of the dashboard max-w-7xl via negative
+    // margins (no transform — RadarSweep/connectors are absolutely positioned).
+    // data-mode is the CSS hub that modulates every decorative instrument.
+    <div
+      data-boot={bootPhase}
+      data-mode={coreState.mode}
+      className="relative mx-[calc(50%-50vw)] space-y-5 px-4 sm:px-6"
+    >
       <RadarSweep />
       <div className="hud-boot flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -221,24 +227,27 @@ export function LiveFeed() {
         </div>
       </div>
 
-      <section className="relative grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <HudConnectors />
-        <div className="hud-boot hud-scan-host relative overflow-hidden border border-cyan-200/20 bg-[#030712] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_24px_80px_rgba(0,0,0,0.34)]">
-          <NeuralCoreScene state={coreState} />
-          <ArcReactorOverlay mode={coreState.mode} />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute left-3 top-3 z-10 font-hud text-[10px] uppercase tracking-[0.24em] text-cyan-100/70"
-          >
-            <span className="mr-2 inline-block border border-cyan-300/30 bg-cyan-400/10 px-1.5 py-0.5 text-cyan-200/90">
-              01
-            </span>
-            Arc Reactor
+      <section className="relative grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-[300px_minmax(0,1fr)_300px] 2xl:grid-cols-[340px_minmax(0,1fr)_340px]">
+        {/* CENTER — DOM-first so it stacks on top below xl */}
+        <div className="relative sm:col-span-2 xl:col-span-1 xl:col-start-2 xl:row-start-1">
+          <div className="hud-boot hud-scan-host relative overflow-hidden border border-cyan-200/20 bg-[#030712] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_24px_80px_rgba(0,0,0,0.34)]">
+            <NeuralCoreScene state={coreState} heightClassName="h-[420px] min-h-[340px] sm:h-[560px] xl:h-[640px]" />
+            <ArcReactorOverlay mode={coreState.mode} />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute left-3 top-3 z-10 font-hud text-[10px] uppercase tracking-[0.24em] text-cyan-100/70"
+            >
+              <span className="mr-2 inline-block border border-cyan-300/30 bg-cyan-400/10 px-1.5 py-0.5 text-cyan-200/90">
+                01
+              </span>
+              Arc Reactor
+            </div>
+            <HudCorners />
           </div>
-          <HudCorners />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+        {/* LEFT column */}
+        <div className="grid content-start gap-4 xl:col-start-1 xl:row-start-1">
           <HudPanel index="02" title="Core Telemetry" bootStep={1}>
             <div className="grid grid-cols-2 gap-3">
               <div className="border border-white/10 bg-white/[0.025] p-3">
@@ -275,7 +284,10 @@ export function LiveFeed() {
               </p>
             </div>
           </HudPanel>
+        </div>
 
+        {/* RIGHT column */}
+        <div className="grid content-start gap-4 xl:col-start-3 xl:row-start-1">
           <HudPanel index="03" title="Subagents Online" bootStep={2}>
             <div className="space-y-2">
               {coreState.activeSubagents.length > 0 ? (
@@ -308,11 +320,8 @@ export function LiveFeed() {
               ) : null}
             </div>
           </HudPanel>
-        </div>
-      </section>
 
-      <section className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <HudPanel index="04" title="Data Flow" bootStep={3}>
+          <HudPanel index="04" title="Data Flow" bootStep={3}>
           <div className="space-y-3">
             {["agent_jobs/lifecycle state", "agent_events stream", "HUD render"].map((label, index) => (
               <div key={label} className="flex items-center gap-3">
@@ -337,12 +346,14 @@ export function LiveFeed() {
             <ActivitySparkline buckets={activityBuckets} />
             <SpectrumBars counts={spectrumCounts} />
           </div>
-        </HudPanel>
+          </HudPanel>
+        </div>
+      </section>
 
-        <HudPanel
-          index="05"
-          title="Event Stream"
-          bootStep={4}
+      <HudPanel
+        index="05"
+        title="Event Stream"
+        bootStep={4}
           actions={
             <span className="font-hud text-[10px] uppercase tracking-[0.14em] text-white/32">
               {events.length} eventos carregados
@@ -354,7 +365,7 @@ export function LiveFeed() {
               Aguardando atividade dos agents. Quando uma skill rodar, os passos aparecem aqui em tempo real.
             </p>
           ) : (
-            <ol className="max-h-[460px] space-y-1.5 overflow-y-auto pr-1">
+            <ol className="max-h-[380px] space-y-1.5 overflow-y-auto pr-1">
               {feedEvents.map((e) => (
                 <li
                   key={e.id}
@@ -378,8 +389,7 @@ export function LiveFeed() {
               ))}
             </ol>
           )}
-        </HudPanel>
-      </section>
+      </HudPanel>
     </div>
   );
 }

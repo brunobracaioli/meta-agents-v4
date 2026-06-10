@@ -20,6 +20,13 @@
   --tech-line-strong: rgba(103, 232, 249, 0.24);
 }
 
+html {
+  /* The live cockpit breaks out of max-w-7xl with mx-[calc(50%-50vw)]; 50vw
+     includes the classic scrollbar, so clip the few px of accidental overflow.
+     clip (unlike hidden) creates no scroll container and keeps sticky working. */
+  overflow-x: clip;
+}
+
 html,
 body {
   min-height: 100%;
