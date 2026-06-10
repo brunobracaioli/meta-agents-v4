@@ -10,6 +10,7 @@ import { TypeOn, useBootSequence } from "./hud/boot-sequence";
 import { DataReadout } from "./hud/data-readout";
 import { EqBars } from "./hud/eq-bars";
 import { Waveform } from "./hud/waveform";
+import { HudConnectors } from "./hud/hud-connectors";
 import { HudCorners, HudPanel } from "./hud/hud-panel";
 import { RadarSweep } from "./hud/radar-sweep";
 import { SpectrumBars } from "./hud/spectrum-bars";
@@ -241,6 +242,7 @@ export function LiveFeed() {
       <section className="relative grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-[300px_minmax(0,1fr)_300px] 2xl:grid-cols-[340px_minmax(0,1fr)_340px]">
         {/* CENTER — DOM-first so it stacks on top below xl */}
         <div className="relative sm:col-span-2 xl:col-span-1 xl:col-start-2 xl:row-start-1">
+          <HudConnectors />
           <div className="hud-boot hud-scan-host relative overflow-hidden border border-cyan-200/20 bg-[#030712] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_24px_80px_rgba(0,0,0,0.34)]">
             <NeuralCoreScene state={coreState} heightClassName="h-[420px] min-h-[340px] sm:h-[560px] xl:h-[640px]" />
             <ArcReactorOverlay mode={coreState.mode} />
