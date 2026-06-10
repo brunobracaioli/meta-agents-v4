@@ -3,36 +3,38 @@ import { memo } from "react";
 const CYAN = "#67e8f9";
 const GLOW = "#bff7ff";
 
-// Normalized coordinates over the top section at xl: the core frame fills the
-// left column (~0..62%), the side panels the right 360px. preserveAspectRatio
-// "none" stretches the curves with the container; non-scaling-stroke keeps the
-// 1px line crisp.
-const PATHS = [
-  { id: "hud-conn-1", d: "M 700 252 C 745 252, 745 130, 784 130", startX: 700, startY: 252, dotBegin: "0s" },
-  { id: "hud-conn-2", d: "M 700 308 C 745 308, 745 430, 784 430", startX: 700, startY: 308, dotBegin: "1.7s" },
+// Anchored to the center-cell wrapper (96px wide strips straddling the grid
+// gap on each side). Column widths and gaps are fixed at xl, so the horizontal
+// geometry is stable in px; only Y stretches with the frame height
+// (preserveAspectRatio="none" + non-scaling-stroke keeps lines crisp).
+type ConnectorPath = { id: string; d: string; startX: number; startY: number; dotBegin: string };
+
+const LEFT_PATHS: ConnectorPath[] = [
+  { id: "hud-conn-l1", d: "M 96 224 C 52 224, 52 96, 0 96", startX: 96, startY: 224, dotBegin: "0s" },
+  { id: "hud-conn-l2", d: "M 96 392 C 52 392, 52 530, 0 530", startX: 96, startY: 392, dotBegin: "1.2s" },
 ];
 
-/**
- * Decorative bezier connectors between the arc reactor frame and the side
- * panels, with light pulses travelling along each path (SMIL animateMotion).
- * Desktop-only; hidden below xl where the layout stacks.
- */
-function HudConnectorsBase() {
+const RIGHT_PATHS: ConnectorPath[] = [
+  { id: "hud-conn-r1", d: "M 0 224 C 44 224, 44 96, 96 96", startX: 0, startY: 224, dotBegin: "0.6s" },
+  { id: "hud-conn-r2", d: "M 0 392 C 44 392, 44 530, 96 530", startX: 0, startY: 392, dotBegin: "1.8s" },
+];
+
+function ConnectorSvg({ paths, className }: { paths: ConnectorPath[]; className: string }) {
   return (
     <svg
       aria-hidden
-      viewBox="0 0 1000 560"
+      viewBox="0 0 96 640"
       preserveAspectRatio="none"
-      className="pointer-events-none absolute inset-0 z-10 hidden h-full w-full xl:block"
+      className={`pointer-events-none absolute top-0 z-10 hidden h-full w-24 xl:block ${className}`}
     >
-      {PATHS.map((path) => (
+      {paths.map((path) => (
         <g key={path.id}>
           <path
             id={path.id}
             d={path.d}
             fill="none"
             stroke={CYAN}
-            strokeOpacity={0.28}
+            strokeOpacity={0.3}
             strokeWidth={1}
             vectorEffect="non-scaling-stroke"
           />
@@ -45,6 +47,19 @@ function HudConnectorsBase() {
         </g>
       ))}
     </svg>
+  );
+}
+
+/**
+ * Decorative bezier connectors with travelling light pulses (SMIL), linking
+ * the reactor frame to the instrument columns on both sides. Desktop-only.
+ */
+function HudConnectorsBase() {
+  return (
+    <>
+      <ConnectorSvg paths={LEFT_PATHS} className="-left-4" />
+      <ConnectorSvg paths={RIGHT_PATHS} className="-right-4" />
+    </>
   );
 }
 

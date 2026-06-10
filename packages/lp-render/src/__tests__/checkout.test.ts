@@ -19,6 +19,7 @@ function browser(search: string): void {
     sessionStorage: {
       getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
       setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
     },
   };
 }
@@ -117,6 +118,39 @@ describe("buildCheckoutHref — Hotmart affiliate route (?hmt=)", () => {
         internationalCheckoutUrl: HOTMART,
       }),
     ).toBe(WAITLIST);
+  });
+});
+
+describe("affiliate router — last-click attribution across platforms", () => {
+  it("a later ?aff= link overrides a stored hmt token — back to Hubla", () => {
+    browser(`?hmt=${HMT}`);
+    buildCheckoutHref({ checkoutUrl: CHECKOUT, cartState: "open", internationalCheckoutUrl: HOTMART });
+    (globalThis as { window: { location: { search: string } } }).window.location.search = `?aff=${AFF}`;
+    expect(
+      buildCheckoutHref({ checkoutUrl: CHECKOUT, cartState: "open", internationalCheckoutUrl: HOTMART }),
+    ).toBe(`${CHECKOUT}?ref=${AFF}`);
+  });
+
+  it("a later ?hmt= link overrides a stored aff token — to Hotmart", () => {
+    browser(`?aff=${AFF}`);
+    buildCheckoutHref({ checkoutUrl: CHECKOUT, cartState: "open", internationalCheckoutUrl: HOTMART });
+    (globalThis as { window: { location: { search: string } } }).window.location.search = `?hmt=${HMT}`;
+    const href = new URL(
+      buildCheckoutHref({ checkoutUrl: CHECKOUT, cartState: "open", internationalCheckoutUrl: HOTMART }),
+    );
+    expect(href.hostname).toBe("pay.hotmart.com");
+    expect(href.searchParams.get("ref")).toBe(HMT);
+  });
+
+  it("a bare URL (no affiliate param) keeps the stored attribution — sticky within the tab", () => {
+    browser(`?hmt=${HMT}`);
+    buildCheckoutHref({ checkoutUrl: CHECKOUT, cartState: "open", internationalCheckoutUrl: HOTMART });
+    (globalThis as { window: { location: { search: string } } }).window.location.search = "?utm_source=ig";
+    const href = new URL(
+      buildCheckoutHref({ checkoutUrl: CHECKOUT, cartState: "open", internationalCheckoutUrl: HOTMART }),
+    );
+    expect(href.hostname).toBe("pay.hotmart.com");
+    expect(href.searchParams.get("ref")).toBe(HMT);
   });
 });
 
