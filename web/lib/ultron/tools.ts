@@ -52,6 +52,9 @@ const CREATE_SKILL_BY_SLUG: Record<string, string> = {
 const ACTIVATE_SKILL_BY_SLUG: Record<string, string> = {
   brunobracaioli: "activate-campaign-brunobracaioli",
 };
+const ANALYZE_SKILL_BY_SLUG: Record<string, string> = {
+  brunobracaioli: "analytic-traffic-brunobracaioli-campaign",
+};
 const LANDING_SKILL_BY_SLUG: Record<string, string> = {
   brunobracaioli: "create-landing-page-brunobracaioli",
 };
@@ -479,6 +482,60 @@ const tools: Record<string, ToolDef> = {
         client_slug: slug,
         queued_at: new Date().toISOString(),
         message: "Pedido de ativação enfileirado. A campanha vai ao ar em instantes.",
+      };
+    },
+  },
+
+  request_analysis: {
+    spec: {
+      name: "request_analysis",
+      description:
+        "Enfileira uma ANÁLISE DE PERFORMANCE sob demanda de todas as campanhas ativas de um cliente (os agents rodam na VM). É READ-ONLY na conta Meta — não cria, não ativa, não gasta nada; só lê métricas e grava diagnóstico + recomendações no banco. Não precisa de confirmação em dois passos. A análise leva alguns minutos; depois consulte o resultado com get_latest_analysis (e o andamento com get_recent_jobs). A mesma análise também roda sozinha todo dia às 8h.",
+      input_schema: {
+        type: "object",
+        properties: {
+          client_slug: { type: "string", description: "slug do cliente, ex.: brunobracaioli" },
+        },
+        required: ["client_slug"],
+      },
+    },
+    handler: async (input) => {
+      const slug = str(input, "client_slug");
+      if (!slug) return { error: "client_slug é obrigatório" };
+      const client = await resolveClientId(slug);
+      if (!client) return { error: `cliente '${slug}' não encontrado` };
+      const skill = ANALYZE_SKILL_BY_SLUG[slug];
+      if (!skill) return { error: `cliente '${slug}' não está habilitado para análise sob demanda` };
+
+      const { allowed } = await enforceLimit(rateLimiters.analysisRequest(), slug, "analysis-request");
+      if (!allowed) return { error: "muitos pedidos de análise para este cliente agora; tente de novo daqui a pouco" };
+
+      const { data, error } = await db()
+        .from("agent_jobs")
+        .insert({
+          client_id: client.id,
+          skill,
+          kind: "analyze",
+          args: {},
+          requested_by: "ultron",
+        })
+        .select("id")
+        .single();
+      if (error) {
+        if (isUniqueViolation(error)) {
+          return { enqueued: false, reason: "já existe uma análise em andamento para este cliente" };
+        }
+        throw error;
+      }
+      return {
+        enqueued: true,
+        job_id: data.id,
+        skill,
+        kind: "analyze",
+        client_slug: slug,
+        queued_at: new Date().toISOString(),
+        message:
+          "Análise enfileirada. Os agents começam em até um minuto e levam alguns minutos; depois é só pedir o resultado (get_latest_analysis).",
       };
     },
   },
