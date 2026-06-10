@@ -42,6 +42,14 @@ _TOOL_MAP: list[tuple[str, tuple[str, str, str]]] = [
 _INGEST_TABLE = "agent_events"
 
 
+def _run_id(session: str) -> str:
+    """Queued jobs export AGENT_JOB_ID (poll-agent-jobs.sh); stamping it links the
+    event to its job run — same rule as scripts/emit-from-stream.py. Without it,
+    hook events land under the Claude session id, an orphan run no dashboard query
+    joins back to the job. Direct cron/manual runs keep the session id as before."""
+    return (os.environ.get("AGENT_JOB_ID") or "").strip() or session
+
+
 def _read_event() -> dict:
     raw = sys.stdin.read()
     return json.loads(raw) if raw.strip() else {}
@@ -55,7 +63,7 @@ def _classify(event: dict) -> dict | None:
     if hook == "SubagentStop":
         name = str(event.get("subagent_type") or event.get("agent_type") or "subagent")
         return {
-            "run_id": session,
+            "run_id": _run_id(session),
             "agent_name": name,
             "agent_type": "subagent",
             "event_type": "end",
@@ -72,7 +80,7 @@ def _classify(event: dict) -> dict | None:
     if tool_name in ("Task", "Agent"):
         subtype = str(tool_input.get("subagent_type") or tool_input.get("description") or "subagent")[:80]
         return {
-            "run_id": session,
+            "run_id": _run_id(session),
             "agent_name": subtype,
             "agent_type": "subagent",
             "event_type": "start",
@@ -86,7 +94,7 @@ def _classify(event: dict) -> dict | None:
         skill = str(tool_input.get("skill") or "")
         if "image" in skill:
             return {
-                "run_id": session,
+                "run_id": _run_id(session),
                 "agent_name": "imagem",
                 "agent_type": "skill",
                 "event_type": "start",
@@ -101,7 +109,7 @@ def _classify(event: dict) -> dict | None:
         command = str(tool_input.get("command") or "")
         if "wrangler pages deploy" in command or "pages/projects" in command:
             return {
-                "run_id": session,
+                "run_id": _run_id(session),
                 "agent_name": "Cloudflare",
                 "agent_type": "tool",
                 "event_type": "step",
@@ -110,7 +118,7 @@ def _classify(event: dict) -> dict | None:
             }
         if "next build" in command:
             return {
-                "run_id": session,
+                "run_id": _run_id(session),
                 "agent_name": "build",
                 "agent_type": "tool",
                 "event_type": "step",
@@ -122,7 +130,7 @@ def _classify(event: dict) -> dict | None:
     for suffix, (agent_name, agent_type, summary) in _TOOL_MAP:
         if tool_name.endswith(suffix) or suffix in tool_name:
             return {
-                "run_id": session,
+                "run_id": _run_id(session),
                 "agent_name": agent_name,
                 "agent_type": agent_type,
                 "event_type": "step",
@@ -165,6 +173,17 @@ def main() -> int:
     except (ValueError, OSError):
         return 0
     try:
+        # run-skill.sh parses claude's stream-json (AGENT_EVENTS_FROM_STREAM=1) and is
+        # the source of truth for tool events there — it also sees connector-prefixed
+        # MCP tools this hook's matcher misses. Emitting PreToolUse here too would
+        # duplicate every Task/WebFetch/Skill row. SubagentStop still goes through:
+        # the stream has no subagent-end signal. (Suppression lives here, NOT in
+        # _classify, because emit-from-stream.py reuses _classify under that env var.)
+        if (
+            os.environ.get("AGENT_EVENTS_FROM_STREAM")
+            and str(event.get("hook_event_name") or "") == "PreToolUse"
+        ):
+            return 0
         row = _classify(event)
         if row is None:
             return 0
