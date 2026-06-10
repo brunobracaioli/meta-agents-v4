@@ -33,6 +33,9 @@ export const rateLimiters = {
   // two-turn confirmation and the one-job-per-(client,kind) unique index.
   campaignCreation: () => limiter("campaign-creation", 5, "1 h"),
   campaignActivation: () => limiter("campaign-activation", 3, "1 h"),
+  // On-demand performance analysis is read-only on Meta (writes only analysis rows) but
+  // burns a full headless run (~10 min) on the VM — modest cap, plus the unique index.
+  analysisRequest: () => limiter("analysis-request", 4, "1 h"),
   // Landing-page builds are heavy (npm + next build + wrangler deploy) but spend no ad
   // budget and are born noindex — modest cap, same defence-in-depth rationale.
   landingCreation: () => limiter("landing-creation", 5, "1 h"),
