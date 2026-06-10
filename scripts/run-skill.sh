@@ -98,10 +98,15 @@ cd /app
 
 echo "RUN_START skill=${SKILL} prompt='${PROMPT}' log=${LOG} ts=${TS} timeout=${RUN_TIMEOUT_SEC}s"
 
-# Emit per-tool telemetry by parsing claude's stream-json output. Settings-file
-# hooks do NOT fire in headless `-p` mode (anthropics/claude-code#40506), so we
-# tap the output stream instead — see scripts/emit-from-stream.py. PIPESTATUS[0]
-# keeps the skill's own exit code despite the parser/tee in the pipeline.
+# Emit per-tool telemetry by parsing claude's stream-json output — the parser is
+# the source of truth for tool events here: unlike the PreToolUse hook matcher, it
+# also sees connector-prefixed MCP tools (mcp__claude_ai_Meta_Ads_MCP__…). Current
+# CLIs DO fire settings-file hooks in `-p` mode (the old #40506 limitation is gone),
+# so AGENT_EVENTS_FROM_STREAM=1 tells emit-agent-event.py to skip PreToolUse and
+# only emit SubagentStop "end" rows, which the stream has no signal for — without
+# it every Task/WebFetch/Skill event lands twice. PIPESTATUS[0] keeps the skill's
+# own exit code despite the parser/tee in the pipeline.
+export AGENT_EVENTS_FROM_STREAM=1
 set +e
 timeout "${RUN_TIMEOUT_SEC}" claude -p --dangerously-skip-permissions \
   --output-format stream-json --verbose \
