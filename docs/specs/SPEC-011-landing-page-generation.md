@@ -128,6 +128,10 @@ consent_key:"b2tech_consent_v1" }, seo }`.
     ignorado se a LP não tem `secondaryCtaHref` (nunca vaza pra Hubla).
   - Ambos persistem em `sessionStorage` (`b2tech_aff_v1` / `b2tech_hmt_v1`) e sobrevivem a
     navegação por âncora; UTMs continuam sendo anexadas em todos os casos.
+  - **Atribuição last-click:** URL com qualquer param de afiliado é fonte de verdade pros
+    DOIS canais — grava o próprio token e **limpa o token armazenado do outro canal** (um
+    `?aff=` posterior re-atribui pra Hubla mesmo com `hmt` na sessão, e vice-versa). URL sem
+    param de afiliado mantém a atribuição da sessão (sticky por aba; morre ao fechar a aba).
   - CTA secundário "Compra internacional" (`offer.secondaryCtaHref/Label`, opcional):
     sempre Hotmart; só anexa `ref` quando há `hmt` (token Hubla nunca vai pra Hotmart).
 

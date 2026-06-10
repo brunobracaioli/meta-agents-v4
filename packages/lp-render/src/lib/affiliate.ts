@@ -6,6 +6,12 @@
 //     (the code at the end of a Hotmart hotlink — the checkout page shows it as "REF")
 // Pass-through by design: any token is forwarded (the platform validates `ref` server-side),
 // so onboarding a new affiliate needs no code change. See checkout.ts / SPEC-011 §6.
+//
+// Attribution model: LAST CLICK. A URL that carries any affiliate param is the source of
+// truth for BOTH channels — it sets its own token and clears the other channel's stored one,
+// so a visitor who later arrives via a different affiliate's link is re-attributed. A URL
+// with no affiliate param falls back to what the session captured earlier (attribution
+// survives reloads and in-page navigation; sessionStorage dies with the tab).
 
 export const AFFILIATE_URL_PARAM = "aff"; // incoming param on the LP URL (Hubla)
 export const HOTMART_URL_PARAM = "hmt"; // incoming param on the LP URL (Hotmart)
@@ -14,42 +20,46 @@ export const AFFILIATE_CHECKOUT_PARAM = "ref"; // outgoing param on the checkout
 const STORAGE_KEY = "b2tech_aff_v1";
 const HOTMART_STORAGE_KEY = "b2tech_hmt_v1";
 
-export function captureAffiliate(): void {
-  if (typeof window === "undefined") return;
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const aff = params.get(AFFILIATE_URL_PARAM);
-    if (aff) window.sessionStorage.setItem(STORAGE_KEY, aff);
-    const hmt = params.get(HOTMART_URL_PARAM);
-    if (hmt) window.sessionStorage.setItem(HOTMART_STORAGE_KEY, hmt);
-  } catch {
-    // non-fatal: affiliate attribution is best-effort
-  }
+interface AffiliateTokens {
+  aff: string | null;
+  hmt: string | null;
 }
 
 // Reads the URL first (self-healing against useEffect ordering between <CheckoutButton/>
-// and <Tracking/>, and resilient to in-page anchor navigation), then falls back to the
-// value captured into sessionStorage. Returns null when no token is present.
-function readToken(urlParam: string, storageKey: string): string | null {
-  if (typeof window === "undefined") return null;
+// and <Tracking/>), syncing sessionStorage as a side effect; falls back to the stored
+// values when the URL carries no affiliate param at all.
+function resolveTokens(): AffiliateTokens {
+  if (typeof window === "undefined") return { aff: null, hmt: null };
   try {
-    const fromUrl = new URLSearchParams(window.location.search).get(urlParam);
-    if (fromUrl) {
-      window.sessionStorage.setItem(storageKey, fromUrl);
-      return fromUrl;
+    const params = new URLSearchParams(window.location.search);
+    const urlAff = params.get(AFFILIATE_URL_PARAM);
+    const urlHmt = params.get(HOTMART_URL_PARAM);
+    const store = window.sessionStorage;
+    if (urlAff || urlHmt) {
+      // Explicit affiliate link → last click wins on both channels.
+      if (urlAff) store.setItem(STORAGE_KEY, urlAff);
+      else store.removeItem(STORAGE_KEY);
+      if (urlHmt) store.setItem(HOTMART_STORAGE_KEY, urlHmt);
+      else store.removeItem(HOTMART_STORAGE_KEY);
+      return { aff: urlAff, hmt: urlHmt };
     }
-    return window.sessionStorage.getItem(storageKey);
+    return { aff: store.getItem(STORAGE_KEY), hmt: store.getItem(HOTMART_STORAGE_KEY) };
   } catch {
-    return null;
+    // non-fatal: affiliate attribution is best-effort
+    return { aff: null, hmt: null };
   }
+}
+
+export function captureAffiliate(): void {
+  resolveTokens();
 }
 
 /** Hubla affiliate token (?aff=), or null. */
 export function getAffiliate(): string | null {
-  return readToken(AFFILIATE_URL_PARAM, STORAGE_KEY);
+  return resolveTokens().aff;
 }
 
 /** Hotmart affiliate code (?hmt=), or null. */
 export function getHotmartAffiliate(): string | null {
-  return readToken(HOTMART_URL_PARAM, HOTMART_STORAGE_KEY);
+  return resolveTokens().hmt;
 }
