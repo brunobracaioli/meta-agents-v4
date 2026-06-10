@@ -201,6 +201,51 @@ body {
     animation: hud-caret 0.9s step-end infinite;
   }
 
+  /* Instruments — always alive, more intense under [data-mode="activated"]
+     (the attribute lives on the live page root). CSS vars inside keyframes
+     resolve per-element at animation time, so mode flips need no re-render. */
+  .hud-eq {
+    --eq-amp: 0.4;
+  }
+
+  [data-mode="activated"] .hud-eq {
+    --eq-amp: 1;
+  }
+
+  .hud-eq-bar {
+    transform-origin: bottom;
+    animation: hud-eq 1s ease-in-out infinite alternate;
+  }
+
+  .hud-wave {
+    --wave-dur: 9s;
+  }
+
+  [data-mode="activated"] .hud-wave {
+    --wave-dur: 4s;
+  }
+
+  .hud-wave-track {
+    animation: hud-wave var(--wave-dur) linear infinite;
+  }
+
+  .hud-readout-track {
+    animation: hud-readout 16s linear infinite;
+  }
+
+  [data-mode="activated"] .hud-readout-track {
+    animation-duration: 8s;
+  }
+
+  .hud-tick-rail {
+    width: 6px;
+    background:
+      repeating-linear-gradient(to bottom, rgba(103, 232, 249, 0.4) 0 1px, transparent 1px 8px),
+      repeating-linear-gradient(to bottom, rgba(103, 232, 249, 0.55) 0 1px, transparent 1px 40px);
+    background-size: 3px 100%, 6px 100%;
+    background-repeat: no-repeat;
+  }
+
   .hud-scan-host {
     position: relative;
     overflow: hidden;
@@ -282,6 +327,27 @@ body {
   }
 }
 
+@keyframes hud-eq {
+  from {
+    transform: scaleY(calc(0.1 + 0.1 * var(--eq-amp)));
+  }
+  to {
+    transform: scaleY(calc(0.2 + 0.8 * var(--eq-amp)));
+  }
+}
+
+@keyframes hud-wave {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes hud-readout {
+  to {
+    transform: translateY(-50%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hud-ring-cw,
   .hud-ring-ccw,
@@ -296,6 +362,17 @@ body {
   .hud-scan-host::after {
     animation: none !important;
     opacity: 0;
+  }
+
+  .hud-eq-bar,
+  .hud-wave-track,
+  .hud-readout-track {
+    animation: none !important;
+  }
+
+  /* Frozen mid-height keeps the instrument legible instead of invisible. */
+  .hud-eq-bar {
+    transform: scaleY(0.45);
   }
 
   /* SMIL <animateMotion> ignores prefers-reduced-motion; hide the dots entirely. */

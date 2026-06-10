@@ -7,6 +7,8 @@ import { AnimatedCounter } from "./hud/animated-counter";
 import { ArcGauge } from "./hud/arc-gauge";
 import { ArcReactorOverlay } from "./hud/arc-reactor-overlay";
 import { TypeOn, useBootSequence } from "./hud/boot-sequence";
+import { EqBars } from "./hud/eq-bars";
+import { Waveform } from "./hud/waveform";
 import { HudCorners, HudPanel } from "./hud/hud-panel";
 import { RadarSweep } from "./hud/radar-sweep";
 import { SpectrumBars } from "./hud/spectrum-bars";
@@ -284,11 +286,22 @@ export function LiveFeed() {
               </p>
             </div>
           </HudPanel>
+
+          <HudPanel index="03" title="Signal // Freq" bootStep={2}>
+            <EqBars className="h-16" />
+            <p className="mt-1 font-hud text-[10px] uppercase tracking-[0.18em] text-cyan-100/45">
+              Canal A · atividade neural
+            </p>
+            <Waveform className="mt-4 h-14" />
+            <p className="mt-1 font-hud text-[10px] uppercase tracking-[0.18em] text-cyan-100/45">
+              Canal B · onda portadora
+            </p>
+          </HudPanel>
         </div>
 
         {/* RIGHT column */}
         <div className="grid content-start gap-4 xl:col-start-3 xl:row-start-1">
-          <HudPanel index="03" title="Subagents Online" bootStep={2}>
+          <HudPanel index="04" title="Subagents Online" bootStep={3}>
             <div className="space-y-2">
               {coreState.activeSubagents.length > 0 ? (
                 coreState.activeSubagents.map((subagent) => (
@@ -321,7 +334,7 @@ export function LiveFeed() {
             </div>
           </HudPanel>
 
-          <HudPanel index="04" title="Data Flow" bootStep={3}>
+          <HudPanel index="05" title="Data Flow" bootStep={4}>
           <div className="space-y-3">
             {["agent_jobs/lifecycle state", "agent_events stream", "HUD render"].map((label, index) => (
               <div key={label} className="flex items-center gap-3">
@@ -351,9 +364,9 @@ export function LiveFeed() {
       </section>
 
       <HudPanel
-        index="05"
+        index="06"
         title="Event Stream"
-        bootStep={4}
+        bootStep={5}
           actions={
             <span className="font-hud text-[10px] uppercase tracking-[0.14em] text-white/32">
               {events.length} eventos carregados
