@@ -240,6 +240,8 @@ export function LiveFeed() {
       </div>
 
       <section className="relative grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-[300px_minmax(0,1fr)_300px] 2xl:grid-cols-[340px_minmax(0,1fr)_340px]">
+        <span aria-hidden className="hud-tick-rail absolute -left-3 bottom-2 top-2 hidden xl:block" />
+        <span aria-hidden className="hud-tick-rail absolute -right-3 bottom-2 top-2 hidden xl:block" />
         {/* CENTER — DOM-first so it stacks on top below xl */}
         <div className="relative sm:col-span-2 xl:col-span-1 xl:col-start-2 xl:row-start-1">
           <HudConnectors />
