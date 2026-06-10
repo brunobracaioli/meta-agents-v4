@@ -1,18 +1,22 @@
-# Spec — Análise de performance de campanhas Meta Ads (autônoma, a cada 3 dias)
+# Spec — Análise diária de performance de TODAS as campanhas ativas Meta Ads
 
-> Status: implementado em 2026-05-23. ADR: [0004](../adr/0004-meta-ads-performance-analysis-schema.md).
+> Status: implementado em 2026-05-23 (tráfego, a cada 3 dias); ampliado em 2026-06-10 para
+> **todas as campanhas ativas (qualquer objetivo), diário**. ADRs:
+> [0004](../adr/0004-meta-ads-performance-analysis-schema.md) ·
+> [0024](../adr/0024-daily-all-campaigns-analysis.md).
 > Skill: `.claude/skills/analytic-traffic-brunobracaioli-campaign/`.
 
 ## Objetivo
 
-Avaliar, de forma **autônoma, headless e recorrente (a cada 3 dias)**, a performance das campanhas
-de tráfego do cliente `brunobracaioli` no Meta Ads, e **persistir diagnóstico + recomendações de
-forma estruturada e auditável** no Supabase — para que um humano (ou, em ondas futuras, um
-decision-engine) decida as ações.
+Avaliar, de forma **autônoma, headless e recorrente (diária)**, a performance de **todas as
+campanhas ativas** do cliente `brunobracaioli` no Meta Ads — qualquer objetivo
+(`OUTCOME_TRAFFIC`/`LINK_CLICKS`, `OUTCOME_SALES`, `OUTCOME_ENGAGEMENT`, ...), inclusive campanhas
+criadas manualmente pelo operador — e **persistir diagnóstico + recomendações de forma estruturada
+e auditável** no Supabase, para que um humano (ou, em ondas futuras, um decision-engine) decida as
+ações.
 
 Princípio inegociável (pedido do usuário): **nunca analisar uma métrica isolada.** Toda conclusão
-cruza ≥2 métricas e as ancora no **objetivo** da campanha (`OUTCOME_TRAFFIC` → otimização
-`LANDING_PAGE_VIEWS`).
+cruza ≥2 métricas e as ancora no **objetivo da campanha analisada** (north-star por objetivo).
 
 ## Escopo
 
@@ -38,9 +42,17 @@ cruza ≥2 métricas e as ancora no **objetivo** da campanha (`OUTCOME_TRAFFIC` 
 
 ## Framework de diagnóstico (boas práticas — "nunca métrica isolada")
 
-### North-star e identidades do funil
-Para tráfego, a métrica-objetivo é o **CPLPV** (custo por landing page view); CTR(link) e CPC(link)
-são diagnósticos. As identidades que **ligam** as métricas (e que tornam ilegítimo olhar uma só):
+### North-star por objetivo e identidades do funil
+
+| Objetivo da campanha | North-star | Diagnóstico secundário |
+|---|---|---|
+| `OUTCOME_TRAFFIC` / `LINK_CLICKS` | CPLPV (custo por landing page view) | CTR link, LPV% |
+| `OUTCOME_SALES` | CPA (custo por compra) | funil LPV → checkout iniciado → compra |
+| `OUTCOME_ENGAGEMENT` | custo/engajamento; CPM + frequência | **não** julgar por CTR link |
+
+CTR(link) e CPC(link) são diagnósticos de onde o funil quebra em qualquer objetivo. Comparação
+entre campanhas irmãs do mesmo objetivo (CPA vs CPA, CPLPV vs CPLPV) é o critério para
+`reallocate_budget`. As identidades que **ligam** as métricas (e que tornam ilegítimo olhar uma só):
 
 ```
 CPM   = spend / impressões × 1000
@@ -62,15 +74,29 @@ freq  = impressões / alcance
 | CPM↑ + frequência baixa no início | fase de aprendizado (dados imaturos) | `observe` |
 | tudo saudável + volume baixo | restrição de budget/audiência | `scale` (respeitar cap R$50) |
 
-Rankings de leilão (`quality_ranking`, `engagement_rate_ranking`, `conversion_rate_ranking`)
-contextualizam: quality baixo → criativo; conversion baixo → pós-clique/oferta.
-
 ### Âncoras (relativo, não absoluto)
-- **Benchmark de indústria** e **auction ranking benchmarks** do MCP respondem "esse CTR/CPC é bom?".
 - **Tendência**: janela atual vs `compare` (delta %) **e** vs snapshots anteriores acumulados em
-  `metric_snapshots` (comparação inter-rodadas). Sinais de `performance_trend` e `anomaly_signal`.
-- **Comparação entre irmãos**: rankear os 3 ângulos (autoridade/dor/oferta) entre si para achar
+  `metric_snapshots` (comparação inter-rodadas) — com cadência diária, este histórico é a âncora
+  principal.
+- **Benchmark de indústria** e **auction ranking benchmarks** do MCP, quando disponíveis.
+- **Comparação entre irmãos**: ads do mesmo ad set e campanhas irmãs do mesmo objetivo →
   vencedor/perdedor relativo.
+
+### Limitações conhecidas do Meta MCP nesta conta (validadas em 2026-06-10)
+- `ads_get_ad_entities` **não expõe** `actions` genérico, `inline_link_clicks` nem rankings de
+  leilão (`quality_ranking` etc.) — usar `actions:link_click`, `cost_per_link_click`, `results`,
+  `cost_per_result`.
+- LPV/compras vêm de `results.all_conversion_types` e **só no nível campaign**; `ad_set`/`ad` usam
+  `link_clicks` como proxy.
+- `industry_benchmark`/`performance_trend`/`anomaly_signal` costumam retornar "no data".
+- Valores localizados (`"R$16,12 BRL"`, `"4,84%"`) — parsear para cents/float.
+- Outputs grandes (117+ campanhas históricas) vão para arquivo em `tool-results/` — processar com
+  python3/jq filtrando `spend > 0`, nunca ler inteiro no contexto.
+
+### Checagem de orçamento
+Toda campanha ativa tem `daily_budget` comparado ao teto do cliente (R$50/d por campanha,
+`lista-de-clientes`); excedente ⇒ finding `severity='medium'`, `metric_focus='budget'` para
+decisão humana (a skill continua read-only).
 
 ### Gates de significância / fase de aprendizado (não agir no ruído)
 Não emitir veredito forte (`is_significant=false`, `recommendation_type='observe'`) quando:
@@ -122,7 +148,9 @@ quando há entidade com `spend_cents > 0` na janela.
 3. Sem gasto na janela → caminho `no_data` íntegro (não falha, não fica em deadlock).
 4. Com gasto → cada finding tem `diagnosis` cruzando ≥2 métricas, `evidence` coerente, e passa (ou
    é marcado fora de) pelos gates de significância.
-5. Cron a cada 3 dias registrado no `crontab` e validável com `supercronic -test`.
+5. Cron diário (08:00 BRT) registrado no `crontab` e validável com `supercronic -test`.
+6. `analyses.objective` registra a lista distinta de objetivos com gasto na janela (text livre,
+   ex.: `'LINK_CLICKS,OUTCOME_SALES'`).
 
 ## Pendências / próximos passos
 - Onda 3+: decision-engine consome `analysis_findings` para agir (exigirá sair do read-only).
