@@ -7,6 +7,7 @@ import { AnimatedCounter } from "./hud/animated-counter";
 import { ArcGauge } from "./hud/arc-gauge";
 import { ArcReactorOverlay } from "./hud/arc-reactor-overlay";
 import { TypeOn, useBootSequence } from "./hud/boot-sequence";
+import { DataReadout } from "./hud/data-readout";
 import { EqBars } from "./hud/eq-bars";
 import { Waveform } from "./hud/waveform";
 import { HudCorners, HudPanel } from "./hud/hud-panel";
@@ -173,6 +174,14 @@ export function LiveFeed() {
   const spectrumCounts = useMemo(() => eventTypeCounts(events, metricsNowMs), [events, metricsNowMs]);
   const eventsPerMinute = useMemo(() => eventsPerMinuteNow(events, metricsNowMs), [events, metricsNowMs]);
   const gaugeMax = Math.max(10, ...activityBuckets);
+  const readoutLines = useMemo(
+    () =>
+      events.slice(-12).map((e) => {
+        const hex = (Date.parse(e.ts) % 0xffff).toString(16).padStart(4, "0");
+        return `> ${e.agent_name.slice(0, 14).padEnd(14, ".")} :: ${e.event_type.toUpperCase()} 0x${hex}`;
+      }),
+    [events],
+  );
   const sessionStartMsRef = useRef<number>(Date.now());
   const bootPhase = useBootSequence();
   const coreState = useMemo(() => deriveNeuralCoreState(events, nowMs, liveProcesses), [events, nowMs, liveProcesses]);
@@ -360,13 +369,17 @@ export function LiveFeed() {
             <SpectrumBars counts={spectrumCounts} />
           </div>
           </HudPanel>
+
+          <HudPanel index="06" title="Raw Feed" bootStep={5}>
+            <DataReadout lines={readoutLines} className="h-36" />
+          </HudPanel>
         </div>
       </section>
 
       <HudPanel
-        index="06"
+        index="07"
         title="Event Stream"
-        bootStep={5}
+        bootStep={6}
           actions={
             <span className="font-hud text-[10px] uppercase tracking-[0.14em] text-white/32">
               {events.length} eventos carregados
