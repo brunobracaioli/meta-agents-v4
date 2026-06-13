@@ -309,6 +309,9 @@ function errMsg(err: unknown): string {
 
 export const GET = handle(app);
 export const POST = handle(app);
-// The landing-page editor uses PATCH (sections/theme/settings). Next route handlers must
-// export each HTTP method explicitly, so Hono can dispatch them.
+// The landing-page editor uses PATCH (sections/theme/settings) and PUT/DELETE (tracking
+// secrets). Next route handlers must export each HTTP method explicitly, or Next returns 405
+// before Hono ever dispatches — so every verb the Hono app handles needs an export here.
 export const PATCH = handle(app);
+export const PUT = handle(app);
+export const DELETE = handle(app);
