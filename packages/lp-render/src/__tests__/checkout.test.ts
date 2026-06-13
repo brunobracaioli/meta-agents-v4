@@ -154,6 +154,79 @@ describe("affiliate router — last-click attribution across platforms", () => {
   });
 });
 
+describe("buildCheckoutHref — producer migrated to Hotmart, Hubla kept for affiliates", () => {
+  // checkoutUrl is now the Hotmart producer link; affiliateCheckoutUrl carries the Hubla base
+  // for the ?aff= channel. Mirrors imersao-agencia after the 2026-06-13 Hubla→Hotmart migration.
+  const PRODUCER = "https://pay.hotmart.com/A106205617B?bid=1781362751851";
+
+  it("no affiliate param → producer Hotmart link, no stray ref", () => {
+    browser("");
+    expect(
+      buildCheckoutHref({
+        checkoutUrl: PRODUCER,
+        cartState: "open",
+        affiliateCheckoutUrl: CHECKOUT,
+        internationalCheckoutUrl: HOTMART,
+      }),
+    ).toBe(PRODUCER);
+  });
+
+  it("?aff= → Hubla affiliate base + ref, never the producer Hotmart URL", () => {
+    browser(`?aff=${AFF}`);
+    const href = new URL(
+      buildCheckoutHref({
+        checkoutUrl: PRODUCER,
+        cartState: "open",
+        affiliateCheckoutUrl: CHECKOUT,
+        internationalCheckoutUrl: HOTMART,
+      }),
+    );
+    expect(href.hostname).toBe("pay.hub.la");
+    expect(href.searchParams.get("ref")).toBe(AFF);
+  });
+
+  it("?hmt= → Hotmart checkout + ref", () => {
+    browser(`?hmt=${HMT}`);
+    const href = new URL(
+      buildCheckoutHref({
+        checkoutUrl: PRODUCER,
+        cartState: "open",
+        affiliateCheckoutUrl: CHECKOUT,
+        internationalCheckoutUrl: HOTMART,
+      }),
+    );
+    expect(href.hostname).toBe("pay.hotmart.com");
+    expect(href.searchParams.get("ref")).toBe(HMT);
+  });
+
+  it("hmt wins over aff — goes to Hotmart, not Hubla", () => {
+    browser(`?aff=${AFF}&hmt=${HMT}`);
+    const href = new URL(
+      buildCheckoutHref({
+        checkoutUrl: PRODUCER,
+        cartState: "open",
+        affiliateCheckoutUrl: CHECKOUT,
+        internationalCheckoutUrl: HOTMART,
+      }),
+    );
+    expect(href.hostname).toBe("pay.hotmart.com");
+    expect(href.searchParams.get("ref")).toBe(HMT);
+  });
+
+  it("a stale Hubla token never rides on the producer Hotmart URL once cleared", () => {
+    // Visit via ?aff= (stores it), then a bare reload: stays on Hubla (sticky, correct).
+    // A later ?hmt= clears aff → Hotmart; a subsequent bare URL must NOT resurrect the Hubla ref.
+    browser(`?hmt=${HMT}`);
+    buildCheckoutHref({ checkoutUrl: PRODUCER, cartState: "open", affiliateCheckoutUrl: CHECKOUT, internationalCheckoutUrl: HOTMART });
+    (globalThis as { window: { location: { search: string } } }).window.location.search = "";
+    const href = new URL(
+      buildCheckoutHref({ checkoutUrl: PRODUCER, cartState: "open", affiliateCheckoutUrl: CHECKOUT, internationalCheckoutUrl: HOTMART }),
+    );
+    expect(href.hostname).toBe("pay.hotmart.com"); // hmt sticky, not the producer-with-aff bug
+    expect(href.searchParams.get("ref")).toBe(HMT);
+  });
+});
+
 describe("buildInternationalCheckoutHref — secondary CTA (always Hotmart)", () => {
   it("attaches ref=<hmt> when the visitor arrived via ?hmt=", () => {
     browser(`?hmt=${HMT}`);

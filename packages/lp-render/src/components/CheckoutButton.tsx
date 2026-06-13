@@ -22,6 +22,9 @@ export function CheckoutButton({ label, pulse = false }: { label: string; pulse?
         checkoutUrl: contentSpec.checkout_url,
         cartState: contentSpec.cart_state,
         ...(contentSpec.waitlist_url ? { waitlistUrl: contentSpec.waitlist_url } : {}),
+        ...(contentSpec.affiliate_checkout_url
+          ? { affiliateCheckoutUrl: contentSpec.affiliate_checkout_url }
+          : {}),
         ...(messages.offer.secondaryCtaHref
           ? { internationalCheckoutUrl: messages.offer.secondaryCtaHref }
           : {}),

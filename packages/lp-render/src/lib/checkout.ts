@@ -1,18 +1,24 @@
 import { getUtms } from "./utm";
 import { getAffiliate, getHotmartAffiliate, AFFILIATE_CHECKOUT_PARAM } from "./affiliate";
 
-// Builds the destination for the primary CTA. In open-cart mode it points at the
-// Hubla checkout with captured UTMs appended and, when the visitor arrived via an
-// affiliate link (?aff=<token>), that token re-attached as the Hubla `ref` param.
-// A Hotmart affiliate link (?hmt=<code>) takes precedence: the primary CTA swaps to
-// the Hotmart checkout (offer.secondaryCtaHref) with the code as Hotmart's `ref` —
-// Hubla can't attribute a Hotmart affiliate, so the whole funnel moves platforms.
+// Builds the destination for the primary CTA. In open-cart mode it routes per channel:
+//   - no affiliate param        → the producer checkout (checkoutUrl), UTMs only, no ref.
+//   - ?hmt=<code> (Hotmart)      → the Hotmart checkout (internationalCheckoutUrl) + ref.
+//   - ?aff=<token> (Hubla)       → the Hubla checkout + ref. The Hubla base is
+//     affiliateCheckoutUrl when set (LPs whose producer checkout migrated to another
+//     platform), else checkoutUrl itself (legacy LPs whose producer checkout IS Hubla).
+// A Hotmart link (?hmt=) takes precedence over a Hubla link (?aff=) when both resolve —
+// a token never crosses platforms, since one platform can't attribute the other's affiliate.
 // In closed-cart mode it points at the waitlist target (WhatsApp). See SPEC-011 §6.
 
 export interface CheckoutConfig {
   checkoutUrl: string;
   cartState: "open" | "closed";
   waitlistUrl?: string; // e.g. https://wa.me/<number>?text=...
+  /** Hubla checkout base for the ?aff= route, used when the producer checkout (checkoutUrl)
+   * lives on a different platform (e.g. migrated to Hotmart). When absent, an ?aff= token is
+   * appended to checkoutUrl instead — the legacy single-platform behaviour. */
+  affiliateCheckoutUrl?: string;
   /** Hotmart checkout (offer.secondaryCtaHref). Required for the ?hmt= route; when absent
    * the hmt token is ignored (never forwarded to Hubla — the platforms don't share refs). */
   internationalCheckoutUrl?: string;
@@ -42,7 +48,15 @@ export function buildCheckoutHref(config: CheckoutConfig): string {
   if (hotmartAffiliate && config.internationalCheckoutUrl) {
     return appendParams(config.internationalCheckoutUrl, hotmartAffiliate);
   }
-  return appendParams(config.checkoutUrl, getAffiliate());
+  const hublaAffiliate = getAffiliate();
+  if (hublaAffiliate) {
+    // Dedicated Hubla base when the producer checkout moved off Hubla; otherwise the
+    // producer checkout itself is the Hubla base (legacy single-platform LPs).
+    return appendParams(config.affiliateCheckoutUrl ?? config.checkoutUrl, hublaAffiliate);
+  }
+  // No affiliate → producer checkout, UTMs only. Never attach a stray ref (a leftover Hubla
+  // token must not ride on a Hotmart producer URL — it would not attribute and only confuses).
+  return appendParams(config.checkoutUrl, null);
 }
 
 /** Destination for the secondary "international" CTA (always Hotmart). Only the Hotmart

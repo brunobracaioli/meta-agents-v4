@@ -51,6 +51,9 @@ export interface Settings {
     server?: { endpoint: string; lp_id: string };
   };
   checkout_url: string;
+  /** Hubla checkout base for the ?aff= route when checkout_url is a different platform
+   * (e.g. producer migrated to Hotmart). Absent ⇒ ?aff= appends to checkout_url. */
+  affiliate_checkout_url?: string;
   waitlist_url?: string;
   price_cents: number;
   cart_state: "open" | "closed";

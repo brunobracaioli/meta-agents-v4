@@ -29,6 +29,10 @@ export interface ContentSpec {
   product: string;
   price_cents: number;
   checkout_url: string;
+  /** Hubla checkout base for the ?aff= affiliate route, when the producer checkout_url lives
+   * on another platform (e.g. migrated to Hotmart). Absent ⇒ ?aff= falls back to checkout_url.
+   * See lib/checkout.ts. */
+  affiliate_checkout_url?: string;
   waitlist_url?: string;
   cart_state: "open" | "closed";
   noindex: boolean;
