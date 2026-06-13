@@ -5,11 +5,11 @@ import { useContent } from "../content";
 import { buildCheckoutHref, buildInternationalCheckoutHref } from "../lib/checkout";
 
 // Primary CTA. The href is computed client-side after mount so captured UTMs and the
-// affiliate token (?aff= → Hubla, ?hmt= → Hotmart swap) are appended (open cart) or the
-// waitlist target is used (closed cart). SSR falls back to the bare checkout/waitlist URL
-// so the link works without JS.
+// affiliate route (?aff= → Hubla checkout + ref, ?hmt= → Hotmart hotlink go.hotmart.com/<code>)
+// are applied (open cart) or the waitlist target is used (closed cart). SSR falls back to the
+// bare checkout/waitlist URL so the link works without JS.
 export function CheckoutButton({ label, pulse = false }: { label: string; pulse?: boolean }) {
-  const { contentSpec, messages } = useContent();
+  const { contentSpec } = useContent();
   const fallback =
     contentSpec.cart_state === "closed"
       ? contentSpec.waitlist_url ?? "#oferta"
@@ -25,9 +25,6 @@ export function CheckoutButton({ label, pulse = false }: { label: string; pulse?
         ...(contentSpec.affiliate_checkout_url
           ? { affiliateCheckoutUrl: contentSpec.affiliate_checkout_url }
           : {}),
-        ...(messages.offer.secondaryCtaHref
-          ? { internationalCheckoutUrl: messages.offer.secondaryCtaHref }
-          : {}),
       }),
     );
   }, []);
@@ -40,7 +37,8 @@ export function CheckoutButton({ label, pulse = false }: { label: string; pulse?
 }
 
 // Secondary "international purchase" CTA (Hotmart). Renders nothing unless the offer
-// carries both secondaryCta fields. Only the ?hmt= code is attached — never ?aff=.
+// carries both secondaryCta fields. UTMs only — affiliate attribution is handled by the
+// primary CTA (Hotmart is cookie-based; no affiliate id rides on this checkout URL).
 export function InternationalCheckoutButton() {
   const { messages } = useContent();
   const base = messages.offer.secondaryCtaHref;
