@@ -34,7 +34,7 @@ correspondente e passa para os subagents `landing-page-architect` + `lp-copywrit
 - Tipo: workshop ao vivo (agência de Meta Ads operada por agentes de IA)
 - Data: 20/06/2026, 13h–18h (5h), ao vivo no Zoom, com gravação
 - Preço: R$ 147,00 (`priceCents=14700`) · 1º lote, à vista · âncora R$ 497
-- Checkout: `https://pay.hub.la/YftyuP6fkiKfL2daF0o1`
+- Checkout: `https://pay.hotmart.com/A106205617B?bid=1781362751851`
 - Garantia: 7 dias, reembolso via `bruno@b2tech.io`
 - Subdomínio padrão: `imersao-agencia` → `imersao-agencia.b2tech.io`
 - Brief: `.claude/materiais-das-empresas/brunobracaioli/produtos/imersao-agencia.json`
