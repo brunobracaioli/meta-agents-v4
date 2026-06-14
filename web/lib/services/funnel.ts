@@ -51,22 +51,40 @@ export type FunnelData = {
   >;
   clientName: string;
   currency: string;
+  accountId: string;
   account: FunnelEntity | null;
   campaigns: FunnelEntity[];
 };
 
-function rawNumber(raw: FunnelEvent["raw"], key: string): number | null {
-  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-    const v = (raw as Record<string, unknown>)[key];
-    if (typeof v === "number") return v;
+/** One selectable source = a client + one of its ad accounts that has funnel data. */
+export type FunnelAccountOption = { accountId: string; label: string };
+export type FunnelClientOption = {
+  clientId: string;
+  name: string;
+  slug: string;
+  accounts: FunnelAccountOption[];
+};
+
+function rawObject(raw: FunnelEvent["raw"]): Record<string, unknown> | null {
+  let v: unknown = raw;
+  if (typeof v === "string") {
+    try {
+      v = JSON.parse(v);
+    } catch {
+      return null;
+    }
   }
+  if (v && typeof v === "object" && !Array.isArray(v)) return v as Record<string, unknown>;
   return null;
 }
 
-function buildEntity(
-  events: FunnelEvent[],
-  spendCents: number | null,
-): FunnelEntity {
+function rawNumber(raw: FunnelEvent["raw"], key: string): number | null {
+  const obj = rawObject(raw);
+  const n = obj?.[key];
+  return typeof n === "number" ? n : null;
+}
+
+function buildEntity(events: FunnelEvent[], spendCents: number | null): FunnelEntity {
   const steps = [...events]
     .sort((a, b) => a.step_order - b.step_order)
     .map((e) => ({
@@ -83,15 +101,20 @@ function buildEntity(
   const impressionEvent = events.find((e) => e.event_type === "impression");
   const purchases = purchaseEvent?.count ?? 0;
   const revenue_cents = purchaseEvent?.value_cents ?? null;
-  // roas is stashed in raw on every row (Meta's purchase_roas).
-  const roas = rawNumber(purchaseEvent?.raw ?? null, "roas");
+  const rawRoas = rawNumber(purchaseEvent?.raw ?? null, "roas");
 
-  // Spend: prefer the authoritative snapshot value; otherwise reconstruct from
-  // revenue/ROAS (account level has no snapshot row but always has purchases).
+  // Spend: authoritative snapshot value when present; otherwise reconstruct from
+  // revenue / ROAS (used as a last resort).
   let spend: number | null = spendCents;
-  if (spend == null && roas && roas > 0 && revenue_cents != null) {
-    spend = Math.round(revenue_cents / roas);
+  if (spend == null && rawRoas && rawRoas > 0 && revenue_cents != null) {
+    spend = Math.round(revenue_cents / rawRoas);
   }
+
+  // ROAS: compute from revenue / spend (most reliable — both authoritative);
+  // fall back to the value Meta reported in raw.
+  let roas: number | null = null;
+  if (revenue_cents != null && spend && spend > 0) roas = revenue_cents / spend;
+  else if (rawRoas != null) roas = rawRoas;
 
   return {
     level: events[0]?.level ?? "campaign",
@@ -108,23 +131,82 @@ function buildEntity(
 }
 
 /**
- * The most recent funnel snapshot for the dashboard funnel view. Reads the
- * latest analysis that produced funnel_events, splits the account-level funnel
- * (the hero) from the per-campaign funnels (ranked by spend), and joins
- * metric_snapshots for authoritative campaign spend. Read-only.
+ * Clients (and their ad accounts) that have at least one funnel snapshot. Powers
+ * the client/account selectors. Read-only.
  */
-export async function getLatestFunnel(): Promise<FunnelData | null> {
+export async function getFunnelDirectory(): Promise<FunnelClientOption[]> {
   const supabase = db();
 
-  // Latest analysis_id that actually has a funnel persisted.
-  const latest = await supabase
+  const accountsRes = await supabase
     .from("funnel_events")
-    .select("analysis_id, captured_at")
-    .order("captured_at", { ascending: false })
-    .limit(1);
+    .select("client_id, meta_entity_id, entity_name, captured_at")
+    .eq("level", "account")
+    .order("captured_at", { ascending: false });
+  if (accountsRes.error) throw accountsRes.error;
+
+  const rows = accountsRes.data ?? [];
+  if (rows.length === 0) return [];
+
+  const clientIds = [...new Set(rows.map((r) => r.client_id))];
+  const clientsRes = await supabase
+    .from("clients")
+    .select("id, name, slug")
+    .in("id", clientIds);
+  if (clientsRes.error) throw clientsRes.error;
+  const clientsById = new Map((clientsRes.data ?? []).map((c) => [c.id, c]));
+
+  // Dedupe to one entry per (client, account), newest first (rows are ordered).
+  const byClient = new Map<string, Map<string, FunnelAccountOption>>();
+  for (const r of rows) {
+    const accounts = byClient.get(r.client_id) ?? new Map<string, FunnelAccountOption>();
+    if (!accounts.has(r.meta_entity_id)) {
+      accounts.set(r.meta_entity_id, {
+        accountId: r.meta_entity_id,
+        label: r.entity_name ?? r.meta_entity_id,
+      });
+    }
+    byClient.set(r.client_id, accounts);
+  }
+
+  return [...byClient.entries()]
+    .map(([clientId, accounts]) => {
+      const client = clientsById.get(clientId);
+      return {
+        clientId,
+        name: client?.name ?? clientId,
+        slug: client?.slug ?? "",
+        accounts: [...accounts.values()],
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * The most recent funnel snapshot for a given client/account (defaults to the
+ * latest overall). Splits the account-level funnel (the hero) from per-campaign
+ * funnels ranked by spend, and joins metric_snapshots for authoritative spend.
+ * Read-only.
+ */
+export async function getLatestFunnel(opts?: {
+  clientId?: string;
+  accountId?: string;
+}): Promise<FunnelData | null> {
+  const supabase = db();
+
+  // Resolve the latest analysis that has an account-level funnel for the selection.
+  let sel = supabase
+    .from("funnel_events")
+    .select("analysis_id, meta_entity_id, client_id, captured_at")
+    .eq("level", "account")
+    .order("captured_at", { ascending: false });
+  if (opts?.clientId) sel = sel.eq("client_id", opts.clientId);
+  if (opts?.accountId) sel = sel.eq("meta_entity_id", opts.accountId);
+  const latest = await sel.limit(1);
   if (latest.error) throw latest.error;
-  const analysisId = latest.data?.[0]?.analysis_id;
-  if (!analysisId) return null;
+  const head = latest.data?.[0];
+  if (!head) return null;
+  const analysisId = head.analysis_id;
+  const accountId = head.meta_entity_id;
 
   const [analysisRes, eventsRes, snapshotsRes] = await Promise.all([
     supabase
@@ -154,9 +236,12 @@ export async function getLatestFunnel(): Promise<FunnelData | null> {
   const events = (eventsRes.data ?? []) as FunnelEvent[];
   if (events.length === 0) return null;
 
+  const snapshots = snapshotsRes.data ?? [];
   const spendByEntity = new Map<string, number | null>(
-    (snapshotsRes.data ?? []).map((s) => [s.meta_entity_id, s.spend_cents]),
+    snapshots.map((s) => [s.meta_entity_id, s.spend_cents]),
   );
+  // Account has no snapshot row → its spend is the sum of campaign spend.
+  const accountSpend = snapshots.reduce((sum, s) => sum + (s.spend_cents ?? 0), 0) || null;
 
   const clientRes = await supabase
     .from("clients")
@@ -164,7 +249,6 @@ export async function getLatestFunnel(): Promise<FunnelData | null> {
     .eq("id", analysis.client_id)
     .single();
 
-  // Group events by entity.
   const byEntity = new Map<string, FunnelEvent[]>();
   for (const e of events) {
     const key = `${e.level}:${e.meta_entity_id}`;
@@ -176,8 +260,8 @@ export async function getLatestFunnel(): Promise<FunnelData | null> {
   let account: FunnelEntity | null = null;
   const campaigns: FunnelEntity[] = [];
   for (const [key, group] of byEntity) {
-    if (key.startsWith("account:")) {
-      account = buildEntity(group, null);
+    if (key === `account:${accountId}`) {
+      account = buildEntity(group, accountSpend);
     } else if (key.startsWith("campaign:")) {
       const metaId = group[0]?.meta_entity_id ?? "";
       campaigns.push(buildEntity(group, spendByEntity.get(metaId) ?? null));
@@ -190,6 +274,7 @@ export async function getLatestFunnel(): Promise<FunnelData | null> {
     analysis,
     clientName: clientRes.data?.name ?? "—",
     currency: clientRes.data?.currency ?? "BRL",
+    accountId,
     account,
     campaigns,
   };
