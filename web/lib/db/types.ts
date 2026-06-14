@@ -695,6 +695,84 @@ export type Database = {
           },
         ]
       }
+      funnel_events: {
+        Row: {
+          analysis_id: string
+          captured_at: string
+          client_id: string
+          cost_per_event_cents: number | null
+          count: number
+          cvr_from_prev: number | null
+          cvr_from_top: number | null
+          date_start: string | null
+          date_stop: string | null
+          entity_name: string | null
+          event_type: string
+          id: string
+          level: string
+          meta_entity_id: string
+          objective: string | null
+          raw: Json | null
+          step_order: number
+          value_cents: number | null
+        }
+        Insert: {
+          analysis_id: string
+          captured_at?: string
+          client_id: string
+          cost_per_event_cents?: number | null
+          count?: number
+          cvr_from_prev?: number | null
+          cvr_from_top?: number | null
+          date_start?: string | null
+          date_stop?: string | null
+          entity_name?: string | null
+          event_type: string
+          id?: string
+          level: string
+          meta_entity_id: string
+          objective?: string | null
+          raw?: Json | null
+          step_order: number
+          value_cents?: number | null
+        }
+        Update: {
+          analysis_id?: string
+          captured_at?: string
+          client_id?: string
+          cost_per_event_cents?: number | null
+          count?: number
+          cvr_from_prev?: number | null
+          cvr_from_top?: number | null
+          date_start?: string | null
+          date_stop?: string | null
+          entity_name?: string | null
+          event_type?: string
+          id?: string
+          level?: string
+          meta_entity_id?: string
+          objective?: string | null
+          raw?: Json | null
+          step_order?: number
+          value_cents?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "funnel_events_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "analyses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funnel_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       generated_images: {
         Row: {
           aspect: string | null
@@ -1480,6 +1558,7 @@ export type OperationLog = Row<"operation_logs">
 export type Analysis = Row<"analyses">
 export type MetricSnapshot = Row<"metric_snapshots">
 export type AnalysisFinding = Row<"analysis_findings">
+export type FunnelEvent = Row<"funnel_events">
 export type DailySummary = Row<"daily_summaries">
 export type AgentEvent = Row<"agent_events">
 export type AgentJob = Row<"agent_jobs">
