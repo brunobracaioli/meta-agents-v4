@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { FunnelData, FunnelEntity, FunnelStep } from "@/lib/services/funnel";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import type { FunnelClientOption, FunnelData, FunnelEntity } from "@/lib/services/funnel";
 import { HudPanel } from "@/components/live/hud/hud-panel";
 import { useAnimatedNumber } from "@/components/live/hud/animated-counter";
 import { formatCents, formatNumber, formatPercent, formatRatio, VERDICT_STYLES } from "@/lib/format";
@@ -261,9 +262,83 @@ function RailItem({
 }
 
 // ---------------------------------------------------------------------------
+// Client / account selectors (drive ?client=&account= → server refetch)
+// ---------------------------------------------------------------------------
+const SELECT_CLASSES =
+  "hud-clip-sm border border-cyan-300/25 bg-[#0a0f1f] px-3 py-2 font-hud text-[11px] uppercase tracking-[0.1em] text-white/85 outline-none transition focus:border-cyan-200/50 disabled:opacity-50";
+
+function FunnelSelectors({
+  clients,
+  selectedClientId,
+  selectedAccountId,
+}: {
+  clients: FunnelClientOption[];
+  selectedClientId: string;
+  selectedAccountId: string;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const current = clients.find((c) => c.clientId === selectedClientId) ?? clients[0];
+
+  function go(clientId: string, accountId: string) {
+    startTransition(() => {
+      router.push(
+        `/dashboard/funnel?client=${encodeURIComponent(clientId)}&account=${encodeURIComponent(accountId)}`,
+      );
+    });
+  }
+
+  return (
+    <div className={`flex flex-wrap items-center gap-2 transition-opacity ${pending ? "opacity-50" : ""}`}>
+      <span className="font-hud text-[9px] uppercase tracking-[0.2em] text-cyan-100/40">Cliente</span>
+      <select
+        aria-label="Cliente"
+        className={SELECT_CLASSES}
+        value={selectedClientId}
+        disabled={pending || clients.length <= 1}
+        onChange={(e) => {
+          const c = clients.find((x) => x.clientId === e.target.value);
+          go(e.target.value, c?.accounts[0]?.accountId ?? "");
+        }}
+      >
+        {clients.map((c) => (
+          <option key={c.clientId} value={c.clientId}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+      <span className="font-hud text-[9px] uppercase tracking-[0.2em] text-cyan-100/40">Conta</span>
+      <select
+        aria-label="Conta de anúncios"
+        className={SELECT_CLASSES}
+        value={selectedAccountId}
+        disabled={pending || (current?.accounts.length ?? 0) <= 1}
+        onChange={(e) => go(selectedClientId, e.target.value)}
+      >
+        {current?.accounts.map((a) => (
+          <option key={a.accountId} value={a.accountId}>
+            {a.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Top-level view
 // ---------------------------------------------------------------------------
-export function FunnelView({ data }: { data: FunnelData }) {
+export function FunnelView({
+  data,
+  clients,
+  selectedClientId,
+  selectedAccountId,
+}: {
+  data: FunnelData;
+  clients: FunnelClientOption[];
+  selectedClientId: string;
+  selectedAccountId: string;
+}) {
   const { analysis, account, campaigns, currency, clientName } = data;
 
   const entities = useMemo(
@@ -299,13 +374,20 @@ export function FunnelView({ data }: { data: FunnelData }) {
             {entities.length === 1 ? "" : "s"}
           </p>
         </div>
-        <span
-          className={`hud-clip-sm border px-2.5 py-1 font-hud text-[10px] uppercase tracking-[0.18em] ${
-            VERDICT_STYLES[verdict] ?? VERDICT_STYLES.no_data
-          }`}
-        >
-          {verdict}
-        </span>
+        <div className="flex flex-wrap items-center gap-3">
+          <FunnelSelectors
+            clients={clients}
+            selectedClientId={selectedClientId}
+            selectedAccountId={selectedAccountId}
+          />
+          <span
+            className={`hud-clip-sm border px-2.5 py-1 font-hud text-[10px] uppercase tracking-[0.18em] ${
+              VERDICT_STYLES[verdict] ?? VERDICT_STYLES.no_data
+            }`}
+          >
+            {verdict}
+          </span>
+        </div>
       </div>
 
       <KpiStrip e={selected} currency={currency} />
