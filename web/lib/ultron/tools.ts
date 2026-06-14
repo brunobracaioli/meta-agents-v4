@@ -53,7 +53,7 @@ const ACTIVATE_SKILL_BY_SLUG: Record<string, string> = {
   brunobracaioli: "activate-campaign-brunobracaioli",
 };
 const ANALYZE_SKILL_BY_SLUG: Record<string, string> = {
-  brunobracaioli: "analytic-traffic-brunobracaioli-campaign",
+  brunobracaioli: "funnel-analytics-brunobracaioli-campaign",
 };
 const LANDING_SKILL_BY_SLUG: Record<string, string> = {
   brunobracaioli: "create-landing-page-brunobracaioli",

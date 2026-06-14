@@ -5,9 +5,10 @@
 # Daily traffic campaign for cliente brunobracaioli at 10:00 BRT.
 0 10 * * * /app/scripts/run-skill.sh create-traffic-brunobracaioli-campaign
 
-# Daily performance analysis for cliente brunobracaioli at 08:00 BRT (read-only).
-# Covers ALL active campaigns (any objective) — see docs/adr/0024-daily-all-campaigns-analysis.md.
-0 8 * * * /app/scripts/run-skill.sh analytic-traffic-brunobracaioli-campaign
+# Daily performance + funnel analysis for cliente brunobracaioli at 08:00 BRT (read-only).
+# Covers ALL active campaigns (any objective), full conversion funnel via mcp-meta-ads-b2tech —
+# see docs/adr/0025-meta-ads-funnel-analytics-b2tech.md (replaces analytic-traffic-..., ADR 0024).
+0 8 * * * /app/scripts/run-skill.sh funnel-analytics-brunobracaioli-campaign
 
 # Daily AI summary for cliente brunobracaioli at 23:30 BRT (consolida o dia p/ o Ultron).
 30 23 * * * /app/scripts/run-skill.sh daily-summary-brunobracaioli
