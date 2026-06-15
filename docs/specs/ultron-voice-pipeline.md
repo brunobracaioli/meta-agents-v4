@@ -1,6 +1,8 @@
 # Spec — Pipeline de voz do Ultron
 
-> Status: em implementação (2026-05-30). Spec mãe: [web-dashboard-ultron.md](./web-dashboard-ultron.md).
+> Status: **superseded** por [SPEC-016-ultron-voice-chat.md](./SPEC-016-ultron-voice-chat.md)
+> (as-built 2026-06-10 — tuning de VAD, modelo do chat e layout atualizados lá).
+> Texto abaixo preservado como histórico (2026-05-30). Spec mãe: [web-dashboard-ultron.md](./web-dashboard-ultron.md).
 
 ## Objetivo
 

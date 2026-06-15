@@ -1,0 +1,37 @@
+{
+  "skill": "analytic-traffic-brunobracaioli-campaign",
+  "client": "brunobracaioli",
+  "date": "2026-06-10",
+  "verified": true,
+  "window": {"window": "last_7d (2026-06-03..2026-06-09)", "compare": "previous_period (2026-05-27..2026-06-02)"},
+  "analysis_id": "6c05c907-7572-4615-a0e3-aa8cc6669880",
+  "overall_verdict": "healthy",
+  "entities_analyzed": 20,
+  "active_entities": 6,
+  "snapshots": [
+    {"level": "campaign", "meta_entity_id": "120247558914720505", "name": "[TRF][CCA][2026-06-07][Tráfego CBO][ELES-TRABALHAM-POR-VOCE]", "spend_cents": 3874, "ctr_link": 10.7, "cpc_cents": 13, "cplpv_cents": 16},
+    {"level": "campaign", "meta_entity_id": "120247580099370505", "name": "VENDAS-INGRESSOS-IMERSÃO-LP-CRIATIVOS-FULL", "spend_cents": 6718, "ctr_link": 4.65, "cpc_cents": 140, "cplpv_cents": 224, "purchases": 1},
+    {"level": "campaign", "meta_entity_id": "120247579966890505", "name": "VENDAS-INGRESSOS-IMERSÃO-LP", "spend_cents": 4577, "ctr_link": 5.41, "cpc_cents": 131, "cplpv_cents": 241, "purchases": 2},
+    {"level": "campaign", "meta_entity_id": "120247659552160505", "name": "Engajamento-Lives", "spend_cents": 2894, "ctr_link": 0.88, "cpc_cents": 181, "cplpv_cents": null},
+    {"level": "campaign", "meta_entity_id": "120247763001990505", "name": "[cbo][vendas][imersão][multicriativos]", "spend_cents": 1612, "ctr_link": 3.55, "cpc_cents": 147, "cplpv_cents": 322},
+    {"level": "campaign", "meta_entity_id": "120247762100890505", "name": "[cbo][vendas][imersão]", "spend_cents": 1761, "ctr_link": 4.83, "cpc_cents": 135, "cplpv_cents": 440}
+  ],
+  "findings": [
+    {"severity": "info", "metric_focus": "cplpv", "diagnosis": "CCA: CTR 10,7% + CPC R$0,13 + CPM R$13,41 + CPLPV R$0,16 — criativo e leilão eficientes; limitado pelo budget R$20/d", "recommendation_type": "scale", "is_significant": true},
+    {"severity": "info", "metric_focus": "cpa", "diagnosis": "VENDAS-LP: 2 compras CPA R$22,89; CPM alto + CTR saudável = custo no leilão; abaixo dos pisos", "recommendation_type": "observe", "is_significant": false},
+    {"severity": "low", "metric_focus": "cpm", "diagnosis": "CRIATIVOS-FULL: CPM R$65 apesar de CTR 4,65%; CPA R$67,18 = 3x a irmã; gargalo checkout→compra", "recommendation_type": "reallocate_budget", "is_significant": false},
+    {"severity": "medium", "metric_focus": "budget", "diagnosis": "[cbo][vendas][imersão] x2 em aprendizado; budget R$100/d excede teto R$50/d; risco de sobreposição de leilão", "recommendation_type": "observe", "is_significant": false},
+    {"severity": "info", "metric_focus": "cpm", "diagnosis": "Engajamento-Lives: CTR link baixo não é defeito p/ objetivo engajamento; CPM R$16 barato", "recommendation_type": "none", "is_significant": false},
+    {"severity": "info", "metric_focus": "data_quality", "diagnosis": "Rankings de leilão, benchmark, trend e anomaly indisponíveis; LPV só no nível campaign", "recommendation_type": "none", "is_significant": false}
+  ],
+  "decisions": [
+    "window=last_7d (2026-06-03..2026-06-09), compare=2026-05-27..2026-06-02",
+    "triggered_by=manual (pedido do operador, não cron)",
+    "LPV extraído de results.all_conversion_types (nível campaign); ad_set/ad usam link_clicks como proxy",
+    "ctr persistido = CTR de link (link_clicks/impressões); ctr_all no raw",
+    "results/cost_per_result: compras p/ campanhas OUTCOME_SALES, LPV p/ tráfego",
+    "Telegram pulado (TELEGRAM_CHAT_ID ausente no .env.local) — log-only",
+    "overall_verdict=healthy: CCA excelente e significativa; vendas convertendo; demais em aprendizado"
+  ],
+  "errors": []
+}

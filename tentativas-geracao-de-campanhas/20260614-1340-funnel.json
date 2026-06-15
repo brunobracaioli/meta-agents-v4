@@ -1,0 +1,35 @@
+{
+  "skill": "funnel-analytics-brunobracaioli-campaign",
+  "client": "brunobracaioli",
+  "date": "2026-06-14",
+  "verified": true,
+  "connector": "mcp-meta-ads-b2tech",
+  "window": {"window": "last_7d", "start": "2026-06-07", "stop": "2026-06-13", "compare": "previous_period", "compare_start": "2026-05-31", "compare_stop": "2026-06-06"},
+  "analysis_id": "fac129a0-1c64-4879-91fe-440e0b68dd50",
+  "overall_verdict": "watch",
+  "entities_analyzed": 34,
+  "active_entities": 10,
+  "account_funnel": {"impression": 37853, "link_click": 1663, "landing_page_view": 756, "view_content": 751, "add_to_cart": 247, "initiate_checkout": 199, "purchase": 19, "revenue_cents": 272333, "roas": 1.5538, "cpa_cents": 9225, "cpm_cents": 4630, "ctr": 0.0535},
+  "cvr_steps_pct": {"impr_to_link": 4.4, "link_to_lpv": 45.5, "lpv_to_vc": 99.3, "vc_to_atc": 32.9, "atc_to_ic": 80.6, "ic_to_purchase": 9.5},
+  "persisted": {"funnel_events": 245, "funnel_entities": 35, "metric_snapshots": 34, "analysis_findings": 4},
+  "findings": [
+    {"severity": "high", "metric_focus": "funnel_checkout", "recommendation_type": "fix_landing_page", "is_significant": true, "diagnosis": "Funil saudavel ate IC (ATC->IC 80,6%), mas IC->Purchase so 9,5% -> gargalo no checkout, nao criativo/audiencia"},
+    {"severity": "medium", "metric_focus": "roas_reallocate", "recommendation_type": "reallocate_budget", "is_significant": true, "diagnosis": "CRIATIVOS-FULL ROAS 0,08 vs VENDAS-LP ROAS 3,85 (gasto comparavel)"},
+    {"severity": "medium", "metric_focus": "scale_winner", "recommendation_type": "scale", "is_significant": true, "diagnosis": "interface-3 ROAS 5,68 e 120626-Copia ROAS 7,37, CPA << media -> escalar ate teto R$50"},
+    {"severity": "medium", "metric_focus": "auction_overlap", "recommendation_type": "adjust_audience", "is_significant": false, "diagnosis": "~15+ campanhas irmas quase identicas -> sobreposicao de leilao + CPM R$46"}
+  ],
+  "objectives": ["OUTCOME_ENGAGEMENT", "OUTCOME_SALES", "OUTCOME_TRAFFIC"],
+  "decisions": [
+    "window=last_7d, compare=previous_period",
+    "iterei campanhas com gasto via level=campaign na CONTA -> arquivo tool-results -> jq/python (object_id=<campaign_id> retorna #200; run_insights_report deu timeout)",
+    "persistencia via PostgREST (245 funnel_events + 34 metric_snapshots) por ser volume alto; findings via MCP execute_sql",
+    "account-level vai em funnel_events (level=account); analysis_findings de conta usam level=null (check da tabela so aceita campaign/ad_set/ad)",
+    "reach/frequency/cost_per_action_type por campanha ausentes no arquivo (field set reduzido) -> cost_per_event via spend/count; account-level tem dados completos"
+  ],
+  "limitations": [
+    "object_id=<campaign_id> level=campaign -> Meta #200 (token le no no conta, nao no no campanha); usar level=campaign na conta + arquivo",
+    "run_insights_report (async) deu timeout nesta janela; fallback get_insights account-scope funcionou",
+    "triggered_by=manual (smoke test); no cron sera triggered_by=cron"
+  ],
+  "errors": []
+}

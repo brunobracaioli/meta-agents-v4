@@ -1,0 +1,22 @@
+{
+  "skill": "publish-landing-page-brunobracaioli",
+  "client": "brunobracaioli",
+  "date": "2026-06-09",
+  "verified": true,
+  "landing_page_id": "d34c9e9a-5306-40b5-8bb2-7480329f5c76",
+  "subdomain": "imersao-agencia",
+  "url": "https://imersao-agencia.b2tech.io",
+  "pages_dev_url": "https://b2tech-imersao-agencia.pages.dev",
+  "cloudflare_project": "b2tech-imersao-agencia",
+  "repo_path": "landing-pages/imersao-agencia",
+  "sections_published": 17,
+  "deploy": {
+    "deployed": true,
+    "ssl": "active",
+    "deployment_id": "7f9c87f8"
+  },
+  "noindex": true,
+  "source": "supabase-draft",
+  "notes": "republish com lp-render novo: roteador ?hmt= (Hotmart affiliate) + offer secondaryCta recriado; cache .next stale movido pra .next.stale-20260609",
+  "errors": []
+}
