@@ -56,3 +56,13 @@ add_to_cart(5) → initiate_checkout(6) → purchase(7)`.
 - Token b2tech inválido → `overall_verdict='error'`, manifest `verified:false`, sair.
 - `action_values`/`purchase_roas` ausentes (objetivo não-vendas) → `value_cents=null`,
   ROAS null; funil para no evento mais fundo disponível.
+
+## Dashboard (funil visual)
+- Página `web/app/(app)/dashboard/funnel/page.tsx` → `web/components/funnel/funnel-view.tsx`,
+  alimentada por `getLatestFunnel()` em `web/lib/services/funnel.ts` (read model `funnel_events`).
+- **Filtro "só com venda"**: toggle client-side (sem refetch) que subseta os dados já
+  carregados para campanhas com `purchases > 0`. Quando ativo: (a) a lista de entidades
+  mostra só essas campanhas e (b) a entidade "Conta (todas)" é **re-agregada** a partir
+  delas (`aggregateAccount`) — soma de cada etapa do funil, `spend`/`revenue` somados e
+  `cvr_*`/`cost_per_event`/ROAS recalculados — refletindo no funil e no KPI strip.
+  O botão é desabilitado quando nenhuma campanha teve venda na análise.
