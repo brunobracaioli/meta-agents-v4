@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { FunnelClientOption, FunnelData, FunnelEntity } from "@/lib/services/funnel";
+import type { FunnelClientOption, FunnelData, FunnelEntity, FunnelStep } from "@/lib/services/funnel";
 import { HudPanel } from "@/components/live/hud/hud-panel";
 import { useAnimatedNumber } from "@/components/live/hud/animated-counter";
 import { formatCents, formatNumber, formatPercent, formatRatio, VERDICT_STYLES } from "@/lib/format";
@@ -61,6 +61,60 @@ function cvrTone(pct: number, isLeak: boolean): string {
 
 function entityKey(e: FunnelEntity): string {
   return `${e.level}:${e.meta_entity_id}`;
+}
+
+// Re-aggregate an account-level entity from a subset of campaigns (used by the
+// "só com venda" filter). Sums each step across the given campaigns, following
+// the real account's step order/template, and re-derives the headline numbers.
+function aggregateAccount(template: FunnelEntity, campaigns: FunnelEntity[]): FunnelEntity {
+  const countByType = new Map<string, number>();
+  const valueByType = new Map<string, number>();
+  const hasValue = new Set<string>();
+  for (const c of campaigns) {
+    for (const s of c.steps) {
+      countByType.set(s.event_type, (countByType.get(s.event_type) ?? 0) + s.count);
+      if (s.value_cents != null) {
+        valueByType.set(s.event_type, (valueByType.get(s.event_type) ?? 0) + s.value_cents);
+        hasValue.add(s.event_type);
+      }
+    }
+  }
+  const spend = campaigns.reduce((sum, c) => sum + (c.spend_cents ?? 0), 0) || null;
+
+  const topType = template.steps[0]?.event_type;
+  const topCount = topType ? countByType.get(topType) ?? 0 : 0;
+
+  const steps: FunnelStep[] = template.steps.map((t, i) => {
+    const count = countByType.get(t.event_type) ?? 0;
+    const prevType = template.steps[i - 1]?.event_type;
+    const prevCount = prevType ? countByType.get(prevType) ?? 0 : null;
+    return {
+      step_order: t.step_order,
+      event_type: t.event_type,
+      count,
+      value_cents: hasValue.has(t.event_type) ? valueByType.get(t.event_type) ?? null : null,
+      cost_per_event_cents: spend != null && count > 0 ? Math.round(spend / count) : null,
+      cvr_from_prev: prevCount != null && prevCount > 0 ? count / prevCount : null,
+      cvr_from_top: topCount > 0 ? count / topCount : null,
+    };
+  });
+
+  const purchaseStep = steps.find((s) => s.event_type === "purchase");
+  const revenue = purchaseStep?.value_cents ?? null;
+  const roas = revenue != null && spend != null && spend > 0 ? revenue / spend : null;
+
+  return {
+    level: "account",
+    meta_entity_id: template.meta_entity_id,
+    entity_name: template.entity_name,
+    objective: template.objective,
+    steps,
+    impressions: countByType.get("impression") ?? 0,
+    purchases: purchaseStep?.count ?? 0,
+    spend_cents: spend,
+    revenue_cents: revenue,
+    roas,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -359,14 +413,28 @@ export function FunnelView({
 }) {
   const { analysis, account, campaigns, currency, clientName } = data;
 
+  // "Só com venda" filter: subsets the already-loaded data client-side (no
+  // refetch) to campaigns that had ≥1 purchase, and re-aggregates the account
+  // funnel from just those campaigns.
+  const [onlySales, setOnlySales] = useState(false);
+  const salesCampaigns = useMemo(() => campaigns.filter((c) => c.purchases > 0), [campaigns]);
+  const hasSales = salesCampaigns.length > 0;
+  const filtering = onlySales && hasSales;
+
+  const displayCampaigns = filtering ? salesCampaigns : campaigns;
+  const displayAccount = useMemo(
+    () => (filtering && account ? aggregateAccount(account, salesCampaigns) : account),
+    [filtering, account, salesCampaigns],
+  );
+
   const entities = useMemo(
-    () => (account ? [account, ...campaigns] : campaigns),
-    [account, campaigns],
+    () => (displayAccount ? [displayAccount, ...displayCampaigns] : displayCampaigns),
+    [displayAccount, displayCampaigns],
   );
   const [selectedKey, setSelectedKey] = useState(
-    account ? entityKey(account) : entities[0] ? entityKey(entities[0]) : "",
+    account ? entityKey(account) : campaigns[0] ? entityKey(campaigns[0]) : "",
   );
-  const selected = entities.find((e) => entityKey(e) === selectedKey) ?? entities[0];
+  const selected = entities.find((e) => entityKey(e) === selectedKey) ?? displayAccount ?? entities[0];
 
   if (!selected) {
     return <p className="text-sm text-white/50">Sem dados de funil para exibir.</p>;
@@ -398,6 +466,25 @@ export function FunnelView({
             selectedClientId={selectedClientId}
             selectedAccountId={selectedAccountId}
           />
+          <button
+            type="button"
+            onClick={() => setOnlySales((v) => !v)}
+            disabled={!hasSales}
+            aria-pressed={filtering}
+            title={
+              hasSales
+                ? "Mostrar só as campanhas que tiveram venda"
+                : "Nenhuma campanha com venda nesta análise"
+            }
+            className={`hud-clip-sm border px-3 py-2 font-hud text-[11px] uppercase tracking-[0.1em] transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              filtering
+                ? "border-emerald-300/50 bg-emerald-400/10 text-emerald-200 shadow-[0_0_18px_rgba(16,185,129,0.15)]"
+                : "border-cyan-300/25 bg-[#0a0f1f] text-white/70 hover:border-cyan-200/50"
+            }`}
+          >
+            {filtering ? "◉" : "○"} só com venda
+            {hasSales ? ` · ${salesCampaigns.length}` : ""}
+          </button>
           <span
             className={`hud-clip-sm border px-2.5 py-1 font-hud text-[10px] uppercase tracking-[0.18em] ${
               VERDICT_STYLES[verdict] ?? VERDICT_STYLES.no_data
@@ -413,7 +500,11 @@ export function FunnelView({
       <div className="grid gap-4 lg:grid-cols-[1.7fr_1fr]">
         <HudPanel
           index="01"
-          title={isAccount ? "Funil — conta (todas as campanhas)" : `Funil — ${selected.entity_name ?? "campanha"}`}
+          title={
+            isAccount
+              ? `Funil — conta (${filtering ? "campanhas com venda" : "todas as campanhas"})`
+              : `Funil — ${selected.entity_name ?? "campanha"}`
+          }
           className="hud-scan-host"
           actions={
             <span className="font-hud text-[10px] uppercase tracking-[0.18em] text-cyan-100/45">
@@ -424,20 +515,23 @@ export function FunnelView({
           <FunnelChart e={selected} currency={currency} />
         </HudPanel>
 
-        <HudPanel index="02" title="Entidades · ordenadas por investimento">
+        <HudPanel
+          index="02"
+          title={`Entidades · ordenadas por investimento${filtering ? " · com venda" : ""}`}
+        >
           <div className="max-h-[520px] space-y-1.5 overflow-y-auto pr-1">
-            {account && (
+            {displayAccount && (
               <RailItem
-                name="◆ Conta (todas)"
-                spend={account.spend_cents}
-                roas={account.roas}
-                purchases={account.purchases}
+                name={filtering ? "◆ Conta (com venda)" : "◆ Conta (todas)"}
+                spend={displayAccount.spend_cents}
+                roas={displayAccount.roas}
+                purchases={displayAccount.purchases}
                 currency={currency}
-                active={entityKey(account) === selectedKey}
-                onClick={() => setSelectedKey(entityKey(account))}
+                active={entityKey(displayAccount) === selectedKey}
+                onClick={() => setSelectedKey(entityKey(displayAccount))}
               />
             )}
-            {campaigns.map((c) => (
+            {displayCampaigns.map((c) => (
               <RailItem
                 key={entityKey(c)}
                 name={c.entity_name ?? c.meta_entity_id}
