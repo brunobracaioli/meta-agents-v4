@@ -49,6 +49,10 @@ const CAPTURE_SCREEN_TOOL: Anthropic.Tool = {
 const CREATE_SKILL_BY_SLUG: Record<string, string> = {
   brunobracaioli: "create-traffic-brunobracaioli-campaign",
 };
+// Campanha de VENDAS reusando os criativos "top vendas" (OUTCOME_SALES + pixel PURCHASE).
+const CREATE_SALES_SKILL_BY_SLUG: Record<string, string> = {
+  brunobracaioli: "create-sales-brunobracaioli-campaign",
+};
 const ACTIVATE_SKILL_BY_SLUG: Record<string, string> = {
   brunobracaioli: "activate-campaign-brunobracaioli",
 };
@@ -389,6 +393,76 @@ const tools: Record<string, ToolDef> = {
         client_slug: slug,
         queued_at: new Date().toISOString(),
         message: "Pedido de criação enfileirado. Os agents começam em até um minuto; a campanha vai nascer pausada.",
+      };
+    },
+  },
+
+  request_sales_campaign_creation: {
+    spec: {
+      name: "request_sales_campaign_creation",
+      description:
+        "Enfileira a CRIAÇÃO de uma campanha de VENDAS (otimizada para compra) que REUSA os criativos que mais venderam da conta — não cria arte nem copy nova, reaproveita os top performers. A campanha nasce PAUSED (sem gasto). Use quando o operador pedir para 'criar campanha de vendas com os criativos que mais performaram / venderam / top criativos'. FLUXO OBRIGATÓRIO: chame primeiro com confirm=false para obter os detalhes, leia-os ao operador e peça confirmação; só chame com confirm=true após um 'sim' explícito.",
+      input_schema: {
+        type: "object",
+        properties: {
+          client_slug: { type: "string", description: "slug do cliente, ex.: brunobracaioli" },
+          confirm: {
+            type: "boolean",
+            description: "false = apenas devolve os detalhes para confirmar; true = enfileira de fato (use só após o operador confirmar)",
+          },
+        },
+        required: ["client_slug", "confirm"],
+      },
+    },
+    handler: async (input) => {
+      const slug = str(input, "client_slug");
+      const confirm = input.confirm === true;
+      if (!slug) return { error: "client_slug é obrigatório" };
+      const client = await resolveClientId(slug);
+      if (!client) return { error: `cliente '${slug}' não encontrado` };
+      const skill = CREATE_SALES_SKILL_BY_SLUG[slug];
+      if (!skill) return { error: `cliente '${slug}' não está habilitado para criação automática de campanha de vendas` };
+
+      if (!confirm) {
+        return {
+          confirmation_required: true,
+          action: "criar campanha de vendas reusando os top criativos",
+          client: client.name,
+          client_slug: slug,
+          daily_budget_cents: client.daily_budget_cap_cents,
+          currency: client.currency,
+          note: "Campanha de vendas (otimizada por compra) reaproveitando os criativos que mais venderam nos últimos 30 dias. Nasce PAUSED (gasto zero até ser ativada). Confirme com o operador antes de chamar com confirm=true.",
+        };
+      }
+
+      const { allowed } = await enforceLimit(rateLimiters.campaignCreation(), slug, "sales-campaign-creation");
+      if (!allowed) return { error: "muitos pedidos de criação para este cliente agora; tente de novo daqui a pouco" };
+
+      const { data, error } = await db()
+        .from("agent_jobs")
+        .insert({
+          client_id: client.id,
+          skill,
+          kind: "create_sales",
+          args: { "budget-cents": client.daily_budget_cap_cents },
+          requested_by: "ultron",
+        })
+        .select("id")
+        .single();
+      if (error) {
+        if (isUniqueViolation(error)) {
+          return { enqueued: false, reason: "já existe um pedido de criação de campanha de vendas em andamento para este cliente" };
+        }
+        throw error;
+      }
+      return {
+        enqueued: true,
+        job_id: data.id,
+        skill,
+        kind: "create_sales",
+        client_slug: slug,
+        queued_at: new Date().toISOString(),
+        message: "Pedido de criação de campanha de vendas enfileirado. Os agents começam em até um minuto; a campanha vai nascer pausada, reusando os top criativos.",
       };
     },
   },
