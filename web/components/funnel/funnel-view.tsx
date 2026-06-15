@@ -23,8 +23,8 @@ const STEP_META: Record<string, { label: string; tag: string }> = {
 // Perceptual width (power scale) so the funnel narrows visibly without the
 // bottom stages collapsing to nothing — the exact figures live in the labels.
 function barWidth(count: number, top: number): number {
-  if (top <= 0) return 8;
-  return Math.max(8, Math.min(100, Math.pow(count / top, 0.42) * 100));
+  if (top <= 0) return 46;
+  return Math.max(46, Math.min(100, Math.pow(count / top, 0.34) * 100));
 }
 
 function roasTone(roas: number | null): string {
