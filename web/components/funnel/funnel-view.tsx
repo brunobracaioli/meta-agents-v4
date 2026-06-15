@@ -20,11 +20,29 @@ const STEP_META: Record<string, { label: string; tag: string }> = {
   purchase: { label: "Compra", tag: "BUY" },
 };
 
-// Perceptual width (power scale) so the funnel narrows visibly without the
-// bottom stages collapsing to nothing — the exact figures live in the labels.
-function barWidth(count: number, top: number): number {
-  if (top <= 0) return 46;
-  return Math.max(46, Math.min(100, Math.pow(count / top, 0.34) * 100));
+// Funnel silhouette: the bar width tapers monotonically from the top stage
+// (widest) down to the last stage (narrowest), so it always reads as a funnel
+// even when the real drop-off is extreme (e.g. 45k impressions → 22 purchases).
+// Each width blends the stage's rank — which guarantees the taper — with a light
+// perceptual nudge for its real magnitude; the exact figures live in the labels.
+const FUNNEL_MAX_WIDTH = 100;
+const FUNNEL_MIN_WIDTH = 46;
+const FUNNEL_RANK_WEIGHT = 0.7;
+
+function computeFunnelWidths(counts: number[]): number[] {
+  const n = counts.length;
+  if (n === 0) return [];
+  const top = counts[0] ?? 0;
+  let prev = FUNNEL_MAX_WIDTH;
+  return counts.map((count, i) => {
+    const rank = n > 1 ? 1 - i / (n - 1) : 1; // 1 at the top stage → 0 at the last
+    const prop = top > 0 ? Math.pow(Math.max(count, 0) / top, 0.34) : 0; // [0,1]
+    const blend = FUNNEL_RANK_WEIGHT * rank + (1 - FUNNEL_RANK_WEIGHT) * prop;
+    // Clamp to the stage above so the silhouette never widens going down.
+    const width = Math.min(prev, FUNNEL_MIN_WIDTH + (FUNNEL_MAX_WIDTH - FUNNEL_MIN_WIDTH) * blend);
+    prev = width;
+    return width;
+  });
 }
 
 function roasTone(roas: number | null): string {
@@ -106,7 +124,7 @@ function KpiStrip({ e, currency }: { e: FunnelEntity; currency: string }) {
 // The funnel itself
 // ---------------------------------------------------------------------------
 function FunnelChart({ e, currency }: { e: FunnelEntity; currency: string }) {
-  const top = e.steps[0]?.count ?? 0;
+  const widths = useMemo(() => computeFunnelWidths(e.steps.map((s) => s.count)), [e.steps]);
 
   // Worst conversion between consecutive stages = the leak (only flag real drops).
   const leakIndex = useMemo(() => {
@@ -129,7 +147,7 @@ function FunnelChart({ e, currency }: { e: FunnelEntity; currency: string }) {
     <div className="space-y-0">
       {e.steps.map((s, i) => {
         const meta = STEP_META[s.event_type] ?? { label: s.event_type, tag: "" };
-        const width = barWidth(s.count, top);
+        const width = widths[i] ?? FUNNEL_MIN_WIDTH;
         const isPurchase = s.event_type === "purchase";
         const isLeak = i === leakIndex;
         const cvrPct = s.cvr_from_prev != null ? s.cvr_from_prev * 100 : null;
