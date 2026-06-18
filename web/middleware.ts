@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/session";
+import { createSupabaseServerClient, type CookieToSet } from "@/lib/auth/supabase";
 
 // Routes that must NOT require a session.
 const PUBLIC_API = ["/api/auth/login"];
@@ -68,15 +69,36 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
   // The preview shows draft (unpublished) content, so it requires a session too.
   const isProtected = pathname.startsWith("/dashboard") || isPreview || (isApi && !isPublicApi);
 
-  // Auth gate for protected routes.
+  // Auth gate for protected routes. AUTH_MODE=supabase verifies the per-operator session
+  // (ADR 0026) and may refresh tokens — those refreshed cookies are collected here and
+  // applied to whatever response we return. Default "password" keeps the legacy jose gate.
+  const authMode = process.env.AUTH_MODE === "supabase" ? "supabase" : "password";
+  const pendingCookies: CookieToSet[] = [];
+
   if (isProtected) {
-    const token = req.cookies.get(SESSION_COOKIE)?.value;
-    const ok = await verifySessionToken(token, process.env.AUTH_SECRET ?? "");
+    let ok: boolean;
+    if (authMode === "supabase") {
+      const supabase = createSupabaseServerClient({
+        getAll: () => req.cookies.getAll().map(({ name, value }) => ({ name, value })),
+        setAll: (cookies) => {
+          for (const ck of cookies) {
+            req.cookies.set(ck.name, ck.value);
+            pendingCookies.push(ck);
+          }
+        },
+      });
+      const { data } = await supabase.auth.getUser();
+      ok = Boolean(data.user);
+    } else {
+      const token = req.cookies.get(SESSION_COOKIE)?.value;
+      ok = await verifySessionToken(token, process.env.AUTH_SECRET ?? "");
+    }
     if (!ok) {
-      if (isApi) {
-        return applyStaticHeaders(NextResponse.json({ error: "unauthorized" }, { status: 401 }), csp, isProd, isPreview);
-      }
-      return applyStaticHeaders(NextResponse.redirect(new URL("/login", req.url)), csp, isProd, isPreview);
+      const unauth = isApi
+        ? NextResponse.json({ error: "unauthorized" }, { status: 401 })
+        : NextResponse.redirect(new URL("/login", req.url));
+      for (const ck of pendingCookies) unauth.cookies.set({ name: ck.name, value: ck.value, ...ck.options });
+      return applyStaticHeaders(unauth, csp, isProd, isPreview);
     }
   }
 
@@ -88,6 +110,7 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
     requestHeaders.set("Content-Security-Policy", csp);
   }
   const res = NextResponse.next({ request: { headers: requestHeaders } });
+  for (const ck of pendingCookies) res.cookies.set({ name: ck.name, value: ck.value, ...ck.options });
   return applyStaticHeaders(res, csp, isProd, isPreview);
 }
 
