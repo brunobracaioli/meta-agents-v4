@@ -44,6 +44,10 @@
       "Glob",
       "Grep",
       "Read(./**)",
+
+      "WebFetch",
+      "WebSearch",
+
       "Edit(./src/**)",
       "Edit(./tests/**)",
       "Edit(./docs/**)",
@@ -83,7 +87,26 @@
       "mcp__meta-ads-mcp__ads_create_ad",
       "mcp__meta-ads-mcp__ads_catalog_create",
       "mcp__meta-ads-mcp__ads_activate_entity",
-      "mcp__meta-ads-mcp__ads_update_entity"
+      "mcp__meta-ads-mcp__ads_update_entity",
+
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__meta_token_status",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__list_ad_accounts",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__list_campaigns",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__list_adsets",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__list_ads",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__list_creatives",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__get_insights",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__run_insights_report",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__create_campaign",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__create_adset",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__create_creative",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__create_ad",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__update_campaign",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__update_adset",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__update_ad",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__pause_campaign",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__pause_adset",
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__pause_ad"
     ],
 
     "deny": []
@@ -91,7 +114,7 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Write|mcp__.+__ads_create_campaign|mcp__.+__execute_sql",
+        "matcher": "Write|mcp__.+__ads_create_campaign|mcp__.+__create_campaign|mcp__.+__execute_sql",
         "hooks": [
           {
             "type": "command",
@@ -102,7 +125,16 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Task|Agent|Skill|WebFetch|WebSearch|mcp__.+__ads_.+|mcp__.+__execute_sql|mcp__.+__apply_migration",
+        "matcher": "WebFetch|WebSearch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/enforce-research-allowlist.py\""
+          }
+        ]
+      },
+      {
+        "matcher": "Task|Agent|Skill|WebFetch|WebSearch|mcp__.+__ads_.+|mcp__.+__(create|update|pause|copy)_(campaign|adset|ad|creative)|mcp__.+__get_insights|mcp__.+__run_insights_report|mcp__.+__list_(campaigns|adsets|ads|creatives)|mcp__.+__execute_sql|mcp__.+__apply_migration",
         "hooks": [
           {
             "type": "command",

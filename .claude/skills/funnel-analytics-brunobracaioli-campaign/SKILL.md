@@ -1,8 +1,8 @@
 ---
 name: funnel-analytics-brunobracaioli-campaign
-description: 'Análise diária 100% autônoma e headless da performance de TODAS as campanhas ativas Meta Ads do cliente brunobracaioli (qualquer objetivo) usando o connector mcp-meta-ads-b2tech (read-only), que entrega o FUNIL DE CONVERSÃO COMPLETO (impression → link_click → landing_page_view → view_content → add_to_cart → initiate_checkout → purchase) com receita (action_values) e ROAS (purchase_roas). Extrai o funil por entidade, diagnostica cruzando ≥2 métricas (nunca métrica isolada) ancorado no north-star de cada objetivo, e PERSISTE no Supabase: analyses + metric_snapshots + analysis_findings (ADR 0004) + o read model funnel_events (ADR 0025) que alimenta o funil de eventos visual no dashboard. NÃO altera NADA na conta Meta. Substitui a analytic-traffic-brunobracaioli-campaign. Use quando pedirem "analisar performance/funil de brunobracaioli/CCA", ou via cron DIÁRIO (`claude -p --dangerously-skip-permissions ".claude/skills/funnel-analytics-brunobracaioli-campaign"`).'
+description: 'Análise diária 100% autônoma e headless da performance de TODAS as campanhas ativas Meta Ads do cliente brunobracaioli (qualquer objetivo) usando o connector MCP_META_ADS_B2_TECH (read-only), que entrega o FUNIL DE CONVERSÃO COMPLETO (impression → link_click → landing_page_view → view_content → add_to_cart → initiate_checkout → purchase) com receita (action_values) e ROAS (purchase_roas). Extrai o funil por entidade, diagnostica cruzando ≥2 métricas (nunca métrica isolada) ancorado no north-star de cada objetivo, e PERSISTE no Supabase: analyses + metric_snapshots + analysis_findings (ADR 0004) + o read model funnel_events (ADR 0025) que alimenta o funil de eventos visual no dashboard. NÃO altera NADA na conta Meta. Substitui a analytic-traffic-brunobracaioli-campaign. Use quando pedirem "analisar performance/funil de brunobracaioli/CCA", ou via cron DIÁRIO (`claude -p --dangerously-skip-permissions ".claude/skills/funnel-analytics-brunobracaioli-campaign"`).'
 argument-hint: "[window=last_7d] [compare=previous_period] [level=ad]"
-allowed-tools: Read, Bash, Glob, Write, mcp__claude_ai_mcp-meta-ads-b2tech__meta_token_status, mcp__claude_ai_mcp-meta-ads-b2tech__list_ad_accounts, mcp__claude_ai_mcp-meta-ads-b2tech__list_campaigns, mcp__claude_ai_mcp-meta-ads-b2tech__list_adsets, mcp__claude_ai_mcp-meta-ads-b2tech__list_ads, mcp__claude_ai_mcp-meta-ads-b2tech__list_creatives, mcp__claude_ai_mcp-meta-ads-b2tech__get_insights, mcp__claude_ai_mcp-meta-ads-b2tech__run_insights_report, mcp__supabase__execute_sql, mcp__supabase__list_tables, mcp__plugin_telegram_telegram__reply
+allowed-tools: Read, Bash, Glob, Write, mcp__claude_ai_MCP_META_ADS_B2_TECH__meta_token_status, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_ad_accounts, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_campaigns, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_adsets, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_ads, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_creatives, mcp__claude_ai_MCP_META_ADS_B2_TECH__get_insights, mcp__claude_ai_MCP_META_ADS_B2_TECH__run_insights_report, mcp__supabase__execute_sql, mcp__supabase__list_tables, mcp__plugin_telegram_telegram__reply
 ---
 
 # Skill: /funnel-analytics-brunobracaioli-campaign
@@ -10,7 +10,7 @@ allowed-tools: Read, Bash, Glob, Write, mcp__claude_ai_mcp-meta-ads-b2tech__meta
 Avalia, **de ponta a ponta e sem intervenção humana**, a performance de **TODAS as campanhas
 ativas** do cliente **brunobracaioli** no Meta Ads — qualquer objetivo (`OUTCOME_TRAFFIC`/
 `LINK_CLICKS`, `OUTCOME_SALES`, `OUTCOME_ENGAGEMENT`, ...). Diferença central para a skill
-anterior: lê via o connector **`mcp-meta-ads-b2tech`**, que entrega o **funil de conversão
+anterior: lê via o connector **`MCP_META_ADS_B2_TECH`**, que entrega o **funil de conversão
 completo** com valores limpos (`actions`, `action_values`, `purchase_roas`,
 `cost_per_action_type`) — o que o MCP oficial não consolidava.
 
@@ -243,7 +243,7 @@ Escrever `${TRY_DIR}/${STAMP}-funnel.json`:
   "client": "brunobracaioli",
   "date": "${DATE}",
   "verified": true,
-  "connector": "mcp-meta-ads-b2tech",
+  "connector": "MCP_META_ADS_B2_TECH",
   "window": {"window": "last_7d", "compare": "previous_period"},
   "analysis_id": "...",
   "overall_verdict": "no_data|healthy|watch|underperforming|learning|error",
@@ -311,6 +311,6 @@ nenhuma alteração feita na conta Meta. Funil + recomendações gravados no Sup
 ## 8. Pré-requisitos
 - Migration `20260614000001_add_funnel_events` aplicada (tabela `funnel_events`) + as tabelas da
   migration `add_meta_ads_performance_analysis` (`analyses`, `metric_snapshots`, `analysis_findings`).
-- Connector `mcp-meta-ads-b2tech` autenticado (token válido no Supabase) e MCP do Supabase autenticado.
+- Connector `MCP_META_ADS_B2_TECH` autenticado (token válido no Supabase) e MCP do Supabase autenticado.
 - Opcional: `TELEGRAM_CHAT_ID` no ambiente (`.env.local` / `fly secrets`).
 - Pasta `tentativas-geracao-de-campanhas/` (criada se faltar).

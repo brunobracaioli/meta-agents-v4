@@ -1,8 +1,8 @@
 ---
 name: analytic-traffic-brunobracaioli-campaign
-description: '[DEPRECATED 2026-06-14 → use funnel-analytics-brunobracaioli-campaign (ADR 0025): versão com FUNIL COMPLETO via mcp-meta-ads-b2tech. Mantida só para rollback.] Analisa de forma 100% autônoma e headless a performance de TODAS as campanhas ativas Meta Ads do cliente brunobracaioli (qualquer objetivo — tráfego, vendas, engajamento) — lê métricas via MCP da Meta (read-only), diagnostica cruzando métricas (nunca métrica isolada) com north-star por objetivo (CPLPV p/ tráfego, CPA p/ vendas, custo/engajamento p/ engajamento), e persiste análise + recomendações estruturadas no Supabase (analyses, metric_snapshots, analysis_findings) + manifest + Telegram. NÃO altera nada na conta Meta. Use quando pedirem "analisar performance das campanhas de brunobracaioli/CCA", ou quando disparada via cron DIÁRIO (`claude -p --dangerously-skip-permissions ".claude/skills/analytic-traffic-brunobracaioli-campaign"`).'
+description: '[DEPRECATED 2026-06-14 → use funnel-analytics-brunobracaioli-campaign (ADR 0025): versão com FUNIL COMPLETO via MCP_META_ADS_B2_TECH. Mantida só para rollback.] Analisa de forma 100% autônoma e headless a performance de TODAS as campanhas ativas Meta Ads do cliente brunobracaioli (qualquer objetivo — tráfego, vendas, engajamento) — lê métricas via MCP da Meta (read-only), diagnostica cruzando métricas (nunca métrica isolada) com north-star por objetivo (CPLPV p/ tráfego, CPA p/ vendas, custo/engajamento p/ engajamento), e persiste análise + recomendações estruturadas no Supabase (analyses, metric_snapshots, analysis_findings) + manifest + Telegram. NÃO altera nada na conta Meta. Use quando pedirem "analisar performance das campanhas de brunobracaioli/CCA", ou quando disparada via cron DIÁRIO (`claude -p --dangerously-skip-permissions ".claude/skills/analytic-traffic-brunobracaioli-campaign"`).'
 argument-hint: "[window=last_7d] [compare=previous_period] [level=ad]"
-allowed-tools: Read, Bash, Glob, Write, mcp__claude_ai_Meta_Ads_MCP__ads_get_ad_accounts, mcp__claude_ai_Meta_Ads_MCP__ads_get_ad_entities, mcp__claude_ai_Meta_Ads_MCP__ads_insights_performance_trend, mcp__claude_ai_Meta_Ads_MCP__ads_insights_anomaly_signal, mcp__claude_ai_Meta_Ads_MCP__ads_insights_auction_ranking_benchmarks, mcp__claude_ai_Meta_Ads_MCP__ads_insights_industry_benchmark, mcp__claude_ai_Meta_Ads_MCP__ads_get_opportunity_score, mcp__claude_ai_Meta_Ads_MCP__ads_get_errors, mcp__claude_ai_Meta_Ads_MCP__ads_get_field_context, mcp__claude_ai_Meta_Ads_MCP__ads_insights_advertiser_context, mcp__supabase__execute_sql, mcp__supabase__list_tables, mcp__plugin_telegram_telegram__reply
+allowed-tools: Read, Bash, Glob, Write, mcp__claude_ai_MCP_META_ADS_B2_TECH__meta_token_status, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_ad_accounts, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_campaigns, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_adsets, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_ads, mcp__claude_ai_MCP_META_ADS_B2_TECH__get_insights, mcp__claude_ai_MCP_META_ADS_B2_TECH__run_insights_report, mcp__supabase__execute_sql, mcp__supabase__list_tables, mcp__plugin_telegram_telegram__reply
 ---
 
 # Skill: /analytic-traffic-brunobracaioli-campaign
@@ -28,11 +28,19 @@ Roda em **headless** (`claude -p`). Regras inegociáveis:
 
 1. **NUNCA chame `AskUserQuestion`.** Sem humano para responder, a sessão entra em deadlock. Em
    qualquer dúvida ou erro: **decida sozinho** com os defaults da §3, registre no manifest e siga.
-2. **READ-ONLY na conta Meta.** Esta skill **só lê**. **NUNCA** chame `ads_update_entity`,
-   `ads_activate_entity`, `ads_create_*` nem qualquer mutação. As recomendações são gravadas no
+2. **READ-ONLY na conta Meta.** Esta skill **só lê**. **NUNCA** chame `update_*`,
+   `pause_*`, `create_*` nem qualquer mutação. As recomendações são gravadas no
    banco para um humano decidir — a skill **não age** na conta, sob nenhuma condição.
-3. **Resolva erros por conta própria.** Use `ads_get_errors`/`ads_get_field_context` para
-   diagnosticar. Se uma tool de insights faltar um campo, use proxies (§3) e registre a limitação.
+3. **Resolva erros por conta própria.** Diagnostique pela resposta da tool
+   (`error_user_msg`/subcode) e por `list_*` (`effective_status`). Se uma tool de insights
+   faltar um campo, use proxies (§3) e registre a limitação.
+
+> ⚠️ **DEPRECATED + reapontada pro MCP novo.** O corpo abaixo foi escrito para o MCP oficial
+> antigo (nomes de campo `amount_spent`/`results.all_conversion_types`, valores localizados
+> `R$…`). O connector agora é **`MCP_META_ADS_B2_TECH`** (mesmo do funnel), que entrega valores
+> limpos e lê no **nó CONTA** via `get_insights(object_id=act_…, level=…)`. **Para análise de
+> verdade use a `funnel-analytics-brunobracaioli-campaign`** (ADR 0025). Aqui só os NOMES de
+> tool foram migrados (pra resolverem); a semântica canônica vive na funnel-analytics.
    Só aborte se for impossível ler qualquer dado — e mesmo aí, **grave `analyses` com
    `overall_verdict='error'`** e o manifest com `verified:false` antes de sair.
 4. **Cliente é fixo: `brunobracaioli`.** Não generalize para outros clientes.
@@ -105,12 +113,12 @@ Rankings de leilão (`quality_ranking` etc.) **não são expostos** pelo MCP nes
 peça esses campos; registre a limitação no manifest.
 
 **Âncoras (relativo, não absoluto):**
-- `ads_insights_industry_benchmark` + `ads_insights_auction_ranking_benchmarks` → tente, mas nesta
-  conta costumam retornar "no data" (§7). Quando vazios, a âncora principal é a tendência interna.
+- **Benchmarks/anomalia**: as tools especializadas do MCP antigo (`industry_benchmark`,
+  `auction_ranking_benchmarks`, `performance_trend`, `anomaly_signal`) **não existem** no MCP novo.
+  A âncora passa a ser inteiramente a **tendência interna**.
 - **Tendência**: janela atual vs `compare` (delta %) **e** vs `metric_snapshots` de rodadas
   anteriores (mesma entidade no tempo) — com cadência diária, o histórico em `metric_snapshots` é a
-  âncora mais confiável. `ads_insights_performance_trend` e `ads_insights_anomaly_signal` são
-  complementares (frequentemente "no data").
+  âncora mais confiável.
 - **Entre irmãos**: rankeie ads do mesmo ad set entre si e campanhas irmãs do mesmo objetivo →
   vencedor/perdedor.
 
@@ -141,15 +149,15 @@ Em uma chamada Bash:
   Se faltarem → gravar manifest `verified:false` ("migration add_meta_ads_performance_analysis
   ausente") e sair (nada a fazer).
 - Lookup `client_id`: `SELECT id FROM clients WHERE slug='brunobracaioli'`.
-- `ads_get_ad_accounts` → confirmar `225179730538661` acessível (sanity da conexão Meta).
+- `list_ad_accounts` → confirmar `225179730538661` acessível (sanity da conexão Meta).
 - Se a conta/MCP não responder → `analyses` com `overall_verdict='error'`, manifest
   `verified:false`, e sair.
 
 ### Passo 2 — Coletar métricas (read-only)
-- `ads_get_ad_entities` na conta `225179730538661` (ID numérico, sem `act_`), com insights na
-  `window` (`date_preset`) **e** na `compare` (`time_range` explícito `{"since","until"}` — nunca
-  os dois juntos), nos níveis `campaign`, `adset` e `ad` (atenção: o parâmetro `level` usa `adset`
-  sem underscore; a coluna do banco usa `ad_set`).
+- `get_insights(object_id="act_225179730538661", level=<campaign|adset|ad>, date_preset=window, ...)`
+  — o MCP novo lê no **nó CONTA** (nunca passe o id de um filho; ver funnel-analytics §2). Repetir
+  com `time_range` explícito `{"since","until"}` para o `compare` (nunca os dois juntos). Atenção:
+  o parâmetro `level` usa `adset` sem underscore; a coluna do banco usa `ad_set`.
 - **Campos que o MCP aceita** (nomes diferem do Graph API padrão — validado em 2026-06-10):
   `id, name, status, effective_status, objective` (campaign), `optimization_goal, campaign_id`
   (adset), `adset_id, creative_id` (ad), `daily_budget, impressions, reach, frequency,
@@ -157,7 +165,7 @@ Em uma chamada Bash:
   cost_per_result`.
   **NÃO peça** (erro de validação): `actions` genérico, `inline_link_clicks`,
   `inline_link_click_ctr`, `spend`, `quality_ranking`/`engagement_rate_ranking`/
-  `conversion_rate_ranking` (não expostos). Em dúvida, `ads_get_field_context`.
+  `conversion_rate_ranking` (não expostos). Em dúvida sobre campos, ver funnel-analytics §2 (FIELDS validado).
 - **Outputs estouram o limite de tokens** (a conta tem 117+ campanhas históricas): o resultado vai
   para um arquivo em `tool-results/`. **Nunca leia o arquivo inteiro no contexto** — processe com
   python3/jq (`.ad_entities | fromjson`), filtrando `spend > 0` antes de qualquer análise.
@@ -166,10 +174,9 @@ Em uma chamada Bash:
 - **LPV e compras vêm de `results.all_conversion_types`** (strings `"N (Landing page views)"`,
   `"N (Purchases)"`, `"N (Checkouts initiated)"`) e **só no nível campaign**; para `ad_set`/`ad`
   use `link_clicks` como proxy do funil e registre no manifest.
-- Contexto/âncoras (tentar, tolerar "no data"): `ads_insights_advertiser_context`,
-  `ads_get_opportunity_score`, `ads_insights_industry_benchmark`,
-  `ads_insights_auction_ranking_benchmarks`, `ads_insights_performance_trend`,
-  `ads_insights_anomaly_signal`.
+- Contexto/âncoras: as tools especializadas de benchmark/anomalia/opportunity-score **não
+  existem** no MCP novo — use só `get_insights`/`run_insights_report` + a tendência interna
+  (`metric_snapshots`).
 - Derivar por entidade: CTR link = `actions:link_click`/impressões; CPC link =
   `cost_per_link_click`; CPLPV = spend/LPV; CPA = spend/compras; LPV% = LPV/cliques link.
 
@@ -259,7 +266,7 @@ Meta. Recomendações gravadas no Supabase para decisão humana."**
 
 ## 6. Anti-padrões (NÃO faça)
 - ❌ Chamar `AskUserQuestion` ou parar para pedir confirmação.
-- ❌ Chamar `ads_update_entity` / `ads_activate_entity` / `ads_create_*` / qualquer mutação na conta.
+- ❌ Chamar `update_*` / `pause_*` / `create_*` / qualquer mutação na conta.
 - ❌ Concluir a partir de **uma métrica isolada** (sempre cruze ≥2 e ancore no objetivo).
 - ❌ Emitir veredito forte sem passar pelos gates de significância / fase de aprendizado.
 - ❌ Tratar `no_data` como erro (é o estado esperado enquanto tudo está PAUSED).
