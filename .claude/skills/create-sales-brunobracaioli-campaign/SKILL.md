@@ -1,8 +1,8 @@
 ---
 name: create-sales-brunobracaioli-campaign
-description: Cria de forma 100% autônoma e headless uma campanha de VENDAS (OUTCOME_SALES, CBO, otimizada por PURCHASE no pixel) para o cliente brunobracaioli REUSANDO os criativos "top vendas" já vencedores da conta — descobre os ads que mais venderam (get_insights ad-level + list_ads → creative_id), cria campanha + ad set (OFFSITE_CONVERSIONS) + N ads PAUSED via o MCP "META ADS MCP B2 TECH", persiste no Supabase e escreve manifest. NÃO gera arte nem copy — reaproveita creative_id existentes. Use quando pedirem "criar campanha de vendas com os top criativos do brunobracaioli", ou via headless (`claude -p --dangerously-skip-permissions ".claude/skills/create-sales-brunobracaioli-campaign"`).
+description: Cria de forma 100% autônoma e headless uma campanha de VENDAS (OUTCOME_SALES, CBO, otimizada por PURCHASE no pixel) para o cliente brunobracaioli REUSANDO os criativos "top vendas" já vencedores da conta — descobre os ads que mais venderam (get_insights ad-level + list_ads → creative_id), cria campanha + ad set (OFFSITE_CONVERSIONS) + N ads PAUSED via o MCP "MCP META ADS B2 TECH", persiste no Supabase e escreve manifest. NÃO gera arte nem copy — reaproveita creative_id existentes. Use quando pedirem "criar campanha de vendas com os top criativos do brunobracaioli", ou via headless (`claude -p --dangerously-skip-permissions ".claude/skills/create-sales-brunobracaioli-campaign"`).
 argument-hint: "[budget-cents=5000] [n-creatives=3] [date-preset=last_30d]"
-allowed-tools: Read, Bash, Write, mcp__claude_ai_META_ADS_MCP_B2_TECH__meta_token_status, mcp__claude_ai_META_ADS_MCP_B2_TECH__list_ad_accounts, mcp__claude_ai_META_ADS_MCP_B2_TECH__get_insights, mcp__claude_ai_META_ADS_MCP_B2_TECH__run_insights_report, mcp__claude_ai_META_ADS_MCP_B2_TECH__list_ads, mcp__claude_ai_META_ADS_MCP_B2_TECH__list_campaigns, mcp__claude_ai_META_ADS_MCP_B2_TECH__list_adsets, mcp__claude_ai_META_ADS_MCP_B2_TECH__list_creatives, mcp__claude_ai_META_ADS_MCP_B2_TECH__create_campaign, mcp__claude_ai_META_ADS_MCP_B2_TECH__create_adset, mcp__claude_ai_META_ADS_MCP_B2_TECH__create_ad, mcp__supabase__execute_sql, mcp__supabase__list_tables
+allowed-tools: Read, Bash, Write, mcp__claude_ai_MCP_META_ADS_B2_TECH__meta_token_status, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_ad_accounts, mcp__claude_ai_MCP_META_ADS_B2_TECH__get_insights, mcp__claude_ai_MCP_META_ADS_B2_TECH__run_insights_report, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_ads, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_campaigns, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_adsets, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_creatives, mcp__claude_ai_MCP_META_ADS_B2_TECH__create_campaign, mcp__claude_ai_MCP_META_ADS_B2_TECH__create_adset, mcp__claude_ai_MCP_META_ADS_B2_TECH__create_ad, mcp__supabase__execute_sql, mcp__supabase__list_tables
 ---
 
 # Skill: /create-sales-brunobracaioli-campaign
@@ -17,7 +17,7 @@ PAUSED** → persiste no Supabase → manifest da run.
 É a **irmã de vendas** da `/create-traffic-brunobracaioli-campaign`. Diferenças-chave:
 objetivo `OUTCOME_SALES`, **reusa criativos existentes** (sem geração de imagem/copy, sem
 subagentes), ad set `OFFSITE_CONVERSIONS` + `promoted_object` com pixel `PURCHASE`,
-**omite `destination_type`**, e usa o **novo MCP "META ADS MCP B2 TECH"**.
+**omite `destination_type`**, e usa o **novo MCP "MCP META ADS B2 TECH"**.
 
 > Base humana testada: `how-to/criar-campanha-vendas-top-creativos.md` (run real
 > 15/jun/2026, 3 gates da Meta). Toda a inteligência mora aqui; um runner/Ultron só dispara
@@ -38,7 +38,7 @@ Esta skill roda em **headless** (`claude -p`). Regras inegociáveis:
    aborte se for impossível prosseguir sem gastar verba ou violar um limite duro — e mesmo
    aí, **grave o manifest com `verified:false`** antes de sair, explicando o bloqueio.
 3. **Cliente é fixo: `brunobracaioli`.** Não generalize para outros clientes.
-4. **Meta só via o MCP "META ADS MCP B2 TECH".** **Persista tudo no Supabase via MCP.**
+4. **Meta só via o MCP "MCP META ADS B2 TECH".** **Persista tudo no Supabase via MCP.**
 5. **Limites duros (defesa em profundidade):**
    - Orçamento ≤ **5000 cents/dia** (R$50). Nunca exceda, mesmo se um argumento pedir.
    - **Tudo nasce PAUSED.** Esta skill **não ativa nada**, sob nenhuma condição — não há
@@ -101,7 +101,7 @@ da linha `clients WHERE slug='brunobracaioli'` no Supabase para obter o `client_
 `n-creatives`, `date-preset`. Sem argumentos → usa os defaults acima.
 
 > **Prefixo do connector:** este MCP já mudou de prefixo antes
-> (`B2_Tech_Meta_Ads` → `MCP_META_PRO_B2TECH` → `META_ADS_MCP_B2_TECH`, how-to §6). As tools
+> (`B2_Tech_Meta_Ads` → `MCP_META_PRO_B2TECH` → `MCP_META_ADS_B2_TECH`, how-to §6). As tools
 > são referidas por nome curto (`create_campaign`, …); se o connector foi renomeado e as
 > tools não resolverem, **re-sincronize o prefixo no `allowed-tools`** do frontmatter.
 
@@ -113,7 +113,7 @@ da linha `clients WHERE slug='brunobracaioli'` no Supabase para obter o `client_
 Em uma chamada Bash:
 - `DATE=$(TZ=America/Sao_Paulo date +%F)`, `STAMP=$(TZ=America/Sao_Paulo date +%Y%m%d-%H%M)`.
 - Carregar env: `set -a && eval "$(tr -d '\r' < .env.local)" && set +a` (raiz do projeto;
-  precisa de `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`).
+  precisa de `SUPABASE_URL`, `SUPABASE_SECRET_KEY`).
 - `TRY_DIR=tentativas-geracao-de-campanhas`; `mkdir -p "$TRY_DIR"`. (Diretório de trabalho
   para insights grandes, se necessário: `mkdir -p "$TRY_DIR/.work-${STAMP}"`.)
 - Parse de overrides do `$ARGUMENTS`; aplicar defaults da §3; **clampar `budget-cents` a
@@ -294,7 +294,7 @@ reaproveita arte + copy + variações Advantage+ já embutidas no vencedor — p
 geração de imagem aqui.
 
 **Prefixo do connector pode mudar (how-to §6).** Deploy que muda *schema* de tool exige
-reconectar o connector (o claude.ai cacheia `tools/list`). Se as tools `META_ADS_MCP_B2_TECH`
+reconectar o connector (o claude.ai cacheia `tools/list`). Se as tools `MCP_META_ADS_B2_TECH`
 não resolverem, re-sincronize o prefixo no `allowed-tools`.
 
 **Headless** — `.claude/HEADLESS.md`. Sem `AskUserQuestion`. `--permission-mode
@@ -303,8 +303,8 @@ bypassPermissions` não basta para writes na conta do cliente; é o
 isso os limites duros (R$50, tudo PAUSED).
 
 ## 8. Pré-requisitos
-- `.env.local` na raiz com `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
-- MCP "META ADS MCP B2 TECH" conectado, token válido com `ads_management`
+- `.env.local` na raiz com `SUPABASE_URL`, `SUPABASE_SECRET_KEY`.
+- MCP "MCP META ADS B2 TECH" conectado, token válido com `ads_management`
   (`meta_token_status` → `is_valid:true`; senão `meta_login`).
 - Pixel `653995666521954` ativo na conta.
 - Permissão de Anunciante na Página `867347659802006` ("Bruno Bracaioli").

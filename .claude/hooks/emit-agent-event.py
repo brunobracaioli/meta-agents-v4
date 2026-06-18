@@ -22,11 +22,17 @@ import os
 import sys
 import urllib.request
 
-# tool-name suffix -> (agent_name, agent_type, summary). Matched by suffix so it
-# works regardless of the MCP prefix (mcp__meta-ads-mcp__ads_create_campaign, etc.).
+# tool-name substring -> (agent_name, agent_type, summary). Matched by suffix/substring so
+# it works regardless of the MCP prefix. Two connector generations coexist here: the old
+# `ads_*` names (mcp__claude_ai_Meta_Ads_MCP__ads_create_campaign) and the new
+# MCP_META_ADS_B2_TECH names without the `ads_` prefix (…__create_campaign, …__create_ad).
+# ORDER MATTERS: matching returns the FIRST hit, and `create_ad` ⊂ `create_adset`
+# (idem update_/pause_/list_) — keep the *_adset / *_campaign / *_creative entries BEFORE
+# the *_ad entry, or an ad-set call would be mislabelled as an ad.
 _TOOL_MAP: list[tuple[str, tuple[str, str, str]]] = [
     ("WebFetch", ("scrape", "tool", "scraping da landing page")),
     ("WebSearch", ("pesquisa", "tool", "pesquisando na web")),
+    # old MCP (Meta_Ads_MCP, ads_*)
     ("ads_create_campaign", ("Meta Ads", "tool", "criando campanha")),
     ("ads_create_ad_set", ("Meta Ads", "tool", "criando conjunto de anúncios")),
     ("ads_create_ad", ("Meta Ads", "tool", "criando anúncio")),
@@ -35,6 +41,23 @@ _TOOL_MAP: list[tuple[str, tuple[str, str, str]]] = [
     ("ads_activate_entity", ("Meta Ads", "tool", "ativando entidade")),
     ("ads_get_ad_entities", ("Meta Ads", "tool", "lendo entidades da conta")),
     ("ads_insights", ("Meta Ads", "tool", "lendo métricas de performance")),
+    # new MCP (MCP_META_ADS_B2_TECH) — *_adset before *_ad (substring), etc.
+    ("create_campaign", ("Meta Ads", "tool", "criando campanha")),
+    ("create_creative", ("Meta Ads", "tool", "montando criativo")),
+    ("create_adset", ("Meta Ads", "tool", "criando conjunto de anúncios")),
+    ("create_ad", ("Meta Ads", "tool", "criando anúncio")),
+    ("update_campaign", ("Meta Ads", "tool", "atualizando campanha")),
+    ("update_adset", ("Meta Ads", "tool", "atualizando conjunto de anúncios")),
+    ("update_ad", ("Meta Ads", "tool", "atualizando anúncio")),
+    ("pause_campaign", ("Meta Ads", "tool", "pausando campanha")),
+    ("pause_adset", ("Meta Ads", "tool", "pausando conjunto de anúncios")),
+    ("pause_ad", ("Meta Ads", "tool", "pausando anúncio")),
+    ("list_campaigns", ("Meta Ads", "tool", "lendo campanhas")),
+    ("list_adsets", ("Meta Ads", "tool", "lendo conjuntos de anúncios")),
+    ("list_creatives", ("Meta Ads", "tool", "lendo criativos")),
+    ("list_ads", ("Meta Ads", "tool", "lendo anúncios")),
+    ("run_insights_report", ("Meta Ads", "tool", "lendo métricas de performance")),
+    ("get_insights", ("Meta Ads", "tool", "lendo métricas de performance")),
     ("apply_migration", ("Banco", "tool", "aplicando migration no Supabase")),
     ("execute_sql", ("Banco", "tool", "persistindo dados no Supabase")),
 ]

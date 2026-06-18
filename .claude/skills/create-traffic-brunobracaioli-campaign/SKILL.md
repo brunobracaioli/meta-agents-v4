@@ -2,7 +2,7 @@
 name: create-traffic-brunobracaioli-campaign
 description: Cria de forma 100% autônoma e headless uma campanha de tráfego Meta Ads (CBO, Advantage+) para o cliente brunobracaioli — scrape da landing, geração de 3 criativos, campanha + adset + 3 ads PAUSED via MCP da Meta, persistência no Supabase e manifest. Use quando pedirem "criar campanha de tráfego para brunobracaioli/CCA", ou quando disparada via cron/headless (`claude -p --dangerously-skip-permissions ".claude/skills/create-traffic-brunobracaioli-campaign"`).
 argument-hint: "[url=https://cca.b2tech.io] [budget-cents=5000] [optimization=LANDING_PAGE_VIEWS] [n-creatives=3]"
-allowed-tools: Read, Bash, Glob, Write, Agent, mcp__claude_ai_Meta_Ads_MCP__ads_get_ad_accounts, mcp__claude_ai_Meta_Ads_MCP__ads_get_ad_account_pages, mcp__claude_ai_Meta_Ads_MCP__ads_create_campaign, mcp__claude_ai_Meta_Ads_MCP__ads_create_ad_set, mcp__claude_ai_Meta_Ads_MCP__ads_create_ad, mcp__claude_ai_Meta_Ads_MCP__ads_update_entity, mcp__claude_ai_Meta_Ads_MCP__ads_get_errors, mcp__claude_ai_Meta_Ads_MCP__ads_get_ad_entities, mcp__claude_ai_Meta_Ads_MCP__ads_get_field_context, mcp__supabase__execute_sql, mcp__supabase__list_tables
+allowed-tools: Read, Bash, Glob, Write, Agent, mcp__claude_ai_MCP_META_ADS_B2_TECH__meta_token_status, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_ad_accounts, mcp__claude_ai_MCP_META_ADS_B2_TECH__create_campaign, mcp__claude_ai_MCP_META_ADS_B2_TECH__create_adset, mcp__claude_ai_MCP_META_ADS_B2_TECH__create_creative, mcp__claude_ai_MCP_META_ADS_B2_TECH__create_ad, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_campaigns, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_adsets, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_ads, mcp__supabase__execute_sql, mcp__supabase__list_tables
 ---
 
 # Skill: /create-traffic-brunobracaioli-campaign
@@ -28,16 +28,17 @@ Esta skill roda em **headless** (`claude -p`). Regras inegociáveis:
    para perguntar.
 2. **Resolva erros por conta própria, end-to-end.** Os modos de falha conhecidos e
    suas correções estão na §7 (Gotchas) e nos passos. Se aparecer um erro novo,
-   diagnostique (`ads_get_errors`, `ads_get_field_context`), aplique a correção mais
-   provável e continue. Só aborte se for impossível prosseguir sem gastar verba ou
+   diagnostique pela resposta da tool (`error_user_msg`/subcode) e por `list_ads`/`list_adsets`
+   (`effective_status`), aplique a correção mais provável e continue. Só aborte se for impossível prosseguir sem gastar verba ou
    violar um limite duro — e mesmo aí, **grave o manifest com `verified:false`** antes
    de sair, explicando o bloqueio.
 3. **Cliente é fixo: `brunobracaioli`.** Não generalize para outros clientes.
 4. **Meta só via MCP da Meta** (CLAUDE.md). **Persista tudo no Supabase via MCP.**
 5. **Limites duros (defesa em profundidade):**
    - Orçamento ≤ **5000 cents/dia** (R$50). Nunca exceda, mesmo se um argumento pedir.
-   - **Tudo nasce PAUSED. NUNCA** chame `ads_activate_entity`. Custo Meta = 0 até um
-     humano ativar manualmente. Esta skill **não ativa nada**, sob nenhuma condição.
+   - **Tudo nasce PAUSED. NUNCA** ative (não chame `update_campaign/update_adset/update_ad`
+     com `status="ACTIVE"`; aliás, tools de update nem estão no allowed-tools). Custo Meta = 0
+     até um humano ativar manualmente. Esta skill **não ativa nada**, sob nenhuma condição.
    - Prefira **reusar** criativos já gerados hoje a regerar (respeita o cap de LLM
      `WORKFLOW_LLM_BUDGET_USD_CAP=2.00` e o custo de imagem).
 
@@ -97,17 +98,18 @@ para obter o `client_id` (uuid) — **não hardcode o uuid**.
 Em uma chamada Bash:
 - `DATE=$(TZ=America/Sao_Paulo date +%F)`, `STAMP=$(TZ=America/Sao_Paulo date +%Y%m%d-%H%M)`.
 - Carregar env: `set -a && eval "$(tr -d '\r' < .env.local)" && set +a` (raiz do projeto;
-  precisa de `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`).
+  precisa de `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`).
 - Definir paths: `ADS_DIR=.claude/materiais-das-empresas/brunobracaioli/generated-ads/cca-${DATE}`
   e `TRY_DIR=tentativas-geracao-de-campanhas`. Criar ambos (`mkdir -p`).
 - Parse de overrides do `$ARGUMENTS`; aplicar defaults da §3; **clampar budget a 5000**.
 
 ### Passo 1 — Validar conexão Meta
-- `ads_get_ad_accounts` → confirmar `225179730538661` ativo, moeda `BRL`, e o mínimo
-  de orçamento diário. Confirmar `daily_budget (5000) ≥ mínimo` e `≤ 5000`.
-- `ads_get_ad_account_pages` → confirmar page `867347659802006`.
-- Se a conta/página não responder ou MCP estiver indisponível → gravar manifest
-  `verified:false` com o erro e sair (nada criado, custo zero).
+- (Opcional) `meta_token_status` → exigir `is_valid:true` com scope `ads_management`.
+- `list_ad_accounts` → confirmar `225179730538661` ativo (`account_status:1`), moeda `BRL`.
+- Page `867347659802006` é **constante do cliente** (não há tool de listagem de páginas no
+  MCP novo) — use direto no `create_creative`.
+- Se a conta não responder ou MCP estiver indisponível → gravar manifest `verified:false`
+  com o erro e sair (nada criado, custo zero).
 
 ### Passo 2 — Criativos (gerar fresco + reusar SOMENTE no mesmo dia)
 **Idempotência (vale apenas para o diretório de HOJE):** se `${ADS_DIR}` já tem
@@ -118,8 +120,8 @@ vivo só mostra atividade que vira `agent_events`; ao pular a cadeia, insira 1 e
 sintético para a interface não ficar cega:
 ```bash
 curl -sS -X POST "${SUPABASE_URL}/rest/v1/agent_events" \
-  -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-  -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+  -H "apikey: ${SUPABASE_SECRET_KEY}" \
+  -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}" \
   -H "Content-Type: application/json" -H "Prefer: return=minimal" \
   -d "{\"run_id\":\"${AGENT_JOB_ID:-cron-${STAMP}}\",\"agent_name\":\"criativos\",\"agent_type\":\"skill\",\"event_type\":\"step\",\"summary\":\"reusando os criativos já aprovados de hoje (idempotência)\"}"
 ```
@@ -169,8 +171,10 @@ da cadeia.
    privado — ADR 0003). Para cada PNG, com `RAND=$(openssl rand -hex 10)` por dia:
    ```bash
    PREFIX="brunobracaioli/cca-${DATE}/${RAND}"
+   # SUPABASE_SECRET_KEY é formato novo `sb_secret_` (NÃO-JWT): tem que ir no header
+   # `apikey`. Só `Authorization: Bearer` dá 403 "Invalid Compact JWS".
    curl -sS -X POST "${SUPABASE_URL}/storage/v1/object/ad-ingest/${PREFIX}/ad-v${N}-${ANGLE}.png" \
-     -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+     -H "apikey: ${SUPABASE_SECRET_KEY}" -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}" \
      -H "Content-Type: image/png" --data-binary @"${ADS_DIR}/ad-v${N}-${ANGLE}.png"
    # URL pública resultante:
    # ${SUPABASE_URL}/storage/v1/object/public/ad-ingest/${PREFIX}/ad-v${N}-${ANGLE}.png
@@ -186,49 +190,55 @@ da cadeia.
    ser `200 image/png` antes de usar no ad.
 
 ### Passo 3 — Criar a campanha (PAUSED)
-`ads_create_campaign` (conta `act_225179730538661`):
-- `name=[TRF][CCA][${DATE}] Tráfego CBO — US`, `objective=OUTCOME_TRAFFIC`,
-  `buying_type=AUCTION`, `special_ad_categories=[]`, `status=PAUSED`.
-- **CBO**: `daily_budget=5000` na campanha, `bid_strategy=LOWEST_COST_WITHOUT_CAP`.
-- Guardar `meta_campaign_id`. Se a tool exigir um campo desconhecido, consultar
-  `ads_get_field_context` e preencher.
+`create_campaign` (conta = `account_id="225179730538661"`):
+- `name=[TRF][CCA][${DATE}] Tráfego CBO — US`, `objective="OUTCOME_TRAFFIC"`,
+  `special_ad_categories=[]`, `status="PAUSED"`.
+- **CBO**: `daily_budget=5000` (cents, int) na campanha, `bid_strategy="LOWEST_COST_WITHOUT_CAP"`.
+- A resposta vem como `{"id":"<meta_campaign_id>","success":true}` — guardar o `id`.
 
 ### Passo 4 — Criar o ad set (PAUSED)
-`ads_create_ad_set` (parent = `meta_campaign_id`):
-- `name=[TRF][CCA] adset — US — Advantage+ — LPV — ${DATE}`, `status=PAUSED`.
-- **Sem budget** (CBO controla na campanha).
-- `optimization_goal=LANDING_PAGE_VIEWS`, `billing_event=IMPRESSIONS`,
-  `destination_type=WEBSITE`.
+`create_adset` (`account_id="225179730538661"`, `campaign_id=<meta_campaign_id>`):
+- `name=[TRF][CCA] adset — US — Advantage+ — LPV — ${DATE}`, `status="PAUSED"`.
+- **Sem `daily_budget`** (CBO controla na campanha).
+- `optimization_goal="LANDING_PAGE_VIEWS"`, `billing_event="IMPRESSIONS"`,
+  `destination_type="WEBSITE"`.
 - `targeting={"geo_locations":{"countries":["US"]},"targeting_automation":{"advantage_audience":1}}`
   — **sem** `publisher_platforms`/`placement` (= Advantage+ posicionamentos).
-- Se a Meta recusar `LANDING_PAGE_VIEWS` → recriar com `optimization_goal=LINK_CLICKS`.
+- Se a Meta recusar `LANDING_PAGE_VIEWS` → **recriar** o ad set com `optimization_goal="LINK_CLICKS"`
+  (não há `update` no allowed-tools; o ad set recusado não cria objeto órfão).
 - Se a Meta exigir geo BR ou der subcode `3858634` → manter `["US"]` (§7).
-- Guardar `meta_ad_set_id`.
+- Guardar o `id` da resposta como `meta_ad_set_id`.
 
-### Passo 5 — Criar os 3 ads (PAUSED) — imagem em `link_data.picture`
-Para cada criativo, `ads_create_ad` (parent = `meta_ad_set_id`, `status=PAUSED`) com
-creative **inline** via `object_story_spec`. **A imagem vai DENTRO de `link_data` como
-`picture` (URL pública). NUNCA ponha `image_url` no topo** (§7) — o ad sai sem imagem.
-```json
-{"object_story_spec":{"page_id":"867347659802006","link_data":{
-  "link":"https://cca.b2tech.io",
-  "picture":"https://.../public/ad-ingest/.../ad-vN-<ângulo>.png",
-  "message":"<primaryText>","name":"<headline>","description":"<description>",
-  "call_to_action":{"type":"LEARN_MORE"}}}}
-```
-Guardar cada `meta_ad_id`. O `meta_creative_id` gerado vem via `ads_get_ad_entities`
-(level=ad, fields incluindo `creative`) — capturar para persistir.
+### Passo 5 — Criar os 3 criativos + 3 ads (PAUSED) — fluxo de 2 etapas
+O MCP novo tem `create_creative`, que **aceita `image_url` público DIRETO** (monta o
+`object_story_spec` internamente) e devolve um `creative_id`. Então, **para cada ângulo**,
+são **2 chamadas**:
+
+**5a. `create_creative`** (`account_id="225179730538661"`):
+- `name=[TRF][CCA] creative vN <ângulo> — ${DATE}`, `page_id="867347659802006"`,
+  `link="https://cca.b2tech.io"`, `message=<primaryText>`,
+  `image_url=<URL pública do ad-ingest>` (a `URL_ad-vN-…` do `public-urls.txt`, já `200 image/png`),
+  `headline=<headline>`, `description=<description>`, `cta_type="LEARN_MORE"`.
+- A resposta `{"id":"<creative_id>","success":true}` → guardar `creative_id` (= `meta_creative_id`).
+
+**5b. `create_ad`** (`account_id="225179730538661"`, `adset_id=<meta_ad_set_id>`):
+- `creative_id=<creative_id do 5a>`, `name=[TRF][CCA] vN <ângulo> — ${DATE}`, `status="PAUSED"`.
+- A resposta `{"id":"<meta_ad_id>","success":true}` → guardar `meta_ad_id`.
+
+São independentes por ângulo ⇒ os 3 creatives podem ir em **paralelo**, e depois os 3 ads.
+Não há mais workaround de `link_data.picture` (§7) — `image_url` no `create_creative` resolve.
 
 ### Passo 6 — Validar e auto-resolver
-- `ads_get_errors` para campanha, ad set e cada ad.
-  - Vazio (`{}`) → ok.
-  - `link_data` sem imagem / ad sem mídia → **recriar** o ad com `picture` dentro de
-    `link_data` (§7) e deletar/ignorar o quebrado.
+O MCP novo **não tem** `ads_get_errors`/`ads_get_field_context`. Valide pelas respostas das
+tools (cada `create_*` retorna `success:true` + `id`, ou um erro com `error_user_msg`/subcode)
+e por `list_ads(account_id="225179730538661")`:
+  - `effective_status="IN_PROCESS"` nos ads é **normal** (Meta ingerindo a imagem) — não é erro.
+  - `effective_status="WITH_ISSUES"` → inspecionar o motivo; se for imagem, reconferir que a
+    `image_url` é pública (`200 image/png`) e recriar o creative+ad.
   - Erro de geo / subcode `3858634` → garantir `["US"]`.
-  - `optimization_goal` inválido → cair para `LINK_CLICKS`.
-- Criativo em `IN_PROCESS` é **normal** (Meta ingerindo a imagem) — não é erro.
-- Em headless não há revisão visual; confie em `ads_get_errors` vazio + URL pública
-  `200 image/png` + `picture` setado no spec.
+  - `optimization_goal` inválido → recriar o ad set com `LINK_CLICKS` (Passo 4).
+- Em headless não há revisão visual; confie em `success:true` de cada chamada + URL pública
+  `200 image/png` + ausência de `WITH_ISSUES` no `list_ads`.
 
 ### Passo 7 — Persistir no Supabase (idempotente)
 Via `mcp__supabase__execute_sql`, upserts `ON CONFLICT (<chave meta>) DO UPDATE`.
@@ -286,16 +296,16 @@ Tabela campanha / ad set / 3 ads com IDs e status, link do Ads Manager, e a fras
 
 ## 5. Critério de sucesso
 - 3 PNGs em `${ADS_DIR}` + `public-urls.txt` (URLs `200 image/png`).
-- 1 campanha + 1 ad set + 3 ads **PAUSED** na conta `225179730538661`, nomes `[TRF][CCA]...`.
-- `ads_get_errors` vazio (ou erros resolvidos e documentados no manifest).
+- 1 campanha + 1 ad set + 3 creatives + 3 ads **PAUSED** na conta `225179730538661`, nomes `[TRF][CCA]...`.
+- Cada `create_*` retornou `success:true`; `list_ads` sem `WITH_ISSUES` (erros resolvidos e documentados no manifest).
 - Linhas correspondentes no Supabase + 1 `operation_logs` por entidade.
 - Manifest JSON gravado em `${TRY_DIR}/`.
 
 ## 6. Anti-padrões (NÃO faça)
 - ❌ Chamar `AskUserQuestion` ou parar para pedir confirmação.
-- ❌ Chamar `ads_activate_entity` / ativar qualquer entidade.
+- ❌ Ativar qualquer entidade (`update_*` com `status="ACTIVE"`).
 - ❌ Orçamento > 5000 cents/dia.
-- ❌ `image_url` no topo do creative (ad sai sem imagem).
+- ❌ Passar `image_url` privado/signed (Meta não baixa) — use a URL pública do `ad-ingest`.
 - ❌ Targeting `["BR"]` (trava — subcode 3858634).
 - ❌ Anexar imagem por signed URL do bucket privado `creatives` (Meta não baixa — 3858258).
 - ❌ Criar entidades na Meta sem persistir no Supabase + `operation_logs`.
@@ -303,19 +313,20 @@ Tabela campanha / ad set / 3 ads com IDs e status, link do Ads Manager, e a fras
 
 ## 7. Gotchas obrigatórios (memória do projeto + ADRs)
 
-**BR bloqueado** — [[meta-br-advertiser-verification-blocker]]. Em `ads_create_ad_set`,
+**BR bloqueado** — [[meta-br-advertiser-verification-blocker]]. Em `create_adset`,
 `geo_locations.countries:["BR"]` falha com `VALIDATION` / subcode **`3858634`**
 ("Advertiser is missing: provide a verified advertiser"). Preencher `dsa_beneficiary`/
 `dsa_payor` **NÃO** resolve — é exigência de anunciante verificado para entrega no
 Brasil, ainda não suportada pela API/MCP nesta conta. **Mire `["US"]`** e use sufixo
 `US` no nome. Produto é pt-BR/R$; o US é workaround técnico, reavaliar periodicamente.
 
-**Imagem inline em `link_data.picture`** — [[meta-inline-ad-image-url-must-be-in-link-data]].
-Nesta conta, `ads_get_ad_images` e `ads_create_creative` (que pedem `image_hash`) **não
-estão liberados** — não há upload/hash de imagem. A única forma de anexar imagem é por
-**URL pública** dentro de `object_story_spec.link_data.picture`. Pôr `image_url` no
-**topo** do creative cria o ad mas a imagem **não** entra no `link_data` → ad **sem
-imagem** (aconteceu no v3 da campanha CCA, ad `120246501356000505`, deletado e refeito).
+**Imagem via `create_creative(image_url=…)`** — [[new-meta-mcp-b2tech-validated]]. O MCP novo
+`MCP_META_ADS_B2_TECH` tem `create_creative` que **aceita `image_url` público direto** e monta o
+`object_story_spec` internamente (validado E2E 2026-06-18) — **não** precisa de `image_hash` nem
+do workaround antigo de `link_data.picture`. Continua valendo: a URL precisa ser **pública**
+(bucket `ad-ingest`, ADR 0003); o fetcher do Meta não baixa signed URL de bucket privado
+(`Image Wasn't Downloaded`, subcode 3858258). O histórico do workaround inline está em
+[[meta-inline-ad-image-url-must-be-in-link-data]] (não se aplica mais ao fluxo novo).
 
 **Bucket público `ad-ingest`** — ADR 0003. O fetcher do Meta não baixa a signed URL
 privada do Supabase (`Image Wasn't Downloaded`, subcode 3858258). Suba a cópia de
@@ -328,7 +339,8 @@ bypassPermissions` não basta para writes na conta do cliente; é o
 Confiamos no contrato deste markdown — por isso os limites duros (R$50, tudo PAUSED).
 
 ## 8. Pré-requisitos
-- `.env.local` na raiz com `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
-- MCP da Meta e MCP do Supabase autenticados (já feito).
+- `.env.local` na raiz com `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`.
+- Connector **`MCP_META_ADS_B2_TECH`** autenticado (token válido no Supabase, scope `ads_management`)
+  e MCP do Supabase autenticado.
 - Bucket público `ad-ingest` no Supabase (existe).
 - Pasta `tentativas-geracao-de-campanhas/` (criada se faltar).

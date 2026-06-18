@@ -23,7 +23,7 @@
 - **Queue / scheduler dinâmico**: Upstash QStash
 - **Cron declarativo**: Vercel Cron (em `vercel.json`)
 - **AI**: Anthropic SDK — `claude-opus-4-7` (decisão), `claude-sonnet` (tarefas simples), prompt cache obrigatório
-- **MCP**: `meta-ads-mcp` como connector da Anthropic API (decision-engine LLM, Onda 3+)
+- **MCP**: `MCP_META_ADS_B2_TECH` (connector próprio B2 Tech, Graph v25) como connector da Anthropic API — substitui o `meta-ads-mcp` oficial (desativado); ver ADR 0029
 - **IaC**: Supabase CLI (migrations) + `vercel.json`
 - **CI/CD**: GitHub Actions (lint+test+typecheck) → Vercel deploy automático
 - **Cloud**: Vercel (Edge + Serverless, region `gru1`) + Supabase (region `sa-east-1`) + **Fly.io machine** (region `gru`, Onda 2 cron host — ADR 0012)

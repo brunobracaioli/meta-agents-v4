@@ -2,7 +2,7 @@
 name: activate-campaign-brunobracaioli
 description: Ativa (coloca no ar — GASTO REAL) uma campanha de tráfego Meta Ads já existente do cliente brunobracaioli, de forma 100% autônoma e headless. Recebe `campaign_meta_id=<id>`, valida que a campanha é do cliente, está PAUSED e dentro do teto de orçamento, ativa campanha + ad sets + ads via MCP da Meta, persiste status='ACTIVE' e operation_logs no Supabase. Disparada pela fila `agent_jobs` (poll-agent-jobs.sh) quando o operador confirma a ativação pelo Ultron. NÃO cria campanha — só ativa uma existente.
 argument-hint: "campaign_meta_id=120246500174380505"
-allowed-tools: Read, Bash, Write, mcp__claude_ai_Meta_Ads_MCP__ads_get_ad_accounts, mcp__claude_ai_Meta_Ads_MCP__ads_get_ad_entities, mcp__claude_ai_Meta_Ads_MCP__ads_activate_entity, mcp__claude_ai_Meta_Ads_MCP__ads_get_errors, mcp__claude_ai_Meta_Ads_MCP__ads_get_field_context, mcp__supabase__execute_sql
+allowed-tools: Read, Bash, Write, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_ad_accounts, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_campaigns, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_adsets, mcp__claude_ai_MCP_META_ADS_B2_TECH__list_ads, mcp__claude_ai_MCP_META_ADS_B2_TECH__update_campaign, mcp__claude_ai_MCP_META_ADS_B2_TECH__update_adset, mcp__claude_ai_MCP_META_ADS_B2_TECH__update_ad, mcp__supabase__execute_sql
 ---
 
 # Skill: /activate-campaign-brunobracaioli
@@ -101,28 +101,28 @@ select a.meta_ad_id, a.id as ad_uuid
  where s.campaign_id = '<campaign_uuid>';
 ```
 
-### Passo 2 — Revalidar na Meta (`ads_get_ad_entities`)
-- `ads_get_ad_accounts` → confirmar `225179730538661` ativo.
-- `ads_get_ad_entities` (level=campaign, id = `campaign_meta_id`) → confirmar
-  `effective_status`/`status` **PAUSED** e ler o `daily_budget` (CBO). Se o budget vivo
-  na Meta exceder 5000 cents → **aborte sem ativar** (mesmo que o Supabase diga ≤5000).
+### Passo 2 — Revalidar na Meta (`list_campaigns`)
+- `list_ad_accounts` → confirmar `225179730538661` ativo.
+- `list_campaigns(account_id="225179730538661")` → localizar a campanha pelo `id`
+  (= `campaign_meta_id`); confirmar `status`/`effective_status` **PAUSED** e ler o `daily_budget`
+  (CBO). Se o budget vivo na Meta exceder 5000 cents → **aborte sem ativar** (mesmo que o Supabase
+  diga ≤5000).
 
 ### Passo 3 — Ativar (campanha → ad sets → ads)
 Uma campanha só entrega se a campanha **e** os ad sets **e** os ads estiverem ACTIVE.
-Ative **de cima para baixo**, cada um via `ads_activate_entity`:
-1. Campanha: `ads_activate_entity` no `campaign_meta_id`.
-2. Cada `meta_ad_set_id` do Passo 1.
-3. Cada `meta_ad_id` do Passo 1.
+Ative **de cima para baixo**, cada um via `update_*` com `status="ACTIVE"`:
+1. Campanha: `update_campaign(campaign_id=<campaign_meta_id>, status="ACTIVE")`.
+2. Cada ad set: `update_adset(adset_id=<meta_ad_set_id>, status="ACTIVE")` (Passo 1).
+3. Cada ad: `update_ad(ad_id=<meta_ad_id>, status="ACTIVE")` (Passo 1).
 
-Se a Meta exigir um campo desconhecido, consulte `ads_get_field_context`. Se algum nível
-falhar, registre no manifest, **tente reverter** o que já ativou para PAUSED não é
-possível com esta allowlist — então registre claramente o estado parcial em `errors[]` e
-em `operation_logs`, e finalize com `verified:false`.
+Se algum nível falhar, **reverta o que já ativou para PAUSED** (`update_*` com `status="PAUSED"`),
+registre o estado parcial em `errors[]` e em `operation_logs`, e finalize com `verified:false`.
+(Diferente do MCP antigo, reverter agora é possível — não deixe a campanha entregando parcial.)
 
-### Passo 4 — Validar (`ads_get_errors`)
-- `ads_get_errors` para campanha, ad sets e ads → idealmente vazio (`{}`).
-- `ads_get_ad_entities` (level=campaign) → confirmar `effective_status=ACTIVE` (ou
-  `IN_PROCESS`/`PENDING_REVIEW`, que são normais logo após ativar). Documentar.
+### Passo 4 — Validar (`list_*`)
+- `list_campaigns`/`list_adsets`/`list_ads(account_id="225179730538661")` → confirmar
+  `effective_status=ACTIVE` (ou `IN_PROCESS`, normal logo após ativar). Documentar.
+- Se aparecer `WITH_ISSUES` em qualquer nível, registre no manifest (não é ativação limpa).
 
 ### Passo 5 — Persistir no Supabase (`mcp__supabase__execute_sql`)
 - `update public.campaigns set status='ACTIVE' where meta_campaign_id='<id>';`
@@ -162,7 +162,7 @@ frase: **"Campanha ATIVA — gasto real iniciado (R$50/dia)."** (ou o motivo do 
 ## 5. Critério de sucesso
 - Campanha indicada (e seus ad sets/ads) com `effective_status` ACTIVE/IN_PROCESS na
   conta `225179730538661`.
-- `ads_get_errors` vazio (ou erros documentados no manifest).
+- `list_*` sem `WITH_ISSUES` (ou erros documentados no manifest).
 - `campaigns/ad_sets/ads.status='ACTIVE'` no Supabase + 1 `operation_logs action='activate'`
   por entidade.
 - Manifest JSON gravado em `${TRY_DIR}/`.
