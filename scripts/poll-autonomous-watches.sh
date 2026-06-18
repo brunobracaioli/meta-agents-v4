@@ -29,6 +29,9 @@ SUPABASE_KEY="${SUPABASE_SECRET_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}"
 # the URL illegal (`curl: (3) bad/illegal format`) and silently breaks polling.
 SUPABASE_URL="$(printf '%s' "${SUPABASE_URL}" | tr -d '[:space:]')"
 SUPABASE_KEY="$(printf '%s' "${SUPABASE_KEY}" | tr -d '[:space:]')"
+# Per-operator runner (ADR 0027) ticks ONLY its own operator's watches; empty on the legacy
+# single-tenant runner — then the claim stays on the 1-arg path (current behavior).
+OPERATOR_ID="$(printf '%s' "${OPERATOR_ID:-}" | tr -d '[:space:]')"
 
 log() { echo "WATCH-POLL $(date -u +%Y-%m-%dT%H:%M:%SZ) $*"; }
 
@@ -47,13 +50,19 @@ if ! mkdir "${LOCK_DIR}" 2>/dev/null; then
 fi
 trap cleanup EXIT
 
-# Claim the oldest due watch atomically.
+# Claim the oldest due watch atomically. A per-operator runner (OPERATOR_ID set) ticks ONLY its
+# own operator's watches via the 2-arg scoped RPC; the legacy runner keeps the 1-arg claim.
+if [[ -n "${OPERATOR_ID}" ]]; then
+  CLAIM_BODY="{\"p_worker_id\":\"${WORKER_ID}\",\"p_operator_id\":\"${OPERATOR_ID}\"}"
+else
+  CLAIM_BODY="{\"p_worker_id\":\"${WORKER_ID}\"}"
+fi
 CLAIM=$(curl -fsS -X POST "${REST}/rpc/claim_autonomous_watch" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_KEY}" \
   -H "Content-Type: application/json" \
   --max-time 10 \
-  -d "{\"p_worker_id\":\"${WORKER_ID}\"}" 2>/dev/null)
+  -d "${CLAIM_BODY}" 2>/dev/null)
 
 if [[ -z "${CLAIM}" ]]; then
   log "claim request returned nothing (transient) — will retry next tick."
@@ -73,11 +82,12 @@ if ! [[ "${WATCH_ID}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
 fi
 
 PHASE=$(echo "${CLAIM}" | jq -r '.[0].phase // empty')
+CLIENT_ID=$(echo "${CLAIM}" | jq -r '.[0].client_id // empty')
 log "claimed watch=${WATCH_ID} phase=${PHASE} — running a tick"
 
 # AGENT_JOB_ID set to the watch id ONLY to suppress run-skill.sh lifecycle events for the tick.
 RUN_LOG=$(mktemp)
-AGENT_JOB_ID="${WATCH_ID}" /app/scripts/run-skill.sh autonomous-watch-tick "watch_id=${WATCH_ID}" >"${RUN_LOG}" 2>&1
+AGENT_JOB_ID="${WATCH_ID}" AGENT_JOB_CLIENT_ID="${CLIENT_ID}" /app/scripts/run-skill.sh autonomous-watch-tick "watch_id=${WATCH_ID}" >"${RUN_LOG}" 2>&1
 EC=$?
 
 if [[ ${EC} -eq 0 ]]; then
