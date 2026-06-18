@@ -6,7 +6,11 @@ import { rateLimiters, enforceLimit } from "@/lib/ratelimit";
 import { themeSchema } from "@/lib/landing/validate";
 import { validateSection } from "@/lib/landing/section-schemas";
 import { applyScalarEdit } from "@/lib/landing/edit-path";
-import { operatorOwnsClient } from "@/lib/auth/current-operator";
+import { operatorOwnsClient, operatorRunnerReady } from "@/lib/auth/current-operator";
+
+// Shown when an operator tries to enqueue work before its Fly runner is provisioned + ready
+// (ADR 0027). In password mode operatorRunnerReady() is always true, so this never fires.
+const RUNNER_NOT_READY = "seu runner ainda não está pronto — conclua o onboarding (provisione o runner + conecte os connectors).";
 
 /**
  * Tools the Ultron assistant can call. The data tools run parameterized SELECTs
@@ -354,6 +358,7 @@ const tools: Record<string, ToolDef> = {
       const client = await resolveClientId(slug);
       if (!client) return { error: `cliente '${slug}' não encontrado` };
       if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorRunnerReady(ctx.operatorId))) return { error: RUNNER_NOT_READY };
       const skill = CREATE_SKILL_BY_SLUG[slug];
       if (!skill) return { error: `cliente '${slug}' não está habilitado para criação automática de campanha` };
 
@@ -426,6 +431,7 @@ const tools: Record<string, ToolDef> = {
       const client = await resolveClientId(slug);
       if (!client) return { error: `cliente '${slug}' não encontrado` };
       if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorRunnerReady(ctx.operatorId))) return { error: RUNNER_NOT_READY };
       const skill = CREATE_SALES_SKILL_BY_SLUG[slug];
       if (!skill) return { error: `cliente '${slug}' não está habilitado para criação automática de campanha de vendas` };
 
@@ -501,6 +507,7 @@ const tools: Record<string, ToolDef> = {
       const client = await resolveClientId(slug);
       if (!client) return { error: `cliente '${slug}' não encontrado` };
       if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorRunnerReady(ctx.operatorId))) return { error: RUNNER_NOT_READY };
       const skill = ACTIVATE_SKILL_BY_SLUG[slug];
       if (!skill) return { error: `cliente '${slug}' não está habilitado para ativação automática` };
 
@@ -588,6 +595,7 @@ const tools: Record<string, ToolDef> = {
       const client = await resolveClientId(slug);
       if (!client) return { error: `cliente '${slug}' não encontrado` };
       if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorRunnerReady(ctx.operatorId))) return { error: RUNNER_NOT_READY };
       const skill = ANALYZE_SKILL_BY_SLUG[slug];
       if (!skill) return { error: `cliente '${slug}' não está habilitado para análise sob demanda` };
 
@@ -669,6 +677,7 @@ const tools: Record<string, ToolDef> = {
       const client = await resolveClientId(slug);
       if (!client) return { error: `cliente '${slug}' não encontrado` };
       if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorRunnerReady(ctx.operatorId))) return { error: RUNNER_NOT_READY };
       const skill = LANDING_SKILL_BY_SLUG[slug];
       if (!skill) return { error: `cliente '${slug}' não está habilitado para criação automática de landing page` };
 
@@ -1158,6 +1167,7 @@ const tools: Record<string, ToolDef> = {
       const lp = await resolveLanding(id);
       if (!lp) return { error: "landing page não encontrada" };
       if (!(await operatorOwnsClient(ctx.operatorId, lp.client_id))) return { error: "landing page não encontrada" };
+      if (!(await operatorRunnerReady(ctx.operatorId))) return { error: RUNNER_NOT_READY };
 
       const clientRow = await db().from("clients").select("slug, name").eq("id", lp.client_id).maybeSingle();
       if (clientRow.error) throw clientRow.error;

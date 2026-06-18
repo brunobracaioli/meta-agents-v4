@@ -3,7 +3,7 @@ import type { Context } from "hono";
 import type { Json } from "@/lib/db/types";
 import { db } from "@/lib/db/client";
 import { honoCookieAdapter } from "@/lib/auth/hono-cookies";
-import { assertOperatorOwnsClient, getCurrentOperatorId } from "@/lib/auth/current-operator";
+import { assertOperatorOwnsClient, getCurrentOperatorId, operatorRunnerReady } from "@/lib/auth/current-operator";
 import { getLandingPageFull } from "@/lib/services/landing-page";
 import { rateLimiters, enforceLimit } from "@/lib/ratelimit";
 import {
@@ -362,11 +362,16 @@ landingPages.post("/:id/publish", async (c) => {
   // Default to the LP's current noindex; allow an explicit override (go-live = noindex:0).
   const noindex = typeof body.noindex === "boolean" ? (body.noindex ? 1 : 0) : state.noindex ? 1 : 0;
 
+  // Enqueue gate (Phase 6): in supabase mode the operator's runner must be ready, else the job
+  // would sit unclaimed. No-op in password mode (operatorId null -> operatorRunnerReady true).
+  const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+  if (!(await operatorRunnerReady(operatorId))) return c.json({ error: "runner_not_ready" }, 409);
+
   const ins = await db()
     .from("agent_jobs")
     .insert({
       client_id: state.client_id,
-      operator_id: await getCurrentOperatorId(honoCookieAdapter(c)),
+      operator_id: operatorId,
       skill,
       kind: "landing_publish",
       landing_page_id: id,

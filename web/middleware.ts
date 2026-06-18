@@ -2,8 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/session";
 import { createSupabaseServerClient, type CookieToSet } from "@/lib/auth/supabase";
 
-// Routes that must NOT require a session.
-const PUBLIC_API = ["/api/auth/login"];
+// Routes that must NOT require a session (the unauthenticated auth endpoints).
+const PUBLIC_API = ["/api/auth/login", "/api/auth/signup"];
 
 // Cloudflare Turnstile (login captcha) loads a script and renders its challenge in an
 // <iframe>, and the widget makes XHRs back to this host — so it needs script/frame/connect.

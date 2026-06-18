@@ -49,3 +49,39 @@ export async function assertOperatorOwnsClient(clientId: string, cookies: Cookie
   const operatorId = await getCurrentOperatorId(cookies);
   return operatorOwnsClient(operatorId, clientId);
 }
+
+export type OperatorStatus = {
+  status: string;
+  runner_status: string;
+  connectors_status: Record<string, unknown>;
+  fly_app_name: string | null;
+};
+
+/** The operator's onboarding state (service_role). null in password mode or when no row exists. */
+export async function getOperatorStatus(operatorId: string | null): Promise<OperatorStatus | null> {
+  if (operatorId === null) return null;
+  const { data, error } = await db()
+    .from("operators")
+    .select("status, runner_status, connectors_status, fly_app_name")
+    .eq("id", operatorId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    status: data.status,
+    runner_status: data.runner_status,
+    connectors_status: (data.connectors_status ?? {}) as Record<string, unknown>,
+    fly_app_name: data.fly_app_name,
+  };
+}
+
+/**
+ * Enqueue gate (Phase 6): a job may only be queued once the operator's runner can run it.
+ * Returns true in password mode (operatorId === null — single-tenant, no gate); otherwise
+ * requires the operator to be active AND its Fly runner provisioned + ready (ADR 0027).
+ */
+export async function operatorRunnerReady(operatorId: string | null): Promise<boolean> {
+  if (operatorId === null) return true; // password mode: no gate
+  const st = await getOperatorStatus(operatorId);
+  return st !== null && st.status === "active" && st.runner_status === "ready";
+}
