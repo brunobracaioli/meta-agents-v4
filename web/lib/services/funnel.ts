@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "@/lib/db/client";
+import { getReadClient } from "@/lib/db/read-client";
 import type { Analysis, FunnelEvent } from "@/lib/db/types";
 
 // Canonical funnel order — mirrors the funnel-analytics skill / ADR 0025.
@@ -135,7 +135,7 @@ function buildEntity(events: FunnelEvent[], spendCents: number | null): FunnelEn
  * the client/account selectors. Read-only.
  */
 export async function getFunnelDirectory(): Promise<FunnelClientOption[]> {
-  const supabase = db();
+  const supabase = await getReadClient();
 
   const accountsRes = await supabase
     .from("funnel_events")
@@ -191,7 +191,7 @@ export async function getLatestFunnel(opts?: {
   clientId?: string;
   accountId?: string;
 }): Promise<FunnelData | null> {
-  const supabase = db();
+  const supabase = await getReadClient();
 
   // Resolve the latest analysis that has an account-level funnel for the selection.
   let sel = supabase

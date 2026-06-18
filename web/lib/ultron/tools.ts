@@ -6,6 +6,7 @@ import { rateLimiters, enforceLimit } from "@/lib/ratelimit";
 import { themeSchema } from "@/lib/landing/validate";
 import { validateSection } from "@/lib/landing/section-schemas";
 import { applyScalarEdit } from "@/lib/landing/edit-path";
+import { operatorOwnsClient } from "@/lib/auth/current-operator";
 
 /**
  * Tools the Ultron assistant can call. The data tools run parameterized SELECTs
@@ -18,7 +19,9 @@ import { applyScalarEdit } from "@/lib/landing/edit-path";
 
 // Per-call context the chat loop threads into handlers. sessionId identifies the operator's
 // browser tab — needed by start/stop_autonomous_mode so a watch knows which tab to narrate to.
-export type ToolContext = { sessionId: string };
+// operatorId (ADR 0026) is the logged-in operator in AUTH_MODE=supabase, or null in password
+// mode (single-tenant): write tools stamp it on enqueued jobs and guard client ownership.
+export type ToolContext = { sessionId: string; operatorId: string | null };
 
 type ToolHandler = (input: Record<string, unknown>, ctx: ToolContext) => Promise<unknown>;
 
@@ -344,12 +347,13 @@ const tools: Record<string, ToolDef> = {
         required: ["client_slug", "confirm"],
       },
     },
-    handler: async (input) => {
+    handler: async (input, ctx) => {
       const slug = str(input, "client_slug");
       const confirm = input.confirm === true;
       if (!slug) return { error: "client_slug é obrigatório" };
       const client = await resolveClientId(slug);
       if (!client) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
       const skill = CREATE_SKILL_BY_SLUG[slug];
       if (!skill) return { error: `cliente '${slug}' não está habilitado para criação automática de campanha` };
 
@@ -372,6 +376,7 @@ const tools: Record<string, ToolDef> = {
         .from("agent_jobs")
         .insert({
           client_id: client.id,
+          operator_id: ctx.operatorId,
           skill,
           kind: "create",
           args: { "budget-cents": client.daily_budget_cap_cents },
@@ -414,12 +419,13 @@ const tools: Record<string, ToolDef> = {
         required: ["client_slug", "confirm"],
       },
     },
-    handler: async (input) => {
+    handler: async (input, ctx) => {
       const slug = str(input, "client_slug");
       const confirm = input.confirm === true;
       if (!slug) return { error: "client_slug é obrigatório" };
       const client = await resolveClientId(slug);
       if (!client) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
       const skill = CREATE_SALES_SKILL_BY_SLUG[slug];
       if (!skill) return { error: `cliente '${slug}' não está habilitado para criação automática de campanha de vendas` };
 
@@ -442,6 +448,7 @@ const tools: Record<string, ToolDef> = {
         .from("agent_jobs")
         .insert({
           client_id: client.id,
+          operator_id: ctx.operatorId,
           skill,
           kind: "create_sales",
           args: { "budget-cents": client.daily_budget_cap_cents },
@@ -485,7 +492,7 @@ const tools: Record<string, ToolDef> = {
         required: ["client_slug", "campaign_meta_id", "confirm"],
       },
     },
-    handler: async (input) => {
+    handler: async (input, ctx) => {
       const slug = str(input, "client_slug");
       const campaignMetaId = str(input, "campaign_meta_id");
       const confirm = input.confirm === true;
@@ -493,6 +500,7 @@ const tools: Record<string, ToolDef> = {
       if (!campaignMetaId) return { error: "campaign_meta_id é obrigatório" };
       const client = await resolveClientId(slug);
       if (!client) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
       const skill = ACTIVATE_SKILL_BY_SLUG[slug];
       if (!skill) return { error: `cliente '${slug}' não está habilitado para ativação automática` };
 
@@ -535,6 +543,7 @@ const tools: Record<string, ToolDef> = {
         .from("agent_jobs")
         .insert({
           client_id: client.id,
+          operator_id: ctx.operatorId,
           skill,
           kind: "activate",
           args: { campaign_meta_id: campaignMetaId },
@@ -573,11 +582,12 @@ const tools: Record<string, ToolDef> = {
         required: ["client_slug"],
       },
     },
-    handler: async (input) => {
+    handler: async (input, ctx) => {
       const slug = str(input, "client_slug");
       if (!slug) return { error: "client_slug é obrigatório" };
       const client = await resolveClientId(slug);
       if (!client) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
       const skill = ANALYZE_SKILL_BY_SLUG[slug];
       if (!skill) return { error: `cliente '${slug}' não está habilitado para análise sob demanda` };
 
@@ -588,6 +598,7 @@ const tools: Record<string, ToolDef> = {
         .from("agent_jobs")
         .insert({
           client_id: client.id,
+          operator_id: ctx.operatorId,
           skill,
           kind: "analyze",
           args: {},
@@ -636,7 +647,7 @@ const tools: Record<string, ToolDef> = {
         required: ["client_slug", "confirm"],
       },
     },
-    handler: async (input) => {
+    handler: async (input, ctx) => {
       const slug = str(input, "client_slug");
       const confirm = input.confirm === true;
       const nomeRaw = str(input, "nome");
@@ -657,6 +668,7 @@ const tools: Record<string, ToolDef> = {
       }
       const client = await resolveClientId(slug);
       if (!client) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
       const skill = LANDING_SKILL_BY_SLUG[slug];
       if (!skill) return { error: `cliente '${slug}' não está habilitado para criação automática de landing page` };
 
@@ -678,6 +690,7 @@ const tools: Record<string, ToolDef> = {
         .from("agent_jobs")
         .insert({
           client_id: client.id,
+          operator_id: ctx.operatorId,
           skill,
           kind: "landing",
           args: { nome, "cart-state": "open", noindex: 1 },
@@ -1138,12 +1151,13 @@ const tools: Record<string, ToolDef> = {
         required: ["landing_page_id", "confirm"],
       },
     },
-    handler: async (input) => {
+    handler: async (input, ctx) => {
       const id = str(input, "landing_page_id");
       if (!id) return { error: "landing_page_id é obrigatório" };
       const confirm = input.confirm === true;
       const lp = await resolveLanding(id);
       if (!lp) return { error: "landing page não encontrada" };
+      if (!(await operatorOwnsClient(ctx.operatorId, lp.client_id))) return { error: "landing page não encontrada" };
 
       const clientRow = await db().from("clients").select("slug, name").eq("id", lp.client_id).maybeSingle();
       if (clientRow.error) throw clientRow.error;
@@ -1175,6 +1189,7 @@ const tools: Record<string, ToolDef> = {
         .from("agent_jobs")
         .insert({
           client_id: lp.client_id,
+          operator_id: ctx.operatorId,
           skill,
           kind: "landing_publish",
           landing_page_id: id,
@@ -1285,6 +1300,7 @@ const tools: Record<string, ToolDef> = {
       if (!slug) return { error: "client_slug é obrigatório" };
       const client = await resolveClientId(slug);
       if (!client) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
 
       // Find the landing-page creation job to watch: the most recent kind='landing' job for the
       // client that is still in flight or just completed. We watch the CREATION job; the tick
@@ -1378,7 +1394,7 @@ export const toolSpecs: Anthropic.Tool[] = [
 export async function runTool(
   name: string,
   input: Record<string, unknown>,
-  ctx: ToolContext = { sessionId: "" },
+  ctx: ToolContext = { sessionId: "", operatorId: null },
 ): Promise<unknown> {
   const tool = tools[name];
   if (!tool) return { error: `tool desconhecida: ${name}` };

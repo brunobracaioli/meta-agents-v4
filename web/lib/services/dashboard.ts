@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "@/lib/db/client";
+import { getReadClient } from "@/lib/db/read-client";
 import type { Campaign, Client, OperationLog } from "@/lib/db/types";
 
 export type ClientOverview = {
@@ -32,7 +32,7 @@ export type DashboardOverview = {
  * recent activity feed from operation_logs. Read-only.
  */
 export async function getOverview(): Promise<DashboardOverview> {
-  const supabase = db();
+  const supabase = await getReadClient();
 
   const [clientsRes, campaignsRes, logsRes] = await Promise.all([
     supabase

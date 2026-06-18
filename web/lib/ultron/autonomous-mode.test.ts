@@ -66,7 +66,7 @@ vi.mock("@/lib/ratelimit", () => ({
 import { runTool } from "@/lib/ultron/tools";
 
 const CLIENT = { id: "client-uuid", name: "Bruno", currency: "BRL", daily_budget_cap_cents: 5000 };
-const CTX = { sessionId: "sess-xyz" };
+const CTX = { sessionId: "sess-xyz", operatorId: null };
 
 beforeEach(() => {
   S.client = null;

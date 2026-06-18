@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "@/lib/db/client";
+import { getReadClient } from "@/lib/db/read-client";
 import type {
   Analysis,
   AnalysisFinding,
@@ -31,7 +31,7 @@ export type ClientDetail = {
  * Returns null if the slug does not exist.
  */
 export async function getClientDetail(slug: string): Promise<ClientDetail | null> {
-  const supabase = db();
+  const supabase = await getReadClient();
 
   const clientRes = await supabase.from("clients").select("*").eq("slug", slug).maybeSingle();
   if (clientRes.error) throw clientRes.error;

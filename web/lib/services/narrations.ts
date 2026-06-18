@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db/client";
+import { getReadClient } from "@/lib/db/read-client";
 
 /**
  * Server→browser narration channel for Ultron's autonomous mode (ADR 0019). The headless
@@ -24,7 +25,8 @@ const MAX_BATCH = 10;
 /** Unspoken narrations for a browser session, oldest first. */
 export async function getPendingNarrations(sessionId: string): Promise<PendingNarration[]> {
   const since = new Date(Date.now() - MAX_AGE_MS).toISOString();
-  const { data, error } = await db()
+  const supabase = await getReadClient();
+  const { data, error } = await supabase
     .from("ultron_narrations")
     .select("id, text, kind, image_path, ts")
     .eq("session_id", sessionId)

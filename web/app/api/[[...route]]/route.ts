@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { handle } from "hono/vercel";
-import { setCookie, deleteCookie, getCookie } from "hono/cookie";
+import { setCookie, deleteCookie } from "hono/cookie";
 import type { Context } from "hono";
 import { z } from "zod";
 import { env } from "@/lib/env";
@@ -11,7 +11,9 @@ import {
   createSessionToken,
   sessionCookieOptions,
 } from "@/lib/auth/session";
-import { createSupabaseServerClient, type CookieAdapter } from "@/lib/auth/supabase";
+import { createSupabaseServerClient } from "@/lib/auth/supabase";
+import { honoCookieAdapter } from "@/lib/auth/hono-cookies";
+import { getCurrentOperatorId } from "@/lib/auth/current-operator";
 import { rateLimiters, enforceLimit, clientIp } from "@/lib/ratelimit";
 import { transcribe } from "@/lib/ultron/stt";
 import { runChat, resumeChat } from "@/lib/ultron/chat";
@@ -51,24 +53,6 @@ const supabaseSignupSchema = z.object({
   displayName: z.string().min(1).max(120).optional(),
   turnstileToken: z.string().min(1).max(4096).optional(),
 });
-
-// Bridges Hono's cookie helpers to the @supabase/ssr cookie adapter so the auth session
-// is stored in httpOnly cookies (no token ever reaches client JS).
-function honoCookieAdapter(c: Context): CookieAdapter {
-  return {
-    getAll() {
-      const all = getCookie(c);
-      return Object.entries(all).map(([name, value]) => ({ name, value }));
-    },
-    setAll(cookies) {
-      for (const { name, value, options } of cookies) {
-        // @supabase/ssr's CookieOptions.sameSite allows boolean; Hono's serializer does
-        // not. The shapes are otherwise compatible, so cast to Hono's option type.
-        setCookie(c, name, value, options as Parameters<typeof setCookie>[3]);
-      }
-    },
-  };
-}
 
 // Shared rate-limit + Turnstile gate for the auth endpoints. Returns a Response to short
 // -circuit on failure, or null to proceed.
@@ -215,7 +199,10 @@ app.post("/ultron/chat", async (c) => {
   if (!parsed.success) return c.json({ error: "invalid_request" }, 400);
 
   try {
-    const result = await runChat(parsed.data.sessionId, parsed.data.text);
+    // In AUTH_MODE=supabase, stamp enqueued jobs with the operator so the runner can scope
+    // them (Phase 4); null in password mode (single-tenant, legacy claim). ADR 0026.
+    const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+    const result = await runChat(parsed.data.sessionId, parsed.data.text, operatorId);
     if (result.kind === "need_capture") {
       return c.json({
         status: "need_capture",
@@ -252,7 +239,8 @@ app.post("/ultron/capture", async (c) => {
   if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return c.json({ error: "invalid_request" }, 400);
 
   try {
-    const result = await resumeChat(parsed.data.sessionId, parsed.data.pendingId, parsed.data.image);
+    const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+    const result = await resumeChat(parsed.data.sessionId, parsed.data.pendingId, parsed.data.image, operatorId);
     if (result.kind === "need_capture") {
       return c.json({
         status: "need_capture",

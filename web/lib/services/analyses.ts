@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "@/lib/db/client";
+import { getReadClient } from "@/lib/db/read-client";
 import type { Analysis, AnalysisFinding, MetricSnapshot } from "@/lib/db/types";
 import { pickPrimaryFinding } from "@/components/analyses/analyses-table-utils";
 
@@ -66,7 +66,7 @@ const DEFAULT_ROUNDS_LIMIT = 30;
 export async function getAnalysisRounds(
   limit = DEFAULT_ROUNDS_LIMIT,
 ): Promise<AnalysisRound[]> {
-  const supabase = db();
+  const supabase = await getReadClient();
 
   const analysesRes = await supabase
     .from("analyses")
