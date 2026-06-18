@@ -201,6 +201,7 @@ export type Database = {
           id: string
           kind: string
           landing_page_id: string | null
+          operator_id: string | null
           requested_by: string
           result: Json | null
           skill: string
@@ -220,6 +221,7 @@ export type Database = {
           id?: string
           kind: string
           landing_page_id?: string | null
+          operator_id?: string | null
           requested_by?: string
           result?: Json | null
           skill: string
@@ -239,6 +241,7 @@ export type Database = {
           id?: string
           kind?: string
           landing_page_id?: string | null
+          operator_id?: string | null
           requested_by?: string
           result?: Json | null
           skill?: string
@@ -258,6 +261,13 @@ export type Database = {
             columns: ["landing_page_id"]
             isOneToOne: false
             referencedRelation: "landing_pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_jobs_operator_id_fkey"
+            columns: ["operator_id"]
+            isOneToOne: false
+            referencedRelation: "operators"
             referencedColumns: ["id"]
           },
         ]
@@ -549,6 +559,7 @@ export type Database = {
           id: string
           materials_path: string | null
           name: string
+          operator_id: string | null
           slug: string
           updated_at: string
         }
@@ -563,6 +574,7 @@ export type Database = {
           id?: string
           materials_path?: string | null
           name: string
+          operator_id?: string | null
           slug: string
           updated_at?: string
         }
@@ -577,16 +589,26 @@ export type Database = {
           id?: string
           materials_path?: string | null
           name?: string
+          operator_id?: string | null
           slug?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "clients_operator_id_fkey"
+            columns: ["operator_id"]
+            isOneToOne: false
+            referencedRelation: "operators"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       creatives: {
         Row: {
           call_to_action_type: string | null
           client_id: string
           created_at: string
+          creative_type: string
           description: string | null
           generated_image_id: string | null
           headline: string | null
@@ -594,6 +616,7 @@ export type Database = {
           image_url: string | null
           link_url: string | null
           meta_creative_id: string
+          meta_video_id: string | null
           name: string | null
           page_id: string | null
           primary_text: string | null
@@ -604,6 +627,7 @@ export type Database = {
           call_to_action_type?: string | null
           client_id: string
           created_at?: string
+          creative_type?: string
           description?: string | null
           generated_image_id?: string | null
           headline?: string | null
@@ -611,6 +635,7 @@ export type Database = {
           image_url?: string | null
           link_url?: string | null
           meta_creative_id: string
+          meta_video_id?: string | null
           name?: string | null
           page_id?: string | null
           primary_text?: string | null
@@ -621,6 +646,7 @@ export type Database = {
           call_to_action_type?: string | null
           client_id?: string
           created_at?: string
+          creative_type?: string
           description?: string | null
           generated_image_id?: string | null
           headline?: string | null
@@ -628,6 +654,7 @@ export type Database = {
           image_url?: string | null
           link_url?: string | null
           meta_creative_id?: string
+          meta_video_id?: string | null
           name?: string | null
           page_id?: string | null
           primary_text?: string | null
@@ -825,6 +852,89 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "generated_images_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      generated_videos: {
+        Row: {
+          aspect: string | null
+          channel: string | null
+          client_id: string
+          cost_credits: number | null
+          created_at: string
+          credits_used: number | null
+          duration_seconds: number | null
+          generate_audio: boolean | null
+          id: string
+          mime_type: string | null
+          mode: string | null
+          model: string | null
+          prompt: string | null
+          public_url: string | null
+          quality_tier: string | null
+          resolution: string | null
+          seed: number | null
+          seedance_task_id: string | null
+          storage_bucket: string
+          storage_path: string
+          updated_at: string
+          variant_key: string | null
+        }
+        Insert: {
+          aspect?: string | null
+          channel?: string | null
+          client_id: string
+          cost_credits?: number | null
+          created_at?: string
+          credits_used?: number | null
+          duration_seconds?: number | null
+          generate_audio?: boolean | null
+          id?: string
+          mime_type?: string | null
+          mode?: string | null
+          model?: string | null
+          prompt?: string | null
+          public_url?: string | null
+          quality_tier?: string | null
+          resolution?: string | null
+          seed?: number | null
+          seedance_task_id?: string | null
+          storage_bucket: string
+          storage_path: string
+          updated_at?: string
+          variant_key?: string | null
+        }
+        Update: {
+          aspect?: string | null
+          channel?: string | null
+          client_id?: string
+          cost_credits?: number | null
+          created_at?: string
+          credits_used?: number | null
+          duration_seconds?: number | null
+          generate_audio?: boolean | null
+          id?: string
+          mime_type?: string | null
+          mode?: string | null
+          model?: string | null
+          prompt?: string | null
+          public_url?: string | null
+          quality_tier?: string | null
+          resolution?: string | null
+          seed?: number | null
+          seedance_task_id?: string | null
+          storage_bucket?: string
+          storage_path?: string
+          updated_at?: string
+          variant_key?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generated_videos_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
@@ -1258,6 +1368,39 @@ export type Database = {
           },
         ]
       }
+      operators: {
+        Row: {
+          connectors_status: Json
+          created_at: string
+          display_name: string | null
+          fly_app_name: string | null
+          id: string
+          runner_status: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          connectors_status?: Json
+          created_at?: string
+          display_name?: string | null
+          fly_app_name?: string | null
+          id: string
+          runner_status?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          connectors_status?: Json
+          created_at?: string
+          display_name?: string | null
+          fly_app_name?: string | null
+          id?: string
+          runner_status?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           brief: Json
@@ -1354,34 +1497,65 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      claim_agent_job: {
-        Args: { p_worker_id: string }
-        Returns: {
-          args: Json
-          claimed_at: string | null
-          claimed_by: string | null
-          client_id: string
-          confirmed_at: string
-          created_at: string
-          error: string | null
-          exit_code: number | null
-          finished_at: string | null
-          id: string
-          kind: string
-          landing_page_id: string | null
-          requested_by: string
-          result: Json | null
-          skill: string
-          started_at: string | null
-          status: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "agent_jobs"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
+      claim_agent_job:
+        | {
+            Args: { p_worker_id: string }
+            Returns: {
+              args: Json
+              claimed_at: string | null
+              claimed_by: string | null
+              client_id: string
+              confirmed_at: string
+              created_at: string
+              error: string | null
+              exit_code: number | null
+              finished_at: string | null
+              id: string
+              kind: string
+              landing_page_id: string | null
+              operator_id: string | null
+              requested_by: string
+              result: Json | null
+              skill: string
+              started_at: string | null
+              status: string
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "agent_jobs"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
+        | {
+            Args: { p_operator_id: string; p_worker_id: string }
+            Returns: {
+              args: Json
+              claimed_at: string | null
+              claimed_by: string | null
+              client_id: string
+              confirmed_at: string
+              created_at: string
+              error: string | null
+              exit_code: number | null
+              finished_at: string | null
+              id: string
+              kind: string
+              landing_page_id: string | null
+              operator_id: string | null
+              requested_by: string
+              result: Json | null
+              skill: string
+              started_at: string | null
+              status: string
+            }[]
+            SetofOptions: {
+              from: "*"
+              to: "agent_jobs"
+              isOneToOne: false
+              isSetofReturn: true
+            }
+          }
       claim_autonomous_watch: {
         Args: { p_worker_id: string }
         Returns: {
@@ -1409,6 +1583,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      operator_owns_client: { Args: { p_client_id: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
@@ -1548,6 +1723,7 @@ export const Constants = {
 // ---------------------------------------------------------------------------
 type Row<T extends keyof Database["public"]["Tables"]> = Database["public"]["Tables"][T]["Row"]
 
+export type Operator = Row<"operators">
 export type Client = Row<"clients">
 export type Campaign = Row<"campaigns">
 export type AdSet = Row<"ad_sets">
@@ -1565,4 +1741,3 @@ export type AgentJob = Row<"agent_jobs">
 export type Product = Row<"products">
 export type LandingPage = Row<"landing_pages">
 export type LandingPageSection = Row<"landing_page_sections">
-
