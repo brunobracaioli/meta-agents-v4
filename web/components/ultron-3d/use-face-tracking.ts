@@ -13,7 +13,9 @@ const MODEL_PATH = "/mediapipe/blaze_face_short_range.tflite";
 const DETECT_INTERVAL_MS = 50; // ~20 fps detection (the render loop smooths between frames)
 const NO_FACE_GRACE_MS = 600; // keep tracking through brief detection gaps before relaxing
 // Mirror/sign of the mapping (face position → gaze). Flip if the head turns the wrong way.
-const FLIP_X = 1;
+// FLIP_X = -1: the raw webcam frame is not mirrored, so a face moving to the user's right
+// shifts left in-frame; negating makes the avatar (eyes + head) turn toward the user.
+const FLIP_X = -1;
 const FLIP_Y = 1;
 
 // On-device webcam face tracking (opt-in). Frames never leave the browser — MediaPipe's
