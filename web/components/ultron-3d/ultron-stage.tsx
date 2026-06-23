@@ -242,9 +242,10 @@ export function UltronStage() {
         }
       }
 
-      // Breathing sway + a lean into speech so it reads as alive, not a mannequin.
+      // Gentle horizontal sway so it reads as alive — deliberately NO vertical motion:
+      // bobbing the whole body (especially with the speech amplitude) made it "bounce"
+      // while talking. The mouth/lips carry the speech motion; the body stays planted.
       avatarGroup.rotation.y = Math.sin(elapsed * 0.35) * 0.05 * motion;
-      avatarGroup.position.y = Math.sin(elapsed * 0.8) * 0.01 * motion + mouthOpen * 0.015;
 
       // Emissive + bloom breathe with the voice: Ultron lights up when he speaks.
       const glow = 1.4 + mouthOpen * 1.8 + (speaking ? 0.2 : 0);
