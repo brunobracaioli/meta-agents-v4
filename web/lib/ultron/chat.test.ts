@@ -214,7 +214,7 @@ describe("resumeChat — chain capture into a data tool", () => {
     expect(runTool).toHaveBeenCalledWith(
       "get_campaign_metrics",
       { client_slug: "brunobracaioli" },
-      { sessionId: SESSION },
+      { sessionId: SESSION, operatorId: null },
     );
     expect(result.kind).toBe("reply");
     if (result.kind !== "reply") throw new Error("unreachable");
@@ -238,7 +238,7 @@ describe("runChat — mixed turn (capture_screen + data tool together)", () => {
     expect(runTool).toHaveBeenCalledWith(
       "get_client_overview",
       { client_slug: "brunobracaioli" },
-      { sessionId: SESSION },
+      { sessionId: SESSION, operatorId: null },
     );
 
     createMock.mockResolvedValueOnce(textTurn("Pronto, cruzei tela e dados."));

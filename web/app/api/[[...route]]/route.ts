@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { handle } from "hono/vercel";
 import { setCookie, deleteCookie } from "hono/cookie";
+import type { Context } from "hono";
 import { z } from "zod";
 import { env } from "@/lib/env";
 import { verifyPassword } from "@/lib/auth/password";
@@ -10,6 +11,9 @@ import {
   createSessionToken,
   sessionCookieOptions,
 } from "@/lib/auth/session";
+import { createSupabaseServerClient } from "@/lib/auth/supabase";
+import { honoCookieAdapter } from "@/lib/auth/hono-cookies";
+import { getCurrentOperatorId } from "@/lib/auth/current-operator";
 import { rateLimiters, enforceLimit, clientIp } from "@/lib/ratelimit";
 import { transcribe } from "@/lib/ultron/stt";
 import { runChat, resumeChat } from "@/lib/ultron/chat";
@@ -35,6 +39,40 @@ const loginSchema = z.object({
   // secret key is present.
   turnstileToken: z.string().min(1).max(4096).optional(),
 });
+
+// AUTH_MODE=supabase: per-operator email + password (ADR 0026).
+const supabaseLoginSchema = z.object({
+  email: z.string().email().max(320),
+  password: z.string().min(1).max(200),
+  turnstileToken: z.string().min(1).max(4096).optional(),
+});
+
+const supabaseSignupSchema = z.object({
+  email: z.string().email().max(320),
+  password: z.string().min(8).max(200),
+  displayName: z.string().min(1).max(120).optional(),
+  turnstileToken: z.string().min(1).max(4096).optional(),
+});
+
+// Shared rate-limit + Turnstile gate for the auth endpoints. Returns a Response to short
+// -circuit on failure, or null to proceed.
+async function authGate(
+  c: Context,
+  turnstileToken: string | undefined,
+): Promise<Response | null> {
+  const ip = clientIp(c.req.raw);
+  const { allowed } = await enforceLimit(rateLimiters.login(), ip, "login");
+  if (!allowed) {
+    return c.json({ error: "rate_limited" }, 429, { "Retry-After": "60" });
+  }
+  const turnstileSecret = env.turnstileSecretKey();
+  if (turnstileSecret) {
+    if (!turnstileToken) return c.json({ error: "captcha_required" }, 400);
+    const human = await verifyTurnstile(turnstileToken, turnstileSecret, ip);
+    if (!human) return c.json({ error: "captcha_failed" }, 403);
+  }
+  return null;
+}
 
 const chatSchema = z.object({
   sessionId: z.string().min(8).max(64),
@@ -64,43 +102,70 @@ const reviewFrameSchema = z.object({
 });
 
 app.post("/auth/login", async (c) => {
-  const ip = clientIp(c.req.raw);
-  const { allowed } = await enforceLimit(rateLimiters.login(), ip, "login");
-  if (!allowed) {
-    return c.json({ error: "rate_limited" }, 429, { "Retry-After": "60" });
-  }
-
   const body = await c.req.json().catch(() => null);
-  const parsed = loginSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json({ error: "invalid_request" }, 400);
+
+  if (env.authMode() === "supabase") {
+    const parsed = supabaseLoginSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: "invalid_request" }, 400);
+    const gate = await authGate(c, parsed.data.turnstileToken);
+    if (gate) return gate;
+
+    const supabase = createSupabaseServerClient(honoCookieAdapter(c));
+    const { error } = await supabase.auth.signInWithPassword({
+      email: parsed.data.email,
+      password: parsed.data.password,
+    });
+    // Generic 401 — never reveal whether the email exists.
+    if (error) return c.json({ error: "unauthorized" }, 401);
+    return c.json({ ok: true });
   }
 
-  // Bot / brute-force gate: when Turnstile is configured, reject before we ever
-  // touch the password so automated attempts never reach the credential check.
-  const turnstileSecret = env.turnstileSecretKey();
-  if (turnstileSecret) {
-    const token = parsed.data.turnstileToken;
-    if (!token) {
-      return c.json({ error: "captcha_required" }, 400);
-    }
-    const human = await verifyTurnstile(token, turnstileSecret, ip);
-    if (!human) {
-      return c.json({ error: "captcha_failed" }, 403);
-    }
-  }
+  // Legacy single-password gate (ADR 0006).
+  const parsed = loginSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: "invalid_request" }, 400);
+  const gate = await authGate(c, parsed.data.turnstileToken);
+  if (gate) return gate;
 
   const ok = await verifyPassword(parsed.data.password, env.dashboardPasswordHash());
-  if (!ok) {
-    return c.json({ error: "unauthorized" }, 401);
-  }
+  if (!ok) return c.json({ error: "unauthorized" }, 401);
 
   const token = await createSessionToken(env.authSecret());
   setCookie(c, SESSION_COOKIE, token, { ...sessionCookieOptions });
   return c.json({ ok: true });
 });
 
-app.post("/auth/logout", (c) => {
+// Operator self-signup (AUTH_MODE=supabase only, and only when explicitly enabled).
+// Onboarding is invite/admin-gated by default (threat model): off unless AUTH_ALLOW_SIGNUP.
+app.post("/auth/signup", async (c) => {
+  if (env.authMode() !== "supabase" || !env.allowSignup()) {
+    return c.json({ error: "not_found" }, 404);
+  }
+  const body = await c.req.json().catch(() => null);
+  const parsed = supabaseSignupSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: "invalid_request" }, 400);
+  const gate = await authGate(c, parsed.data.turnstileToken);
+  if (gate) return gate;
+
+  const supabase = createSupabaseServerClient(honoCookieAdapter(c));
+  const { error } = await supabase.auth.signUp({
+    email: parsed.data.email,
+    password: parsed.data.password,
+    ...(parsed.data.displayName
+      ? { options: { data: { display_name: parsed.data.displayName } } }
+      : {}),
+  });
+  // The handle_new_operator trigger creates the public.operators row on user insert.
+  if (error) return c.json({ error: "signup_failed" }, 400);
+  // Depending on project settings the session may require email confirmation first.
+  return c.json({ ok: true });
+});
+
+app.post("/auth/logout", async (c) => {
+  if (env.authMode() === "supabase") {
+    const supabase = createSupabaseServerClient(honoCookieAdapter(c));
+    await supabase.auth.signOut();
+    return c.json({ ok: true });
+  }
   deleteCookie(c, SESSION_COOKIE, { path: "/" });
   return c.json({ ok: true });
 });
@@ -134,7 +199,10 @@ app.post("/ultron/chat", async (c) => {
   if (!parsed.success) return c.json({ error: "invalid_request" }, 400);
 
   try {
-    const result = await runChat(parsed.data.sessionId, parsed.data.text);
+    // In AUTH_MODE=supabase, stamp enqueued jobs with the operator so the runner can scope
+    // them (Phase 4); null in password mode (single-tenant, legacy claim). ADR 0026.
+    const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+    const result = await runChat(parsed.data.sessionId, parsed.data.text, operatorId);
     if (result.kind === "need_capture") {
       return c.json({
         status: "need_capture",
@@ -171,7 +239,8 @@ app.post("/ultron/capture", async (c) => {
   if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return c.json({ error: "invalid_request" }, 400);
 
   try {
-    const result = await resumeChat(parsed.data.sessionId, parsed.data.pendingId, parsed.data.image);
+    const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+    const result = await resumeChat(parsed.data.sessionId, parsed.data.pendingId, parsed.data.image, operatorId);
     if (result.kind === "need_capture") {
       return c.json({
         status: "need_capture",

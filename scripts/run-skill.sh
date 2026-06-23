@@ -13,7 +13,10 @@ set -euo pipefail
 
 SKILL="${1:?usage: run-skill.sh <skill-name> [arg=value ...]}"
 shift || true
-SKILL_DIR="/app/.claude/skills/${SKILL}"
+# Default: single-tenant baked workspace. A per-operator runner with a per-client tree
+# (Phase 5) overrides WORKSPACE_ROOT below after validating ownership.
+WORKSPACE_ROOT="/app"
+SKILL_DIR="${WORKSPACE_ROOT}/.claude/skills/${SKILL}"
 CLAUDE_CRED="/home/runner/.claude/.credentials.json"
 RUN_TIMEOUT_SEC="${RUN_TIMEOUT_SEC:-1500}"
 
@@ -81,6 +84,40 @@ emit_lifecycle() {
 
 emit_lifecycle "start" "skill iniciada"
 
+# Per-operator isolation (ADR 0027). When this runner is dedicated to an operator (OPERATOR_ID
+# set) AND the job carries a client (AGENT_JOB_CLIENT_ID, exported by the poller), verify the
+# client belongs to THIS operator before running anything — the third barrier of the
+# multi-operator threat model (the scoped claim should already prevent it; this is defence in
+# depth, fail-closed). With no OPERATOR_ID (legacy single-tenant runner) the block is skipped
+# and behavior is byte-for-byte the current one.
+OPERATOR_ID_CLEAN="$(printf '%s' "${OPERATOR_ID:-}" | tr -d '[:space:]')"
+CLIENT_ID_CLEAN="$(printf '%s' "${AGENT_JOB_CLIENT_ID:-}" | tr -d '[:space:]')"
+if [[ -n "${OPERATOR_ID_CLEAN}" && -n "${CLIENT_ID_CLEAN}" ]]; then
+  # `|| true`: a transient REST failure leaves CLIENT_ROW empty, which fails the check below
+  # (fail-closed) instead of aborting under `set -e` before we can emit a clean error event.
+  CLIENT_ROW="$(curl -fsS \
+    "${SUPABASE_URL_CLEAN%/}/rest/v1/clients?id=eq.${CLIENT_ID_CLEAN}&select=operator_id,slug" \
+    -H "apikey: ${SUPABASE_KEY}" \
+    -H "Authorization: Bearer ${SUPABASE_KEY}" \
+    --max-time 10 2>/dev/null || true)"
+  [[ -n "${CLIENT_ROW}" ]] || CLIENT_ROW="[]"
+  # `2>/dev/null || true`: never let a parse hiccup abort under `set -e` — an empty result
+  # falls through to the mismatch check below (fail-closed).
+  CLIENT_OPERATOR_ID="$(printf '%s' "${CLIENT_ROW}" | jq -r '.[0].operator_id // empty' 2>/dev/null || true)"
+  CLIENT_SLUG="$(printf '%s' "${CLIENT_ROW}" | jq -r '.[0].slug // empty' 2>/dev/null || true)"
+  if [[ "${CLIENT_OPERATOR_ID}" != "${OPERATOR_ID_CLEAN}" ]]; then
+    echo "ERROR: client ${CLIENT_ID_CLEAN} not owned by operator ${OPERATOR_ID_CLEAN} — refusing" >&2
+    emit_lifecycle "error" "client não pertence a este operador" "3"
+    exit 3
+  fi
+  # Use the per-client workspace once it has been scaffolded (Phase 5); otherwise fall back to
+  # the baked /app tree, so this stays a no-op until per-client workspaces exist.
+  if [[ -n "${CLIENT_SLUG}" && -d "/app/clients/${CLIENT_SLUG}/.claude" ]]; then
+    WORKSPACE_ROOT="/app/clients/${CLIENT_SLUG}"
+    SKILL_DIR="${WORKSPACE_ROOT}/.claude/skills/${SKILL}"
+  fi
+fi
+
 if [[ ! -f "${SKILL_DIR}/SKILL.md" ]]; then
   echo "ERROR: skill not found at ${SKILL_DIR}/SKILL.md" >&2
   emit_lifecycle "error" "skill not found at ${SKILL_DIR}/SKILL.md" "2"
@@ -94,9 +131,9 @@ if [[ ! -f "${CLAUDE_CRED}" ]]; then
   exit 3
 fi
 
-cd /app
+cd "${WORKSPACE_ROOT}"
 
-echo "RUN_START skill=${SKILL} prompt='${PROMPT}' log=${LOG} ts=${TS} timeout=${RUN_TIMEOUT_SEC}s"
+echo "RUN_START skill=${SKILL} workspace=${WORKSPACE_ROOT} prompt='${PROMPT}' log=${LOG} ts=${TS} timeout=${RUN_TIMEOUT_SEC}s"
 
 # Emit per-tool telemetry by parsing claude's stream-json output — the parser is
 # the source of truth for tool events here: unlike the PreToolUse hook matcher, it

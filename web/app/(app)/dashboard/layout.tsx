@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LogoutButton } from "@/components/logout-button";
+import { OnboardingBanner } from "@/components/onboarding-banner";
 import { UltronWidget } from "@/components/ultron/ultron-widget";
 import { UltronProvider } from "@/components/ultron/ultron-provider";
 
@@ -9,6 +10,7 @@ export default function DashboardLayout({
   return (
     <UltronProvider>
       <div className="min-h-screen">
+        <OnboardingBanner />
         <header className="sticky top-0 z-10 border-b border-cyan-300/15 bg-[#050814]/90 backdrop-blur-xl">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
             <Link href="/dashboard" className="flex min-w-0 items-center gap-3">

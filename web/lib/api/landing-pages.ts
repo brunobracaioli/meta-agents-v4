@@ -1,6 +1,9 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import type { Json } from "@/lib/db/types";
 import { db } from "@/lib/db/client";
+import { honoCookieAdapter } from "@/lib/auth/hono-cookies";
+import { assertOperatorOwnsClient, getCurrentOperatorId, operatorRunnerReady } from "@/lib/auth/current-operator";
 import { getLandingPageFull } from "@/lib/services/landing-page";
 import { rateLimiters, enforceLimit } from "@/lib/ratelimit";
 import {
@@ -51,14 +54,20 @@ async function logLandingOp(clientId: string, lpId: string, summary: string, act
   }
 }
 
-/** Reads the LP's edit-relevant state; null if the LP does not exist. */
-async function loadEditState(id: string) {
+/** Reads the LP's edit-relevant state; null if the LP does not exist OR the current operator
+ * does not own its client. These mutations run via service_role (RLS does NOT protect them),
+ * so this is the explicit per-operator ownership guard (ADR 0026). In AUTH_MODE=password the
+ * guard is a no-op (single-tenant). Returning null makes every caller answer 404 — which never
+ * reveals whether a cross-tenant LP exists. */
+async function loadEditState(id: string, c: Context) {
   const res = await db()
     .from("landing_pages")
     .select("client_id, draft_status, noindex")
     .eq("id", id)
     .maybeSingle();
   if (res.error) throw res.error;
+  if (!res.data) return null;
+  if (!(await assertOperatorOwnsClient(res.data.client_id, honoCookieAdapter(c)))) return null;
   return res.data;
 }
 
@@ -110,7 +119,7 @@ landingPages.patch("/:id/sections/:type", async (c) => {
   const fieldCheck = validateSection(type, body.fields);
   if (!fieldCheck.ok) return c.json({ error: "invalid_fields", detail: fieldCheck.error }, 400);
 
-  const state = await loadEditState(id);
+  const state = await loadEditState(id, c);
   if (!state) return c.json({ error: "not_found" }, 404);
   if (state.draft_status === "generating" || state.draft_status === "publishing") {
     return c.json({ error: "draft_busy", draft_status: state.draft_status }, 423);
@@ -150,7 +159,7 @@ landingPages.patch("/:id/theme", async (c) => {
   const parsed = themeSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid_theme", detail: parsed.error.issues[0]?.message }, 400);
 
-  const state = await loadEditState(id);
+  const state = await loadEditState(id, c);
   if (!state) return c.json({ error: "not_found" }, 404);
   if (state.draft_status === "generating" || state.draft_status === "publishing") {
     return c.json({ error: "draft_busy", draft_status: state.draft_status }, 423);
@@ -170,9 +179,11 @@ landingPages.patch("/:id/settings", async (c) => {
   const parsed = settingsPatchSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid_settings", detail: parsed.error.issues[0]?.message }, 400);
 
-  const cur = await db().from("landing_pages").select("settings, draft_status").eq("id", id).maybeSingle();
+  const cur = await db().from("landing_pages").select("client_id, settings, draft_status").eq("id", id).maybeSingle();
   if (cur.error) throw cur.error;
   if (!cur.data) return c.json({ error: "not_found" }, 404);
+  // Ownership guard (service_role bypasses RLS); 404 on cross-tenant. See loadEditState.
+  if (!(await assertOperatorOwnsClient(cur.data.client_id, honoCookieAdapter(c)))) return c.json({ error: "not_found" }, 404);
   if (cur.data.draft_status === "generating" || cur.data.draft_status === "publishing") {
     return c.json({ error: "draft_busy", draft_status: cur.data.draft_status }, 423);
   }
@@ -208,7 +219,7 @@ landingPages.patch("/:id/settings", async (c) => {
 // GET status: which providers/ids have a secret configured. NEVER returns the secret itself.
 landingPages.get("/:id/tracking-secrets/status", async (c) => {
   const id = c.req.param("id");
-  const state = await loadEditState(id);
+  const state = await loadEditState(id, c);
   if (!state) return c.json({ error: "not_found" }, 404);
 
   // Select ONLY non-secret columns — the `secret` jsonb is never read here.
@@ -236,7 +247,7 @@ landingPages.put("/:id/tracking-secrets", async (c) => {
   const parsed = trackingSecretsSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid_secrets", detail: parsed.error.issues[0]?.message }, 400);
 
-  const state = await loadEditState(id);
+  const state = await loadEditState(id, c);
   if (!state) return c.json({ error: "not_found" }, 404);
 
   const rows = parsed.data.entries.map((e) => ({
@@ -267,7 +278,7 @@ landingPages.delete("/:id/tracking-secrets", async (c) => {
   const parsed = trackingSecretDeleteSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid_request", detail: parsed.error.issues[0]?.message }, 400);
 
-  const state = await loadEditState(id);
+  const state = await loadEditState(id, c);
   if (!state) return c.json({ error: "not_found" }, 404);
 
   const del = await db()
@@ -287,7 +298,7 @@ landingPages.delete("/:id/tracking-secrets", async (c) => {
 // columns (the mirror has no raw PII by design). Bounded scan, aggregated in-process.
 landingPages.get("/:id/tracking-health", async (c) => {
   const id = c.req.param("id");
-  const state = await loadEditState(id);
+  const state = await loadEditState(id, c);
   if (!state) return c.json({ error: "not_found" }, 404);
 
   const sinceIso = new Date(Date.now() - 7 * 86400 * 1000).toISOString();
@@ -336,7 +347,7 @@ landingPages.post("/:id/publish", async (c) => {
   const id = c.req.param("id");
   const body = (await c.req.json().catch(() => ({}))) as { noindex?: unknown };
 
-  const state = await loadEditState(id);
+  const state = await loadEditState(id, c);
   if (!state) return c.json({ error: "not_found" }, 404);
 
   const clientRes = await db().from("clients").select("slug").eq("id", state.client_id).maybeSingle();
@@ -351,10 +362,16 @@ landingPages.post("/:id/publish", async (c) => {
   // Default to the LP's current noindex; allow an explicit override (go-live = noindex:0).
   const noindex = typeof body.noindex === "boolean" ? (body.noindex ? 1 : 0) : state.noindex ? 1 : 0;
 
+  // Enqueue gate (Phase 6): in supabase mode the operator's runner must be ready, else the job
+  // would sit unclaimed. No-op in password mode (operatorId null -> operatorRunnerReady true).
+  const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+  if (!(await operatorRunnerReady(operatorId))) return c.json({ error: "runner_not_ready" }, 409);
+
   const ins = await db()
     .from("agent_jobs")
     .insert({
       client_id: state.client_id,
+      operator_id: operatorId,
       skill,
       kind: "landing_publish",
       landing_page_id: id,
@@ -379,7 +396,7 @@ landingPages.post("/:id/assets", async (c) => {
   const { allowed } = await enforceLimit(rateLimiters.landingEdit(), id, "landing-edit");
   if (!allowed) return c.json({ error: "rate_limited" }, 429, { "Retry-After": "5" });
 
-  const state = await loadEditState(id);
+  const state = await loadEditState(id, c);
   if (!state) return c.json({ error: "not_found" }, 404);
 
   const form = await c.req.formData().catch(() => null);

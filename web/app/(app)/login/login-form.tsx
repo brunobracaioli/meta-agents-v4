@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Script from "next/script";
 
 const TURNSTILE_SCRIPT_URL =
@@ -27,10 +28,17 @@ declare global {
 
 export function LoginForm({
   turnstileSiteKey,
+  authMode = "password",
+  allowSignup = false,
 }: {
   turnstileSiteKey: string | null;
+  authMode?: "password" | "supabase";
+  allowSignup?: boolean;
 }) {
   const router = useRouter();
+  // Per-operator (AUTH_MODE=supabase) needs an email; legacy single-password mode does not.
+  const isSupabase = authMode === "supabase";
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -75,6 +83,7 @@ export function LoginForm({
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          ...(isSupabase ? { email } : {}),
           password,
           ...(captchaToken ? { turnstileToken: captchaToken } : {}),
         }),
@@ -104,7 +113,10 @@ export function LoginForm({
   }
 
   const submitDisabled =
-    loading || password.length === 0 || (captchaEnabled && !captchaToken);
+    loading ||
+    password.length === 0 ||
+    (isSupabase && email.length === 0) ||
+    (captchaEnabled && !captchaToken);
 
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
@@ -123,6 +135,23 @@ export function LoginForm({
           <h1 className="text-xl font-semibold text-white">Agência de Agents</h1>
           <p className="text-sm text-white/60">Acesso do operador</p>
         </div>
+
+        {isSupabase && (
+          <div className="space-y-2">
+            <label htmlFor="email" className="block text-sm text-white/80">
+              E-mail
+            </label>
+            <input
+              id="email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-white outline-none focus:border-[var(--color-orange)]"
+              required
+            />
+          </div>
+        )}
 
         <div className="space-y-2">
           <label htmlFor="password" className="block text-sm text-white/80">
@@ -150,6 +179,15 @@ export function LoginForm({
         >
           {loading ? "Entrando…" : "Entrar"}
         </button>
+
+        {isSupabase && allowSignup && (
+          <p className="text-center text-sm text-white/60">
+            Não tem conta?{" "}
+            <Link href="/signup" className="text-[var(--color-orange)] hover:underline">
+              Criar conta
+            </Link>
+          </p>
+        )}
       </form>
     </main>
   );

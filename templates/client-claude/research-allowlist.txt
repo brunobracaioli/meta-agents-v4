@@ -1,0 +1,45 @@
+# Research allowlist — domínios de documentação oficial permitidos para WebFetch/WebSearch.
+# Um domínio registrável por linha. Subdomínios são cobertos automaticamente
+# (ex.: "facebook.com" cobre "developers.facebook.com").
+# Linhas começando com # e linhas em branco são ignoradas.
+# Fonte única de verdade: lida pelo hook enforce-research-allowlist.py E pelo agent web-researcher.
+
+# --- Meta / Facebook Ads ---
+developers.facebook.com
+graph.facebook.com
+business.facebook.com
+
+# --- Google Ads ---
+developers.google.com
+ads.google.com
+support.google.com
+
+# --- Supabase / Postgres ---
+supabase.com
+postgresql.org
+
+# --- Anthropic / Claude ---
+docs.anthropic.com
+docs.claude.com
+
+# --- OpenAI ---
+platform.openai.com
+
+# --- Vercel / Next.js / React ---
+vercel.com
+nextjs.org
+react.dev
+sdk.vercel.ai
+
+# --- DB / ORM / framework ---
+orm.drizzle.team
+hono.dev
+
+# --- Infra / cache / queue ---
+upstash.com
+developers.cloudflare.com
+fly.io
+
+# --- UI ---
+tailwindcss.com
+ui.shadcn.com

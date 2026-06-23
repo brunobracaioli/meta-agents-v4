@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "@/lib/db/client";
+import { getReadClient } from "@/lib/db/read-client";
 import type { ContentDoc, Settings, Theme } from "@b2tech/lp-render/content-doc";
 import type { SectionType } from "@b2tech/lp-render/content-types";
 
@@ -97,7 +97,7 @@ function metaFromRow(row: {
  * sections). Returns null if the id does not exist. Read-only.
  */
 export async function getLandingPageFull(id: string): Promise<LandingPageFull | null> {
-  const supabase = db();
+  const supabase = await getReadClient();
   const pageRes = await supabase
     .from("landing_pages")
     .select(
@@ -145,7 +145,7 @@ export async function getLandingPageFullForRoute(
   productSlug: string,
   id: string,
 ): Promise<LandingPageFull | null> {
-  const supabase = db();
+  const supabase = await getReadClient();
   const clientRes = await supabase.from("clients").select("id").eq("slug", clientSlug).maybeSingle();
   if (clientRes.error) throw clientRes.error;
   if (!clientRes.data) return null;
@@ -168,7 +168,7 @@ export async function getLandingPageFullForRoute(
 
 /** Products for a client slug, each with a count of its landing pages. Null if no client. */
 export async function getClientProducts(slug: string): Promise<ProductSummary[] | null> {
-  const supabase = db();
+  const supabase = await getReadClient();
   const clientRes = await supabase.from("clients").select("id").eq("slug", slug).maybeSingle();
   if (clientRes.error) throw clientRes.error;
   if (!clientRes.data) return null;
@@ -221,7 +221,7 @@ export type LandingPageListRow = LandingPageMeta & {
  * has no editor route (the editor lives under /clients/<slug>/<product>/…). Read-only.
  */
 export async function getAllLandingPages(): Promise<LandingPageListRow[]> {
-  const supabase = db();
+  const supabase = await getReadClient();
   const lpRes = await supabase
     .from("landing_pages")
     .select(
@@ -264,7 +264,7 @@ export async function getProductWithLandingPages(
   clientSlug: string,
   productSlug: string,
 ): Promise<{ product: { id: string; slug: string; name: string }; landingPages: LandingPageListItem[] } | null> {
-  const supabase = db();
+  const supabase = await getReadClient();
   const clientRes = await supabase.from("clients").select("id").eq("slug", clientSlug).maybeSingle();
   if (clientRes.error) throw clientRes.error;
   if (!clientRes.data) return null;
@@ -310,7 +310,8 @@ export type AutoReviewCandidate = {
  */
 export async function getAutoReviewCandidate(windowMinutes = 20): Promise<AutoReviewCandidate | null> {
   const cutoff = new Date(Date.now() - windowMinutes * 60 * 1000).toISOString();
-  const { data, error } = await db()
+  const supabase = await getReadClient();
+  const { data, error } = await supabase
     .from("landing_pages")
     .select("id, subdomain, created_at")
     .eq("draft_status", "ready")

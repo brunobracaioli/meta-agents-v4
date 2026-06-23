@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "@/lib/db/client";
+import { getReadClient } from "@/lib/db/read-client";
 import type { AgentEvent, AgentJob, Json } from "@/lib/db/types";
 
 export type LiveEvent = Pick<
@@ -42,7 +42,8 @@ export type LiveProcess = {
  * returns only newer events (ascending) so the client can append on poll. Read-only.
  */
 export async function getEvents(since?: string): Promise<LiveEvent[]> {
-  let query = db()
+  const supabase = await getReadClient();
+  let query = supabase
     .from("agent_events")
     .select("id, run_id, ts, agent_name, agent_type, event_type, tool_name, summary");
 
@@ -125,20 +126,21 @@ export function mapRunLifecycleEventsToLiveProcesses(events: RunLifecycleEvent[]
 
 export async function getProcesses(): Promise<LiveProcess[]> {
   const select = "id, skill, kind, status, created_at, claimed_at, started_at, finished_at, error";
+  const supabase = await getReadClient();
   const [activeJobs, terminalJobs, runEvents] = await Promise.all([
-    db()
+    supabase
       .from("agent_jobs")
       .select(select)
       .in("status", [...ACTIVE_JOB_STATUSES])
       .order("created_at", { ascending: false })
       .limit(MAX_ACTIVE_JOBS),
-    db()
+    supabase
       .from("agent_jobs")
       .select(select)
       .in("status", [...TERMINAL_JOB_STATUSES])
       .order("finished_at", { ascending: false })
       .limit(MAX_TERMINAL_JOBS),
-    db()
+    supabase
       .from("agent_events")
       .select("id, run_id, ts, agent_name, event_type, summary, payload")
       .eq("tool_name", "run-skill.sh")

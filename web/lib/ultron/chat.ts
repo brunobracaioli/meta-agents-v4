@@ -50,7 +50,7 @@ export type CapturedImage = {
   data: string; // base64, no data: prefix
 };
 
-type LoopContext = { sessionId: string; priorMemory: ChatTurn[]; userText: string };
+type LoopContext = { sessionId: string; priorMemory: ChatTurn[]; userText: string; operatorId: string | null };
 
 function extractText(content: Anthropic.ContentBlock[]): string {
   return content
@@ -178,6 +178,7 @@ async function runLoop(
       }
       const result = await runTool(block.name, (block.input ?? {}) as Record<string, unknown>, {
         sessionId: ctx.sessionId,
+        operatorId: ctx.operatorId,
       });
       pushAgentTrigger(agentTriggers, agentTriggerFromToolResult(block.name, result));
       pushLandingEdit(landingEdits, landingEditFromToolResult(block.name, result));
@@ -215,12 +216,16 @@ async function runLoop(
  * Claude wants to see the operator's screen — in that case memory is persisted only
  * after the capture is resumed (resumeChat).
  */
-export async function runChat(sessionId: string, text: string): Promise<ChatResult> {
+export async function runChat(
+  sessionId: string,
+  text: string,
+  operatorId: string | null = null,
+): Promise<ChatResult> {
   const memory = await loadMemory(sessionId);
   const messages: Anthropic.MessageParam[] = memory.map((t) => ({ role: t.role, content: t.content }));
   messages.push({ role: "user", content: text });
 
-  const result = await runLoop(messages, [], [], [], [], 0, { sessionId, priorMemory: memory, userText: text });
+  const result = await runLoop(messages, [], [], [], [], 0, { sessionId, priorMemory: memory, userText: text, operatorId });
   if (result.kind === "reply") {
     await appendExchange(sessionId, text, result.reply, memory);
   }
@@ -237,6 +242,7 @@ export async function resumeChat(
   sessionId: string,
   pendingId: string,
   image: CapturedImage,
+  operatorId: string | null = null,
 ): Promise<ChatResult> {
   const pending = await loadPending(sessionId, pendingId);
   if (!pending) {
@@ -270,6 +276,7 @@ export async function resumeChat(
       sessionId,
       priorMemory: pending.priorMemory,
       userText: pending.userText,
+      operatorId,
     },
   );
 

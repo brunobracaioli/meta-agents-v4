@@ -20,8 +20,18 @@ function optional(name: string): string | undefined {
 export const env = {
   supabaseUrl: () => required("SUPABASE_URL", process.env.NEXT_PUBLIC_SUPABASE_URL),
   supabaseSecretKey: () => required("SUPABASE_SECRET_KEY"),
+  // Publishable (anon) key for the authenticated, per-operator Supabase client used in
+  // AUTH_MODE=supabase. Public by design (RLS enforces isolation).
+  supabasePublishableKey: () => required("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"),
   authSecret: () => required("AUTH_SECRET"),
   dashboardPasswordHash: () => required("DASHBOARD_PASSWORD"),
+  // Auth strategy. "password" = legacy single-password gate (ADR 0006, default, keeps the
+  // live login untouched). "supabase" = per-operator Supabase Auth (ADR 0026). The cutover
+  // to "supabase" happens in Phase 7 once brunobracaioli exists as operator #1.
+  authMode: (): "password" | "supabase" =>
+    process.env.AUTH_MODE === "supabase" ? "supabase" : "password",
+  // Open signup is off by default; onboarding is invite/admin-gated (threat model).
+  allowSignup: () => process.env.AUTH_ALLOW_SIGNUP === "true",
   anthropicApiKey: () => required("ANTHROPIC_API_KEY", process.env.CLAUDE_API_KEY),
   openaiApiKey: () => required("OPENAI_API_KEY"),
   elevenLabsApiKey: () => required("ELEVENLABS_API_KEY"),

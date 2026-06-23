@@ -26,6 +26,9 @@ SUPABASE_KEY="${SUPABASE_SECRET_KEY:-${SUPABASE_SERVICE_ROLE_KEY:-}}"
 # that makes the URL illegal (`curl: (3) bad/illegal format`) and silently breaks polling.
 SUPABASE_URL="$(printf '%s' "${SUPABASE_URL}" | tr -d '[:space:]')"
 SUPABASE_KEY="$(printf '%s' "${SUPABASE_KEY}" | tr -d '[:space:]')"
+# A per-operator runner (ADR 0027) sets OPERATOR_ID and claims ONLY its own jobs; empty on the
+# legacy single-tenant runner — then every branch below stays on the 1-arg path (current behavior).
+OPERATOR_ID="$(printf '%s' "${OPERATOR_ID:-}" | tr -d '[:space:]')"
 
 CURRENT_JOB_ID=""
 FINALIZED=""
@@ -68,13 +71,19 @@ if ! mkdir "${LOCK_DIR}" 2>/dev/null; then
 fi
 trap cleanup EXIT
 
-# Claim the oldest pending job atomically.
+# Claim the oldest pending job atomically. A per-operator runner (OPERATOR_ID set) claims ONLY
+# its own jobs via the 2-arg scoped RPC; the legacy runner keeps the 1-arg claim unchanged.
+if [[ -n "${OPERATOR_ID}" ]]; then
+  CLAIM_BODY="{\"p_worker_id\":\"${WORKER_ID}\",\"p_operator_id\":\"${OPERATOR_ID}\"}"
+else
+  CLAIM_BODY="{\"p_worker_id\":\"${WORKER_ID}\"}"
+fi
 CLAIM=$(curl -fsS -X POST "${REST}/rpc/claim_agent_job" \
   -H "apikey: ${SUPABASE_KEY}" \
   -H "Authorization: Bearer ${SUPABASE_KEY}" \
   -H "Content-Type: application/json" \
   --max-time 10 \
-  -d "{\"p_worker_id\":\"${WORKER_ID}\"}" 2>/dev/null)
+  -d "${CLAIM_BODY}" 2>/dev/null)
 
 if [[ -z "${CLAIM}" ]]; then
   log "claim request returned nothing (transient) — will retry next tick."
@@ -90,6 +99,7 @@ fi
 CURRENT_JOB_ID="${JOB_ID}"
 SKILL=$(echo "${CLAIM}" | jq -r '.[0].skill // empty')
 KIND=$(echo "${CLAIM}" | jq -r '.[0].kind // empty')
+CLIENT_ID=$(echo "${CLAIM}" | jq -r '.[0].client_id // empty')
 ARGS=$(echo "${CLAIM}" | jq -r '.[0].args | to_entries | map("\(.key)=\(.value)") | join(" ")')
 
 # Defence in depth: validate the skill name and that it exists on disk.
@@ -115,7 +125,7 @@ patch_job "${JOB_ID}" "{\"status\":\"running\",\"started_at\":\"$(now_iso)\"}"
 # it was charset-validated above, so this is safe.
 RUN_LOG=$(mktemp)
 # shellcheck disable=SC2086
-AGENT_JOB_ID="${JOB_ID}" /app/scripts/run-skill.sh "${SKILL}" ${ARGS} >"${RUN_LOG}" 2>&1
+AGENT_JOB_ID="${JOB_ID}" AGENT_JOB_CLIENT_ID="${CLIENT_ID}" /app/scripts/run-skill.sh "${SKILL}" ${ARGS} >"${RUN_LOG}" 2>&1
 EC=$?
 
 if [[ ${EC} -eq 0 ]]; then
