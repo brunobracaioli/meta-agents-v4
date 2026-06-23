@@ -59,6 +59,20 @@ const OUTPUT_BAND_COUNT = 18;
 const OUTPUT_FRAME_MS = 48;
 const MAX_CAPTURE_HOPS = 4; // bound client-side capture round-trips per turn
 
+// Viseme estimation: derive the mouth SHAPE (not just openness) from the speaking spectrum
+// so the 3D avatar can articulate vowels instead of flapping the jaw. We approximate the
+// first two speech formants over the same output FFT — F1 tracks jaw openness, the F2/F1
+// spectral tilt tracks front/back (spread "E/I" vs round "O/U"). This never alters
+// level/bands (the chat visualizer is untouched); it only adds liveSignalRef.shape.
+const F1_LO_HZ = 280; // F1 band ≈ how open the mouth is (open vowels like "A" push it up)
+const F1_HI_HZ = 1000;
+const F2_LO_HZ = 1000; // F2 band ≈ front/back: high energy = spread, low = rounded
+const F2_HI_HZ = 2800;
+const SHAPE_OPEN_GAIN = 2.2; // lift the useful F1 range into 0..1
+const SHAPE_WIDE_NEUTRAL = 0.5; // F2/(F1+F2) tilt above this = spread (E/I), below = round (O/U)
+const SHAPE_WIDE_GAIN = 3.0; // map the tilt deviation into [-1, 1]
+const SHAPE_SMOOTH = 0.35; // per-frame smoothing of the (noisy) estimate
+
 const VAD_CONFIG = {
   speechRms: SPEECH_RMS,
   silenceRms: SILENCE_RMS,
@@ -117,10 +131,18 @@ export function useUltronVoice() {
   // High-frequency mirror of the speaking audio level/bands + status, mutated in place
   // (never via setState) so imperative consumers — e.g. the 3D avatar's rAF lip-sync —
   // can read the live signal every frame without re-rendering React at ~20 Hz.
-  const liveSignalRef = useRef<{ level: number; bands: number[]; status: UltronStatus }>({
+  const liveSignalRef = useRef<{
+    level: number;
+    bands: number[];
+    status: UltronStatus;
+    // Lip SHAPE for the 3D avatar's visemes: open = jaw aperture (F1), wide ∈ [-1,1] =
+    // spread (E/I, +) … rounded (O/U, −). Derived from the speaking spectrum each frame.
+    shape: { open: number; wide: number };
+  }>({
     level: 0,
     bands: silentOutputBands(),
     status: "idle",
+    shape: { open: 0, wide: 0 },
   });
   const handsFreeRef = useRef<boolean>(false);
   const wakeRef = useRef<WakeController | null>(null);
@@ -311,6 +333,8 @@ export function useUltronVoice() {
     if (resetState) {
       liveSignalRef.current.level = 0;
       liveSignalRef.current.bands = silentOutputBands();
+      liveSignalRef.current.shape.open = 0;
+      liveSignalRef.current.shape.wide = 0;
       patch({ outputLevel: 0, outputBands: silentOutputBands() });
     }
   }, [patch]);
@@ -334,6 +358,16 @@ export function useUltronVoice() {
 
       const freq = new Uint8Array(analyser.frequencyBinCount);
       const time = new Float32Array(analyser.fftSize);
+
+      // Formant band → FFT bin indices (fixed for this context's sample rate).
+      const binHz = ctx.sampleRate / analyser.fftSize;
+      const binOf = (hz: number) => Math.max(0, Math.min(freq.length - 1, Math.round(hz / binHz)));
+      const f1Lo = binOf(F1_LO_HZ);
+      const f1Hi = binOf(F1_HI_HZ);
+      const f2Lo = binOf(F2_LO_HZ);
+      const f2Hi = binOf(F2_HI_HZ);
+      let shapeOpen = 0;
+      let shapeWide = 0;
 
       const tick = () => {
         if (outputAnalyserRef.current !== analyser) return;
@@ -363,9 +397,26 @@ export function useUltronVoice() {
             bands.push(Math.min(1, (bucket / (width * 255)) * 1.65));
           }
 
+          // Lip SHAPE (visemes): openness from F1 energy, spread/round from the F2/F1 tilt.
+          // Smoothed per frame because the per-frame formant estimate is noisy. Written only
+          // to the ref (the avatar reads it imperatively — no React re-render).
+          let e1 = 0;
+          for (let i = f1Lo; i <= f1Hi; i++) e1 += freq[i] ?? 0;
+          let e2 = 0;
+          for (let i = f2Lo; i <= f2Hi; i++) e2 += freq[i] ?? 0;
+          const n1 = e1 / (Math.max(1, f1Hi - f1Lo + 1) * 255);
+          const n2 = e2 / (Math.max(1, f2Hi - f2Lo + 1) * 255);
+          const openTarget = Math.min(1, n1 * SHAPE_OPEN_GAIN);
+          const tilt = n1 + n2 > 0.001 ? n2 / (n1 + n2) : SHAPE_WIDE_NEUTRAL;
+          const wideTarget = Math.max(-1, Math.min(1, (tilt - SHAPE_WIDE_NEUTRAL) * SHAPE_WIDE_GAIN));
+          shapeOpen += (openTarget - shapeOpen) * SHAPE_SMOOTH;
+          shapeWide += (wideTarget - shapeWide) * SHAPE_SMOOTH;
+
           outputLastFrameRef.current = now;
           liveSignalRef.current.level = level;
           liveSignalRef.current.bands = bands;
+          liveSignalRef.current.shape.open = shapeOpen;
+          liveSignalRef.current.shape.wide = shapeWide;
           patch({ outputLevel: level, outputBands: bands });
         }
 
