@@ -8,6 +8,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { useUltron } from "@/components/ultron/ultron-provider";
 
 const MODEL_URL = "/models/ultron.glb";
@@ -34,6 +35,22 @@ const ENABLE_BLINK = true;
 const BLINK_ANGLE = 0.28; // radians the upper eyelids rotate to close
 const BLINK_PERIOD_S = 5.2; // average seconds between blinks
 const BLINK_DURATION_S = 0.16;
+
+// Subtle idle head motion on the neck bone — layered sines at incommensurate frequencies
+// (a cheap Perlin-ish noise) so the head softly nods/turns/tilts and never reads as a
+// mechanical loop. Peak angles are tiny (a couple of degrees); the face bones are children
+// of the neck, so the whole head moves while the mouth keeps articulating on top.
+const HEAD_PITCH = 0.035; // nod amplitude in radians (~2°)
+const HEAD_YAW = 0.05; // turn amplitude (~2.9°)
+const HEAD_ROLL = 0.022; // tilt amplitude (~1.3°)
+const HEAD_SPEAK_BOOST = 0.35; // a little extra head motion while he's talking
+
+// Stainless-steel look. The GLB ships metalness=1 / roughness=1, and a metallic PBR
+// material with no environment to reflect renders as a near-black metal — that's why
+// Ultron looked "dark". We give the scene a procedural studio environment (IBL) to
+// reflect, and polish the metal (lower roughness) so each panel reads as brushed steel.
+const STEEL_ROUGHNESS = 0.38; // 0 = mirror, 1 = matte; ~0.38 = brushed stainless steel
+const STEEL_ENV_INTENSITY = 1.3; // how strongly the steel reflects the studio environment
 
 type LoadStatus = "loading" | "ready" | "error";
 
@@ -62,7 +79,7 @@ export function UltronStage() {
     renderer.setPixelRatio(pixelRatio);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMappingExposure = 1.15;
     renderer.domElement.style.display = "block";
     renderer.domElement.style.height = "100%";
     renderer.domElement.style.width = "100%";
@@ -79,6 +96,15 @@ export function UltronStage() {
     const rim = new THREE.PointLight(0x22d3ee, 1.4, 12, 2);
     rim.position.set(0, 2.0, -2.2);
     scene.add(ambient, key, fill, rim);
+
+    // Image-based lighting: a procedural studio environment so the (fully metallic) GLB has
+    // something to reflect. Without it, metalness=1 renders as a near-black metal. We set
+    // ONLY scene.environment (reflections) — the visible cockpit background stays dark, so
+    // the polished steel pops against it with every element well defined.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = envTexture;
+    pmrem.dispose();
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enablePan = false;
@@ -111,6 +137,7 @@ export function UltronStage() {
     const avatarGroup = new THREE.Group();
     scene.add(avatarGroup);
     let jaw: BonePose | null = null;
+    let head: BonePose | null = null; // "head neck upper" — parent of all the face bones
     const lowerLips: BonePose[] = [];
     const upperLips: BonePose[] = [];
     const eyelids: BonePose[] = [];
@@ -122,6 +149,8 @@ export function UltronStage() {
     const jawQuat = new THREE.Quaternion();
     const lipQuat = new THREE.Quaternion();
     const blinkQuat = new THREE.Quaternion();
+    const headQuat = new THREE.Quaternion();
+    const headEuler = new THREE.Euler();
 
     const loader = new GLTFLoader();
     loader.load(
@@ -140,7 +169,20 @@ export function UltronStage() {
             const mats = Array.isArray(asMesh.material) ? asMesh.material : [asMesh.material];
             for (const mat of mats) {
               const std = mat as THREE.MeshStandardMaterial;
-              if (std && std.isMeshStandardMaterial && (std.emissiveMap || std.emissive)) {
+              if (!std || !std.isMeshStandardMaterial) continue;
+              // Polished stainless steel that reflects the studio environment (metalness
+              // stays 1 — the GLB is already all-metal; we only un-matte it and let it
+              // catch the IBL so it stops reading as a dark blob).
+              std.metalness = 1;
+              std.roughness = Math.min(std.roughness ?? 1, STEEL_ROUGHNESS);
+              std.envMapIntensity = STEEL_ENV_INTENSITY;
+              std.needsUpdate = true;
+              // Only materials that actually emit (eyes / chest panel) get the voice glow
+              // pulse — a black emissive would never show anyway.
+              const emits =
+                !!std.emissiveMap ||
+                (!!std.emissive && std.emissive.r + std.emissive.g + std.emissive.b > 0);
+              if (emits) {
                 std.emissiveIntensity = 1.4;
                 emissiveMaterials.push(std);
               }
@@ -151,6 +193,8 @@ export function UltronStage() {
             const pose = (): BonePose => ({ bone: obj, rest: obj.quaternion.clone() });
             if (!jaw && name.includes("jaw")) {
               jaw = pose();
+            } else if (!head && name.includes("neck") && name.includes("upper")) {
+              head = pose();
             } else if (name.includes("lip") && name.includes("lower")) {
               lowerLips.push(pose());
             } else if (name.includes("lip") && name.includes("upper")) {
@@ -242,10 +286,21 @@ export function UltronStage() {
         }
       }
 
-      // Gentle horizontal sway so it reads as alive — deliberately NO vertical motion:
-      // bobbing the whole body (especially with the speech amplitude) made it "bounce"
-      // while talking. The mouth/lips carry the speech motion; the body stays planted.
-      avatarGroup.rotation.y = Math.sin(elapsed * 0.35) * 0.05 * motion;
+      // Subtle idle head motion: layered slow sines at incommensurate frequencies give an
+      // organic nod/turn/tilt (no mechanical loop), a touch more lively while speaking.
+      if (head) {
+        const speak = 1 + (speaking ? HEAD_SPEAK_BOOST : 0);
+        const pitch = (Math.sin(elapsed * 0.5) * 0.6 + Math.sin(elapsed * 0.23 + 1.3) * 0.4) * HEAD_PITCH * motion * speak;
+        const yaw = (Math.sin(elapsed * 0.37 + 2.1) * 0.6 + Math.sin(elapsed * 0.19 + 0.7) * 0.4) * HEAD_YAW * motion * speak;
+        const roll = (Math.sin(elapsed * 0.31 + 4.2) * 0.6 + Math.sin(elapsed * 0.17 + 3.1) * 0.4) * HEAD_ROLL * motion * speak;
+        headEuler.set(pitch, yaw, roll, "XYZ");
+        headQuat.setFromEuler(headEuler);
+        head.bone.quaternion.copy(head.rest).multiply(headQuat);
+      }
+
+      // Faint whole-body weight-shift sway, kept very subtle so it complements (not fights)
+      // the head motion. Deliberately NO vertical motion — that's what made it "bounce".
+      avatarGroup.rotation.y = Math.sin(elapsed * 0.21) * 0.022 * motion;
 
       // Emissive + bloom breathe with the voice: Ultron lights up when he speaks.
       const glow = 1.4 + mouthOpen * 1.8 + (speaking ? 0.2 : 0);
@@ -275,6 +330,8 @@ export function UltronStage() {
           for (const mat of mats) mat?.dispose();
         }
       });
+      envTexture.dispose();
+      scene.environment = null;
       bloomPass.dispose();
       composer.dispose();
       renderer.dispose();
