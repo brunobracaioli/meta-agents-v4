@@ -33,31 +33,6 @@ const SPEECH_FLOOR = 0.05; // deadzone: below this the mouth is fully closed (an
 const MOUTH_ATTACK = 0.6; // smoothing when OPENING (fast)
 const MOUTH_RELEASE = 0.18; // smoothing when CLOSING (slower → natural, doesn't "flap")
 
-// Visemes: the mouth FORMS like a human's instead of only flapping. The speaking spectrum
-// (liveSignalRef.shape) gives `open` (jaw aperture, from F1) and `wide` ∈ [-1,1] (spread for
-// front vowels E/I → +, rounded for back vowels O/U → −). With bones only (no blendshapes) we
-// approximate: open vowels widen the jaw/lips, spread pulls the mouth corners apart, rounding
-// pulls them in + purses the lips ("bico"). Axes/signs are calibratable like everything else.
-const VISEME_OPEN_WEIGHT = 0.6; // how much the spectral openness boosts the amplitude jaw drive
-const VISEME_CORNER_WIDE = 0.13; // corners pull out/up on a spread vowel (E/I)
-const VISEME_CORNER_ROUND = 0.1; // corners pull in on a rounded vowel (O/U)
-const VISEME_LIP_PURSE = 0.06; // lips come together / project on rounding (the "bico")
-const VISEME_SMOOTH = 0.3; // how fast the mouth eases toward the target shape
-const VISEME_CORNER_AXIS = new THREE.Vector3(0, 0, 1); // local axis read as widen/round (calibratable)
-
-// Cheek disc: the GLB's baked cheek disc has no bone, so it can't spin. We overlay a procedural
-// emissive disc parented to the head bone (it tracks head/gaze) and spin it — faster when Ultron
-// is engaged (talking / agents active), tying it to the arc reactor's energy. Sizing/placement
-// is derived from the model's bounding box at load; offsets are calibratable fractions.
-const DISC_RADIUS_FRAC = 0.05; // disc radius as a fraction of model height
-const DISC_SIDE_FRAC = 0.2; // sideways offset from the face center (× model width)
-const DISC_DOWN_FRAC = 0.06; // drop below the head-frame line (× model height)
-const DISC_FWD_FRAC = 0.33; // push toward the face front (× model depth)
-const DISC_YAW = 0.5; // outward yaw so each cheek disc faces slightly out (radians)
-const DISC_SPIN_BASE = 0.6; // idle spin speed (rad/s)
-const DISC_SPIN_ENGAGE = 3.5; // extra spin while engaged (talking / agents active)
-const DISC_COLOR = 0x38e8ff; // cyan, bright enough to pass the bloom threshold
-
 // Idle life: a slow blink and a gentle breathing sway so the avatar never reads as frozen.
 const ENABLE_BLINK = true;
 const BLINK_ANGLE = 0.28; // radians the upper eyelids rotate to close
@@ -135,38 +110,6 @@ const FACE_STATUS_LABEL: Record<FaceTrackStatus, string> = {
 type LoadStatus = "loading" | "ready" | "error";
 
 type BonePose = { bone: THREE.Object3D; rest: THREE.Quaternion };
-
-// Procedural turbine-like disc (built at radius 1; the caller scales it). Ring + hub + spokes
-// so the spin is readable; unlit additive cyan so it glows through the bloom pass. Returned as a
-// group whose local Z is the spin axis — rotate `.rotation.z` to make it turn.
-function makeCheekDisc(): THREE.Group {
-  const disc = new THREE.Group();
-  const mat = new THREE.MeshBasicMaterial({
-    color: DISC_COLOR,
-    transparent: true,
-    opacity: 0.9,
-    blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-  });
-  const ring = new THREE.Mesh(new THREE.RingGeometry(0.72, 1, 40), mat);
-  const hub = new THREE.Mesh(new THREE.CircleGeometry(0.22, 24), mat);
-  disc.add(ring, hub);
-  const spokeGeo = new THREE.PlaneGeometry(0.08, 0.62);
-  for (let i = 0; i < 6; i++) {
-    const pivot = new THREE.Group();
-    const spoke = new THREE.Mesh(spokeGeo, mat);
-    spoke.position.set(0, 0.46, 0);
-    pivot.add(spoke);
-    pivot.rotation.z = (i / 6) * Math.PI * 2;
-    disc.add(pivot);
-  }
-  disc.traverse((o) => {
-    (o as THREE.Mesh).frustumCulled = false;
-  });
-  disc.renderOrder = 2;
-  return disc;
-}
 
 export function UltronStage() {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -272,12 +215,9 @@ export function UltronStage() {
     const browsOuter: BonePose[] = [];
     const eyes: BonePose[] = [];
     const mouthCorners: BonePose[] = [];
-    const cheekDiscs: THREE.Object3D[] = []; // spinning overlay discs (children of the head bone)
     const emissiveMaterials: THREE.MeshStandardMaterial[] = [];
     let mouthOpen = 0; // enveloped 0..1 mouth openness; also drives the emissive/bloom pulse
     let engage = 0; // 0..1 facial "engagement": rises while speaking and when agents are active
-    let visemeOpen = 0; // smoothed spectral openness (F1) → boosts the jaw aperture on open vowels
-    let visemeWide = 0; // smoothed spread(+)/round(−) from the F2/F1 tilt → shapes the mouth
     const baseBloom = bloomPass.strength;
     let disposed = false;
 
@@ -394,35 +334,6 @@ export function UltronStage() {
         camera.updateProjectionMatrix();
         controls.update();
 
-        // Cheek discs: parent to the head bone so they track head/gaze. Placement is derived
-        // from the bounding box (a world point on each cheek), converted into the bone's local
-        // frame; the disc is scaled into world units through the bone's world scale; and its
-        // rest orientation cancels the bone's world rotation (so it faces forward at rest, then
-        // turns WITH the head as the bone animates). A spinner child rotates about its normal.
-        if (head) {
-          head.bone.updateWorldMatrix(true, false);
-          const boneQuat = head.bone.getWorldQuaternion(new THREE.Quaternion());
-          const boneScale = head.bone.getWorldScale(new THREE.Vector3());
-          const worldRadius = size.y * DISC_RADIUS_FRAC;
-          const localScale = worldRadius / Math.max(1e-4, boneScale.x);
-          for (const side of [-1, 1]) {
-            const wrapper = new THREE.Group();
-            const worldTarget = new THREE.Vector3(
-              center.x + side * size.x * DISC_SIDE_FRAC,
-              headY - size.y * DISC_DOWN_FRAC,
-              center.z + size.z * DISC_FWD_FRAC,
-            );
-            wrapper.position.copy(head.bone.worldToLocal(worldTarget));
-            wrapper.quaternion.copy(boneQuat.clone().invert());
-            wrapper.rotateY(side * DISC_YAW);
-            wrapper.scale.setScalar(localScale);
-            const spinner = makeCheekDisc();
-            wrapper.add(spinner);
-            head.bone.add(wrapper);
-            cheekDiscs.push(spinner);
-          }
-        }
-
         setStatus("ready");
       },
       undefined,
@@ -472,28 +383,18 @@ export function UltronStage() {
       const blinkPhase = (elapsed % BLINK_PERIOD_S) / BLINK_DURATION_S;
       const blink = ENABLE_BLINK && blinkPhase < 1 ? Math.sin(blinkPhase * Math.PI) : 0;
 
-      // Visemes: ease the spectral shape (open/wide) and turn the amplitude flap into vowel
-      // articulation. `aperture` is the jaw/lip opening — amplitude-gated (so silence still
-      // closes the mouth) but boosted by spectral openness on open vowels. `round` (0..1) purses
-      // the lips on back vowels (O/U).
-      visemeOpen += (live.shape.open - visemeOpen) * VISEME_SMOOTH;
-      visemeWide += (live.shape.wide - visemeWide) * VISEME_SMOOTH;
-      const aperture = Math.min(1, mouthOpen * (1 + visemeOpen * VISEME_OPEN_WEIGHT));
-      const round = Math.max(0, -visemeWide);
-
-      // Lip-sync: the chin moves only slightly while the lips part — the lower lips follow the
-      // (subtle) jaw, the upper lips lift a touch the other way; rounding brings the lips back
-      // together (protrusion) so "O/U" don't read as a wide-open flap.
+      // Lip-sync: the chin moves only slightly while the lips part — the lower lips follow
+      // the (subtle) jaw, the upper lips lift a touch the other way.
       if (jaw) {
-        jawQuat.setFromAxisAngle(JAW_OPEN_AXIS, JAW_OPEN_ANGLE * aperture);
+        jawQuat.setFromAxisAngle(JAW_OPEN_AXIS, JAW_OPEN_ANGLE * mouthOpen);
         jaw.bone.quaternion.copy(jaw.rest).multiply(jawQuat);
       }
       for (const lip of lowerLips) {
-        lipQuat.setFromAxisAngle(LIP_PART_AXIS, LOWER_LIP_ANGLE * aperture - VISEME_LIP_PURSE * round);
+        lipQuat.setFromAxisAngle(LIP_PART_AXIS, LOWER_LIP_ANGLE * mouthOpen);
         lip.bone.quaternion.copy(lip.rest).multiply(lipQuat);
       }
       for (const lip of upperLips) {
-        lipQuat.setFromAxisAngle(LIP_PART_AXIS, -UPPER_LIP_ANGLE * aperture + VISEME_LIP_PURSE * round);
+        lipQuat.setFromAxisAngle(LIP_PART_AXIS, -UPPER_LIP_ANGLE * mouthOpen);
         lip.bone.quaternion.copy(lip.rest).multiply(lipQuat);
       }
 
@@ -534,18 +435,12 @@ export function UltronStage() {
         faceQuat.setFromAxisAngle(JAW_OPEN_AXIS, a);
         for (const lid of lowerEyelids) lid.bone.quaternion.copy(lid.rest).multiply(faceQuat);
       }
-      // Mouth corners: subtle idle tension + the viseme spread/round. Spread (wide>0) pulls the
-      // corners apart (E/I); round (wide<0) pulls them in (O/U). Mirrored per side so it's
-      // symmetric. The idle drift stays uniform so the resting mouth keeps its micro-life.
+      // Mouth corners: subtle tension/micro-smile, plus a touch of pull while speaking.
       if (mouthCorners.length > 0) {
-        const idle = (Math.sin(elapsed * 0.4 + 2.0) * 0.5 + Math.sin(elapsed * 0.17) * 0.5) * MOUTH_CORNER_AMP;
-        const spread = visemeWide > 0 ? visemeWide * VISEME_CORNER_WIDE : visemeWide * VISEME_CORNER_ROUND;
-        for (const c of mouthCorners) {
-          const side = c.bone.name.toLowerCase().includes("right") ? -1 : 1;
-          const a = (idle + spread * side) * motion;
-          faceQuat.setFromAxisAngle(VISEME_CORNER_AXIS, a);
-          c.bone.quaternion.copy(c.rest).multiply(faceQuat);
-        }
+        const corner = Math.sin(elapsed * 0.4 + 2.0) * 0.5 + Math.sin(elapsed * 0.17) * 0.5;
+        const cornerAngle = (corner * MOUTH_CORNER_AMP + mouthOpen * MOUTH_CORNER_AMP * 0.6) * motion;
+        faceQuat.setFromAxisAngle(JAW_OPEN_AXIS, cornerAngle);
+        for (const c of mouthCorners) c.bone.quaternion.copy(c.rest).multiply(faceQuat);
       }
       // Eyes: when tracking, they lock onto the user; otherwise they make ambient saccades.
       // In BOTH modes an involuntary micro-saccade jitter is layered on top so the eyeball is
@@ -672,14 +567,6 @@ export function UltronStage() {
       // Faint whole-body weight-shift sway, kept very subtle so it complements (not fights)
       // the head motion. Deliberately NO vertical motion — that's what made it "bounce".
       avatarGroup.rotation.y = Math.sin(elapsed * 0.21) * 0.022 * motion;
-
-      // Cheek discs spin continuously and speed up with engagement (talking / agents active),
-      // tying them to the arc reactor's energy. They're children of the head bone, so they
-      // already track the head/gaze; here we only turn them about their own normal (local Z).
-      if (cheekDiscs.length > 0) {
-        const spin = dt * (DISC_SPIN_BASE + engage * DISC_SPIN_ENGAGE) * motion;
-        for (const disc of cheekDiscs) disc.rotation.z += spin;
-      }
 
       // Emissive + bloom breathe with the voice: Ultron lights up when he speaks.
       const glow = 1.4 + mouthOpen * 1.8 + (speaking ? 0.2 : 0);
