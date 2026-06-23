@@ -113,6 +113,15 @@ export function useUltronVoice() {
   const outputAnalyserRef = useRef<AnalyserNode | null>(null);
   const outputRafRef = useRef<number | null>(null);
   const outputLastFrameRef = useRef<number>(0);
+
+  // High-frequency mirror of the speaking audio level/bands + status, mutated in place
+  // (never via setState) so imperative consumers — e.g. the 3D avatar's rAF lip-sync —
+  // can read the live signal every frame without re-rendering React at ~20 Hz.
+  const liveSignalRef = useRef<{ level: number; bands: number[]; status: UltronStatus }>({
+    level: 0,
+    bands: silentOutputBands(),
+    status: "idle",
+  });
   const handsFreeRef = useRef<boolean>(false);
   const wakeRef = useRef<WakeController | null>(null);
   const wakeModeRef = useRef<boolean>(false);
@@ -299,7 +308,11 @@ export function useUltronVoice() {
     outputSourceRef.current = null;
     outputAnalyserRef.current = null;
     outputCtxRef.current = null;
-    if (resetState) patch({ outputLevel: 0, outputBands: silentOutputBands() });
+    if (resetState) {
+      liveSignalRef.current.level = 0;
+      liveSignalRef.current.bands = silentOutputBands();
+      patch({ outputLevel: 0, outputBands: silentOutputBands() });
+    }
   }, [patch]);
 
   const startOutputAnalysis = useCallback(
@@ -351,6 +364,8 @@ export function useUltronVoice() {
           }
 
           outputLastFrameRef.current = now;
+          liveSignalRef.current.level = level;
+          liveSignalRef.current.bands = bands;
           patch({ outputLevel: level, outputBands: bands });
         }
 
@@ -795,8 +810,10 @@ export function useUltronVoice() {
   }, [patch]);
 
   // Keep statusRef in sync for the narration poller's gate (avoids re-creating the interval).
+  // liveSignalRef.status mirrors it too so the 3D avatar can read status frame-by-frame.
   useEffect(() => {
     statusRef.current = state.status;
+    liveSignalRef.current.status = state.status;
   }, [state.status]);
 
   // Poll for autonomous-mode narrations and speak them when idle. Low frequency: these are
@@ -854,6 +871,8 @@ export function useUltronVoice() {
 
   return {
     state,
+    // Imperative, per-frame signal for the 3D avatar lip-sync (no React re-render).
+    liveSignalRef,
     startPushToTalk,
     stopPushToTalk,
     toggleHandsFree,

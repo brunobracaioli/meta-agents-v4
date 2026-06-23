@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { useUltronVoice, type UltronStatus } from "./use-ultron-voice";
+import { type UltronStatus } from "./use-ultron-voice";
+import { useUltron } from "./ultron-provider";
 import { UltronVisualizer } from "./ultron-visualizer";
 import { LiveReviewStage } from "./live-review-stage";
 
@@ -56,7 +57,7 @@ export function UltronWidget() {
     speak,
     autoReview,
     toggleAutoReview,
-  } = useUltronVoice();
+  } = useUltron();
   const idleish = state.status === "idle" || state.status === "armed" || state.status === "listening";
   const busy = !idleish && state.status !== "error";
 
