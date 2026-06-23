@@ -12,14 +12,22 @@ import { useUltron } from "@/components/ultron/ultron-provider";
 
 const MODEL_URL = "/models/ultron.glb";
 
-// --- Lip-sync tuning (calibrated against the "head jaw" bone of ultron.glb) ---------
-// The mesh has NO viseme morph targets, only a jaw bone, so we drive an amplitude-based
-// open/close: the speaking RMS level (0..1, already smoothed in the voice hook) rotates
-// the jaw about its local axis. These constants are the empirical knobs — flip the axis
-// or the sign here if the mouth opens the wrong way / on the wrong hinge.
-const JAW_OPEN_AXIS = new THREE.Vector3(1, 0, 0); // local hinge axis of the jaw bone
-const JAW_OPEN_ANGLE = 0.42; // radians at full volume
-const JAW_SMOOTHING = 0.35; // 0..1 — higher = snappier, lower = smoother (anti-jitter)
+// --- Lip-sync tuning (calibrated against the "head jaw" + lip bones of ultron.glb) ----
+// The mesh has NO viseme morph targets, only bones. A full-jaw amplitude swing reads as a
+// "ventriloquist dummy" (the whole chin drops). Professional speech is the opposite: the
+// LIPS part with only a slight jaw movement. We exploit the rig — the lower-lip bones are
+// CHILDREN of "head jaw" (so they follow a subtle chin), while the upper-lip bones sit
+// under the neck and stay nearly still (as in real speech) — and add an attack/release
+// envelope so the mouth articulates instead of flapping with the volume.
+const JAW_OPEN_AXIS = new THREE.Vector3(1, 0, 0); // local hinge axis of the jaw (validated)
+const JAW_OPEN_ANGLE = 0.13; // radians at full open — SUBTLE chin (primary knob; was 0.42)
+const LIP_PART_AXIS = new THREE.Vector3(1, 0, 0); // local axis used to part the lip bones
+const LOWER_LIP_ANGLE = 0.1; // extra opening of the lower lips (children of the jaw)
+const UPPER_LIP_ANGLE = 0.06; // slight lift of the upper lips (opposite sign)
+const SPEECH_GAIN = 1.5; // speech rarely peaks at 1.0; lift the useful range
+const SPEECH_FLOOR = 0.05; // deadzone: below this the mouth is fully closed (anti-flutter)
+const MOUTH_ATTACK = 0.6; // smoothing when OPENING (fast)
+const MOUTH_RELEASE = 0.18; // smoothing when CLOSING (slower → natural, doesn't "flap")
 
 // Idle life: a slow blink and a gentle breathing sway so the avatar never reads as frozen.
 const ENABLE_BLINK = true;
@@ -103,13 +111,16 @@ export function UltronStage() {
     const avatarGroup = new THREE.Group();
     scene.add(avatarGroup);
     let jaw: BonePose | null = null;
+    const lowerLips: BonePose[] = [];
+    const upperLips: BonePose[] = [];
     const eyelids: BonePose[] = [];
     const emissiveMaterials: THREE.MeshStandardMaterial[] = [];
-    let smoothedLevel = 0;
+    let mouthOpen = 0; // enveloped 0..1 mouth openness; also drives the emissive/bloom pulse
     const baseBloom = bloomPass.strength;
     let disposed = false;
 
-    const deltaQuat = new THREE.Quaternion();
+    const jawQuat = new THREE.Quaternion();
+    const lipQuat = new THREE.Quaternion();
     const blinkQuat = new THREE.Quaternion();
 
     const loader = new GLTFLoader();
@@ -137,10 +148,15 @@ export function UltronStage() {
           }
           if ((obj as THREE.Bone).isBone) {
             const name = obj.name.toLowerCase();
+            const pose = (): BonePose => ({ bone: obj, rest: obj.quaternion.clone() });
             if (!jaw && name.includes("jaw")) {
-              jaw = { bone: obj, rest: obj.quaternion.clone() };
+              jaw = pose();
+            } else if (name.includes("lip") && name.includes("lower")) {
+              lowerLips.push(pose());
+            } else if (name.includes("lip") && name.includes("upper")) {
+              upperLips.push(pose());
             } else if (name.includes("eyelid") && name.includes("upper")) {
-              eyelids.push({ bone: obj, rest: obj.quaternion.clone() });
+              eyelids.push(pose());
             }
           }
         });
@@ -192,14 +208,26 @@ export function UltronStage() {
 
       const live = liveSignalRef.current;
       const speaking = live.status === "speaking";
-      const targetLevel = speaking ? live.level : 0;
-      smoothedLevel += (targetLevel - smoothedLevel) * JAW_SMOOTHING;
+      // Map the speaking amplitude through a deadzone + gain, then an attack/release
+      // envelope so the mouth articulates (opens fast, closes slower) instead of flapping
+      // 1:1 with the volume — and snaps fully shut on silence between words.
+      const raw = speaking ? Math.max(0, (live.level - SPEECH_FLOOR) / (1 - SPEECH_FLOOR)) : 0;
+      const target = Math.min(1, raw * SPEECH_GAIN);
+      mouthOpen += (target - mouthOpen) * (target > mouthOpen ? MOUTH_ATTACK : MOUTH_RELEASE);
 
-      // Lip-sync: open the jaw proportionally to the speaking amplitude.
+      // Lip-sync: the chin moves only slightly while the lips part — the lower lips follow
+      // the (subtle) jaw, the upper lips lift a touch the other way.
       if (jaw) {
-        const angle = JAW_OPEN_ANGLE * smoothedLevel;
-        deltaQuat.setFromAxisAngle(JAW_OPEN_AXIS, angle);
-        jaw.bone.quaternion.copy(jaw.rest).multiply(deltaQuat);
+        jawQuat.setFromAxisAngle(JAW_OPEN_AXIS, JAW_OPEN_ANGLE * mouthOpen);
+        jaw.bone.quaternion.copy(jaw.rest).multiply(jawQuat);
+      }
+      for (const lip of lowerLips) {
+        lipQuat.setFromAxisAngle(LIP_PART_AXIS, LOWER_LIP_ANGLE * mouthOpen);
+        lip.bone.quaternion.copy(lip.rest).multiply(lipQuat);
+      }
+      for (const lip of upperLips) {
+        lipQuat.setFromAxisAngle(LIP_PART_AXIS, -UPPER_LIP_ANGLE * mouthOpen);
+        lip.bone.quaternion.copy(lip.rest).multiply(lipQuat);
       }
 
       // Idle blink — a quick triangular close/open on a loose cadence.
@@ -216,14 +244,14 @@ export function UltronStage() {
 
       // Breathing sway + a lean into speech so it reads as alive, not a mannequin.
       avatarGroup.rotation.y = Math.sin(elapsed * 0.35) * 0.05 * motion;
-      avatarGroup.position.y = Math.sin(elapsed * 0.8) * 0.01 * motion + smoothedLevel * 0.015;
+      avatarGroup.position.y = Math.sin(elapsed * 0.8) * 0.01 * motion + mouthOpen * 0.015;
 
       // Emissive + bloom breathe with the voice: Ultron lights up when he speaks.
-      const glow = 1.4 + smoothedLevel * 1.8 + (speaking ? 0.2 : 0);
+      const glow = 1.4 + mouthOpen * 1.8 + (speaking ? 0.2 : 0);
       for (const mat of emissiveMaterials) {
         mat.emissiveIntensity += (glow - mat.emissiveIntensity) * 0.2;
       }
-      bloomPass.strength += (baseBloom + smoothedLevel * 0.9 - bloomPass.strength) * 0.15;
+      bloomPass.strength += (baseBloom + mouthOpen * 0.9 - bloomPass.strength) * 0.15;
 
       controls.update();
       composer.render();
