@@ -23,7 +23,11 @@ function buildCsp(nonce: string, isProd: boolean, allowSameOriginFrame: boolean)
     "default-src 'self'",
     "img-src 'self' https://*.supabase.co data: blob:",
     "media-src 'self' blob:",
-    `connect-src 'self' https://*.supabase.co wss://*.supabase.co ${CF_TURNSTILE}`,
+    // `blob:` is required by THREE.GLTFLoader: it extracts the textures embedded in the
+    // .glb (the 3D Ultron avatar) into in-memory blob: URLs and fetches them via
+    // ImageBitmapLoader, which is governed by connect-src. Blob URLs are same-origin and
+    // page-created, so this does not widen the exfiltration surface.
+    `connect-src 'self' blob: https://*.supabase.co wss://*.supabase.co ${CF_TURNSTILE}`,
     scriptSrc,
     "style-src 'self' 'unsafe-inline'",
     // 'self' is required for the dashboard editor's same-origin /lp-preview iframe;
