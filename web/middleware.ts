@@ -13,8 +13,11 @@ function buildCsp(nonce: string, isProd: boolean, allowSameOriginFrame: boolean)
   // bootstrap/hydration scripts run WITHOUT 'unsafe-inline'. In dev, HMR needs
   // 'unsafe-inline'/'unsafe-eval', so we relax there only. The Turnstile host is listed
   // for browsers that don't honor 'strict-dynamic' (and for dev, which has no nonce).
+  // 'wasm-unsafe-eval' lets the MediaPipe face-tracking runtime compile its WebAssembly
+  // (on the Ultron tab). It is far narrower than 'unsafe-eval' — it permits wasm only, not
+  // arbitrary JS eval. Dev already allows 'unsafe-eval' (which covers wasm) for HMR.
   const scriptSrc = isProd
-    ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' ${CF_TURNSTILE}`
+    ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval' ${CF_TURNSTILE}`
     : `script-src 'self' 'unsafe-eval' 'unsafe-inline' ${CF_TURNSTILE}`;
   // The landing-page preview is embedded in an <iframe> by the dashboard editor on the
   // SAME origin, so it must permit same-origin framing; every other route stays 'none'.
@@ -53,7 +56,9 @@ function applyStaticHeaders(
   // SAMEORIGIN (not DENY) for the preview so the same-origin editor iframe can load it.
   res.headers.set("X-Frame-Options", allowSameOriginFrame ? "SAMEORIGIN" : "DENY");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.headers.set("Permissions-Policy", "camera=(), geolocation=(), microphone=(self), display-capture=(self)");
+  // camera=(self): the 3D Ultron tab does on-device webcam face tracking (opt-in) so the
+  // avatar can look at the user. Frames never leave the browser (MediaPipe runs locally).
+  res.headers.set("Permissions-Policy", "camera=(self), geolocation=(), microphone=(self), display-capture=(self)");
   if (isProd) {
     res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
   }

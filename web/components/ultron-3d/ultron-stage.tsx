@@ -10,6 +10,9 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { useUltron } from "@/components/ultron/ultron-provider";
+import { NeuralCoreScene } from "@/components/live/neural-core-scene";
+import { useNeuralCoreState } from "@/components/live/use-neural-core-state";
+import { useFaceTracking, type FaceTrackStatus } from "./use-face-tracking";
 
 const MODEL_URL = "/models/ultron.glb";
 
@@ -40,10 +43,45 @@ const BLINK_DURATION_S = 0.16;
 // (a cheap Perlin-ish noise) so the head softly nods/turns/tilts and never reads as a
 // mechanical loop. Peak angles are tiny (a couple of degrees); the face bones are children
 // of the neck, so the whole head moves while the mouth keeps articulating on top.
-const HEAD_PITCH = 0.035; // nod amplitude in radians (~2°)
-const HEAD_YAW = 0.05; // turn amplitude (~2.9°)
-const HEAD_ROLL = 0.022; // tilt amplitude (~1.3°)
-const HEAD_SPEAK_BOOST = 0.35; // a little extra head motion while he's talking
+const HEAD_PITCH = 0.05; // nod amplitude in radians (~2.9°)
+const HEAD_YAW = 0.07; // turn amplitude (~4°)
+const HEAD_ROLL = 0.032; // tilt amplitude (~1.8°)
+const HEAD_SPEAK_BOOST = 0.5; // noticeably more head motion while he's talking
+
+// Facial micro-expressions so the face is never dead-still — both idle and while speaking.
+// Tiny local-axis rotations (a couple of degrees) of the brow / mouth corners + occasional
+// eye saccades (quick darts that then hold). Amplitudes are small enough that the exact
+// local bone axis doesn't matter visually; the point is subtle, organic life.
+const BROW_INNER_AMP = 0.07; // slow drift of the inner brows (furrow/raise near the nose)
+const BROW_OUTER_AMP = 0.065; // slow drift of the outer brows (temple side)
+const BROW_ENGAGE_RAISE = 0.11; // brows lift when engaged (speaking / agents active)
+const MOUTH_CORNER_AMP = 0.05; // subtle tension/micro-smile at the mouth corners
+const EYE_SACCADE_AMP = 0.06; // how far the eyeballs dart on a saccade
+const EYE_SACCADE_SNAP = 0.25; // per-frame lerp toward the new gaze target (eyes move fast)
+const EYE_MICROSACCADE_AMP = 0.04; // tiny involuntary darts layered on top (even when tracking)
+const EYE_FOCUS_SCALE = 0.86; // eyeball contracts to this scale on a focus pulse (then relaxes)
+const LOWER_LID_AMP = 0.045; // subtle idle drift of the lower eyelids
+const LID_WIDEN_ENGAGE = 0.08; // upper lids open a touch more when engaged (eyes "widen")
+const LID_SQUINT_ENGAGE = 0.07; // lower lids rise a touch when engaged (focus squint)
+const BLINK_LOWER_ANGLE = 0.12; // lower lids rise during a blink (sign calibratable)
+const NECK_LOWER_AMP = 0.03; // secondary neck motion so the neck chain isn't rigid
+const ENGAGE_SMOOTH = 0.08; // how fast the engagement scalar follows its target
+
+// Body language: torso + shoulders, like a human talking. The spine drives a slow breathing
+// sway of the whole upper body; the shoulder bones add a subtle drift + a "retract/settle"
+// when engaged. Kept small — the camera frames the head/upper-chest, and these bones carry
+// the arms, so big angles would swing the (mostly off-frame) arms.
+const SPINE_AMP = 0.02; // slow torso sway / breathing
+const SHOULDER_AMP = 0.018; // idle shoulder drift
+const SHOULDER_ENGAGE = 0.03; // shoulders retract/settle a bit when speaking / active
+
+// Gaze tracking: when the webcam locates the user's face, the head + eyes turn toward them.
+// Eyes lead (snap), head eases behind; ambient motion stays but reduced so he's anchored on
+// the user without freezing. Limits keep him from over-rotating off a glance.
+const GAZE_HEAD_YAW = 0.32; // max head turn toward the user (~18°)
+const GAZE_HEAD_PITCH = 0.2; // max head nod toward the user (~11°)
+const GAZE_EYE_AMP = 0.13; // how far the eyes rotate to lock on (eyes lead the head)
+const GAZE_SMOOTH = 0.1; // how fast the head eases toward the gaze target
 
 // Stainless-steel look. The GLB ships metalness=1 / roughness=1, and a metallic PBR
 // material with no environment to reflect renders as a near-black metal — that's why
@@ -51,6 +89,15 @@ const HEAD_SPEAK_BOOST = 0.35; // a little extra head motion while he's talking
 // reflect, and polish the metal (lower roughness) so each panel reads as brushed steel.
 const STEEL_ROUGHNESS = 0.38; // 0 = mirror, 1 = matte; ~0.38 = brushed stainless steel
 const STEEL_ENV_INTENSITY = 1.3; // how strongly the steel reflects the studio environment
+
+const FACE_STATUS_LABEL: Record<FaceTrackStatus, string> = {
+  off: "Olhar livre",
+  loading: "Iniciando câmera…",
+  tracking: "Te observando",
+  "no-face": "Procurando rosto…",
+  denied: "Câmera negada",
+  error: "Falha no rastreio",
+};
 
 type LoadStatus = "loading" | "ready" | "error";
 
@@ -60,6 +107,15 @@ export function UltronStage() {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const { liveSignalRef } = useUltron();
   const [status, setStatus] = useState<LoadStatus>("loading");
+  // Same agent-driven state that powers /dashboard/live, so the arc reactor behind Ultron
+  // lights up exactly when the agents do (including Ultron-triggered runs).
+  const coreState = useNeuralCoreState();
+  // Mirror "are agents active?" into a ref so the rAF loop can read it per-frame (the
+  // render closure is built once) to drive Ultron's facial reaction when the core fires.
+  const coreActiveRef = useRef(false);
+  coreActiveRef.current = coreState.mode === "activated";
+  // Opt-in on-device webcam face tracking → the avatar looks at the user (gazeRef, no re-render).
+  const { enabled: faceEnabled, status: faceStatus, toggle: toggleFace, gazeRef } = useFaceTracking();
 
   useEffect(() => {
     const host = hostRef.current;
@@ -69,13 +125,15 @@ export function UltronStage() {
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x02060f, 0.12);
+    scene.fog = new THREE.FogExp2(0x000000, 0.12);
 
     const camera = new THREE.PerspectiveCamera(32, 1, 0.05, 100);
     camera.position.set(0, 1.7, 2.4);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setClearColor(0x02060f, 1);
+    // Transparent clear so the arc-reactor canvas behind this one shows through; OutputPass
+    // preserves per-fragment alpha, so only the avatar (and its bloom halo) stays opaque.
+    renderer.setClearColor(0x000000, 0);
     renderer.setPixelRatio(pixelRatio);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -138,11 +196,20 @@ export function UltronStage() {
     scene.add(avatarGroup);
     let jaw: BonePose | null = null;
     let head: BonePose | null = null; // "head neck upper" — parent of all the face bones
+    let neckLower: BonePose | null = null;
+    let spineUpper: BonePose | null = null;
+    const shoulders: BonePose[] = [];
     const lowerLips: BonePose[] = [];
     const upperLips: BonePose[] = [];
-    const eyelids: BonePose[] = [];
+    const eyelids: BonePose[] = []; // upper eyelids (blink + widen)
+    const lowerEyelids: BonePose[] = [];
+    const browsInner: BonePose[] = [];
+    const browsOuter: BonePose[] = [];
+    const eyes: BonePose[] = [];
+    const mouthCorners: BonePose[] = [];
     const emissiveMaterials: THREE.MeshStandardMaterial[] = [];
     let mouthOpen = 0; // enveloped 0..1 mouth openness; also drives the emissive/bloom pulse
+    let engage = 0; // 0..1 facial "engagement": rises while speaking and when agents are active
     const baseBloom = bloomPass.strength;
     let disposed = false;
 
@@ -151,6 +218,24 @@ export function UltronStage() {
     const blinkQuat = new THREE.Quaternion();
     const headQuat = new THREE.Quaternion();
     const headEuler = new THREE.Euler();
+    const faceQuat = new THREE.Quaternion();
+    const eyeEuler = new THREE.Euler();
+    // Eye-saccade state: current gaze + the target it darts to, refreshed at loose intervals.
+    let eyeYaw = 0;
+    let eyePitch = 0;
+    let eyeTargetYaw = 0;
+    let eyeTargetPitch = 0;
+    let nextSaccadeAt = 0;
+    // Involuntary micro-saccades (always on) + a periodic "focus" contraction of the eyeball.
+    let eyeMicroYaw = 0;
+    let eyeMicroPitch = 0;
+    let nextMicroAt = 0;
+    let focusScale = 1;
+    let focusUntil = 0;
+    let nextFocusAt = 2;
+    // Eased head orientation toward the user (when face tracking is active).
+    let headGazeYaw = 0;
+    let headGazePitch = 0;
 
     const loader = new GLTFLoader();
     loader.load(
@@ -195,12 +280,28 @@ export function UltronStage() {
               jaw = pose();
             } else if (!head && name.includes("neck") && name.includes("upper")) {
               head = pose();
+            } else if (!neckLower && name.includes("neck") && name.includes("lower")) {
+              neckLower = pose();
             } else if (name.includes("lip") && name.includes("lower")) {
               lowerLips.push(pose());
             } else if (name.includes("lip") && name.includes("upper")) {
               upperLips.push(pose());
+            } else if (name.includes("eyebrow") && name.endsWith("1")) {
+              browsInner.push(pose()); // segment 1 = inner (near the nose)
+            } else if (name.includes("eyebrow")) {
+              browsOuter.push(pose()); // segment 2 = outer (temple side)
+            } else if (name.includes("eyeball")) {
+              eyes.push(pose());
+            } else if (name.includes("mouth corner")) {
+              mouthCorners.push(pose());
             } else if (name.includes("eyelid") && name.includes("upper")) {
               eyelids.push(pose());
+            } else if (name.includes("eyelid") && name.includes("lower")) {
+              lowerEyelids.push(pose());
+            } else if (!spineUpper && name.includes("spine") && name.includes("upper")) {
+              spineUpper = pose();
+            } else if (name.includes("shoulder") && name.endsWith("1")) {
+              shoulders.push(pose()); // primary shoulder bone per side (carries the arm)
             }
           }
         });
@@ -259,6 +360,15 @@ export function UltronStage() {
       const target = Math.min(1, raw * SPEECH_GAIN);
       mouthOpen += (target - mouthOpen) * (target > mouthOpen ? MOUTH_ATTACK : MOUTH_RELEASE);
 
+      // Facial "engagement": calm when idle, up while speaking, peak when agents are active.
+      // Drives brow lift, eye widening/squint and saccade energy so Ultron reacts to work.
+      const targetEngage = Math.max(speaking ? 0.45 : 0, mouthOpen, coreActiveRef.current ? 0.8 : 0);
+      engage += (targetEngage - engage) * ENGAGE_SMOOTH;
+
+      // Blink envelope (shared by upper + lower lids): a quick triangular close on a loose cadence.
+      const blinkPhase = (elapsed % BLINK_PERIOD_S) / BLINK_DURATION_S;
+      const blink = ENABLE_BLINK && blinkPhase < 1 ? Math.sin(blinkPhase * Math.PI) : 0;
+
       // Lip-sync: the chin moves only slightly while the lips part — the lower lips follow
       // the (subtle) jaw, the upper lips lift a touch the other way.
       if (jaw) {
@@ -274,28 +384,149 @@ export function UltronStage() {
         lip.bone.quaternion.copy(lip.rest).multiply(lipQuat);
       }
 
-      // Idle blink — a quick triangular close/open on a loose cadence.
-      if (ENABLE_BLINK && eyelids.length > 0) {
-        const phase = (elapsed % BLINK_PERIOD_S) / BLINK_DURATION_S;
-        const blink = phase < 1 ? Math.sin(phase * Math.PI) : 0;
-        if (blink > 0.001) {
-          blinkQuat.setFromAxisAngle(JAW_OPEN_AXIS, BLINK_ANGLE * blink);
-          for (const lid of eyelids) lid.bone.quaternion.copy(lid.rest).multiply(blinkQuat);
-        } else {
-          for (const lid of eyelids) lid.bone.quaternion.copy(lid.rest);
+      // Upper eyelids: blink (closes, +) competes with a slight widen when engaged (opens, −)
+      // so the eyes "open up" when Ultron is alert. Blink wins while it fires.
+      if (eyelids.length > 0) {
+        const lidAngle = BLINK_ANGLE * blink - LID_WIDEN_ENGAGE * engage * (1 - blink);
+        blinkQuat.setFromAxisAngle(JAW_OPEN_AXIS, lidAngle);
+        for (const lid of eyelids) lid.bone.quaternion.copy(lid.rest).multiply(blinkQuat);
+      }
+
+      // Facial micro-expressions — keep the face alive whether silent or talking.
+      // Eyebrows: inner (near nose) and outer (temple) drift on separate phases and lift
+      // when engaged; a per-bone phase adds slight L/R asymmetry so it never reads robotic.
+      if (browsInner.length > 0) {
+        const d = Math.sin(elapsed * 0.6 + 0.5) * 0.5 + Math.sin(elapsed * 0.27) * 0.5;
+        browsInner.forEach((b, i) => {
+          const asym = Math.sin(elapsed * 0.5 + i * 1.7) * 0.3;
+          const a = ((d + asym) * BROW_INNER_AMP + engage * BROW_ENGAGE_RAISE) * motion;
+          faceQuat.setFromAxisAngle(JAW_OPEN_AXIS, a);
+          b.bone.quaternion.copy(b.rest).multiply(faceQuat);
+        });
+      }
+      if (browsOuter.length > 0) {
+        const d = Math.sin(elapsed * 0.43 + 2.3) * 0.5 + Math.sin(elapsed * 0.19 + 1.1) * 0.5;
+        browsOuter.forEach((b, i) => {
+          const asym = Math.sin(elapsed * 0.37 + i * 2.1) * 0.3;
+          const a = ((d + asym) * BROW_OUTER_AMP + engage * BROW_ENGAGE_RAISE * 0.8) * motion;
+          faceQuat.setFromAxisAngle(JAW_OPEN_AXIS, a);
+          b.bone.quaternion.copy(b.rest).multiply(faceQuat);
+        });
+      }
+      // Lower eyelids: subtle idle drift + focus "squint" when engaged + a rise during the
+      // blink (the lower lid participates too, like a real blink).
+      if (lowerEyelids.length > 0) {
+        const d = Math.sin(elapsed * 0.33 + 1.2) * 0.5 + Math.sin(elapsed * 0.21) * 0.5;
+        const a = (d * LOWER_LID_AMP + engage * LID_SQUINT_ENGAGE) * motion + BLINK_LOWER_ANGLE * blink;
+        faceQuat.setFromAxisAngle(JAW_OPEN_AXIS, a);
+        for (const lid of lowerEyelids) lid.bone.quaternion.copy(lid.rest).multiply(faceQuat);
+      }
+      // Mouth corners: subtle tension/micro-smile, plus a touch of pull while speaking.
+      if (mouthCorners.length > 0) {
+        const corner = Math.sin(elapsed * 0.4 + 2.0) * 0.5 + Math.sin(elapsed * 0.17) * 0.5;
+        const cornerAngle = (corner * MOUTH_CORNER_AMP + mouthOpen * MOUTH_CORNER_AMP * 0.6) * motion;
+        faceQuat.setFromAxisAngle(JAW_OPEN_AXIS, cornerAngle);
+        for (const c of mouthCorners) c.bone.quaternion.copy(c.rest).multiply(faceQuat);
+      }
+      // Eyes: when tracking, they lock onto the user; otherwise they make ambient saccades.
+      // In BOTH modes an involuntary micro-saccade jitter is layered on top so the eyeball is
+      // never perfectly still. A periodic "focus" pulse contracts the eyeball, then relaxes.
+      const gaze = gazeRef.current;
+      if (eyes.length > 0) {
+        // Involuntary micro-saccades — refreshed on a fast, loose cadence (always on).
+        if (elapsed >= nextMicroAt) {
+          eyeMicroYaw = (Math.random() * 2 - 1) * EYE_MICROSACCADE_AMP;
+          eyeMicroPitch = (Math.random() * 2 - 1) * EYE_MICROSACCADE_AMP * 0.6;
+          nextMicroAt = elapsed + 0.35 + Math.random() * 1.1;
+        }
+        if (gaze.active) {
+          // Eyes lock onto the user (they lead; the head eases in behind, below).
+          eyeTargetYaw = Math.max(-1, Math.min(1, gaze.yaw)) * GAZE_EYE_AMP;
+          eyeTargetPitch = Math.max(-1, Math.min(1, gaze.pitch)) * GAZE_EYE_AMP * 0.7;
+        } else if (elapsed >= nextSaccadeAt) {
+          const amp = EYE_SACCADE_AMP * (1 + engage * 0.6); // wider darts when engaged
+          eyeTargetYaw = (Math.random() * 2 - 1) * amp;
+          eyeTargetPitch = (Math.random() * 2 - 1) * amp * 0.6;
+          const hold = engage > 0.5 ? 0.5 + Math.random() * 1.0 : 1.4 + Math.random() * 2.8;
+          nextSaccadeAt = elapsed + hold;
+        }
+        eyeYaw += (eyeTargetYaw + eyeMicroYaw - eyeYaw) * EYE_SACCADE_SNAP;
+        eyePitch += (eyeTargetPitch + eyeMicroPitch - eyePitch) * EYE_SACCADE_SNAP;
+        eyeEuler.set(eyePitch, eyeYaw, 0, "XYZ");
+        faceQuat.setFromEuler(eyeEuler);
+
+        // Focus pulse: occasionally the eyeball contracts (focusing) then relaxes back to 1.
+        if (elapsed >= nextFocusAt) {
+          focusUntil = elapsed + 0.45;
+          nextFocusAt = elapsed + 3 + Math.random() * 4;
+        }
+        const focusTarget = elapsed < focusUntil ? EYE_FOCUS_SCALE : 1;
+        focusScale += (focusTarget - focusScale) * 0.2;
+
+        for (const e of eyes) {
+          e.bone.quaternion.copy(e.rest).multiply(faceQuat);
+          e.bone.scale.setScalar(focusScale);
         }
       }
 
-      // Subtle idle head motion: layered slow sines at incommensurate frequencies give an
-      // organic nod/turn/tilt (no mechanical loop), a touch more lively while speaking.
+      // Head: layered slow sines give an organic ambient nod/turn/tilt. When face tracking
+      // is active, the head EASES toward the user (gaze) and the ambient is dialed down so
+      // he stays anchored on them but never freezes. Ease the gaze offset back to 0 when the
+      // user leaves frame.
       if (head) {
         const speak = 1 + (speaking ? HEAD_SPEAK_BOOST : 0);
-        const pitch = (Math.sin(elapsed * 0.5) * 0.6 + Math.sin(elapsed * 0.23 + 1.3) * 0.4) * HEAD_PITCH * motion * speak;
-        const yaw = (Math.sin(elapsed * 0.37 + 2.1) * 0.6 + Math.sin(elapsed * 0.19 + 0.7) * 0.4) * HEAD_YAW * motion * speak;
-        const roll = (Math.sin(elapsed * 0.31 + 4.2) * 0.6 + Math.sin(elapsed * 0.17 + 3.1) * 0.4) * HEAD_ROLL * motion * speak;
+        const ambPitch = (Math.sin(elapsed * 0.5) * 0.6 + Math.sin(elapsed * 0.23 + 1.3) * 0.4) * HEAD_PITCH * motion * speak;
+        const ambYaw = (Math.sin(elapsed * 0.37 + 2.1) * 0.6 + Math.sin(elapsed * 0.19 + 0.7) * 0.4) * HEAD_YAW * motion * speak;
+        const ambRoll = (Math.sin(elapsed * 0.31 + 4.2) * 0.6 + Math.sin(elapsed * 0.17 + 3.1) * 0.4) * HEAD_ROLL * motion * speak;
+
+        const targetGazeYaw = gaze.active ? Math.max(-1, Math.min(1, gaze.yaw)) * GAZE_HEAD_YAW : 0;
+        const targetGazePitch = gaze.active ? Math.max(-1, Math.min(1, gaze.pitch)) * GAZE_HEAD_PITCH : 0;
+        headGazeYaw += (targetGazeYaw - headGazeYaw) * GAZE_SMOOTH;
+        headGazePitch += (targetGazePitch - headGazePitch) * GAZE_SMOOTH;
+
+        // Reduce ambient while locked on the user (blend by how far the gaze is engaged).
+        const amb = gaze.active ? 0.4 : 1;
+        const pitch = headGazePitch + ambPitch * amb;
+        const yaw = headGazeYaw + ambYaw * amb;
+        const roll = ambRoll * (gaze.active ? 0.6 : 1);
         headEuler.set(pitch, yaw, roll, "XYZ");
         headQuat.setFromEuler(headEuler);
         head.bone.quaternion.copy(head.rest).multiply(headQuat);
+      }
+
+      // Lower neck: a small secondary motion on a different phase so the neck reads as a
+      // chain (head leads, neck base follows) instead of a rigid pivot.
+      if (neckLower) {
+        const nPitch = Math.sin(elapsed * 0.29 + 0.9) * NECK_LOWER_AMP * motion;
+        const nYaw = Math.sin(elapsed * 0.23 + 3.4) * NECK_LOWER_AMP * motion;
+        headEuler.set(nPitch, nYaw, 0, "XYZ");
+        headQuat.setFromEuler(headEuler);
+        neckLower.bone.quaternion.copy(neckLower.rest).multiply(headQuat);
+      }
+
+      // Torso: slow breathing/weight-shift of the whole upper body (the spine carries the
+      // shoulders + neck + head, so this is the base of the body language), faster breath
+      // component on top.
+      if (spineUpper) {
+        const sway = Math.sin(elapsed * 0.27 + 1.5) * SPINE_AMP;
+        const breath = Math.sin(elapsed * 0.85) * SPINE_AMP * 0.4;
+        const tilt = Math.cos(elapsed * 0.19 + 0.6) * SPINE_AMP * 0.5;
+        headEuler.set(breath, sway, tilt, "XYZ");
+        headQuat.setFromEuler(headEuler);
+        spineUpper.bone.quaternion.copy(spineUpper.rest).multiply(headQuat);
+      }
+
+      // Shoulders: a subtle idle drift plus a "retract/settle" when engaged (talking / agents
+      // active) — like a human shifting their shoulders while speaking. Small, with slight
+      // L/R asymmetry; large angles would swing the arms (mostly off-frame).
+      if (shoulders.length > 0) {
+        const drift = Math.sin(elapsed * 0.5 + 1.0) * 0.5 + Math.sin(elapsed * 0.27 + 2.0) * 0.5;
+        shoulders.forEach((s, i) => {
+          const asym = Math.sin(elapsed * 0.4 + i * 2.0) * 0.4;
+          const a = ((drift + asym) * SHOULDER_AMP + engage * SHOULDER_ENGAGE) * motion;
+          faceQuat.setFromAxisAngle(JAW_OPEN_AXIS, a);
+          s.bone.quaternion.copy(s.rest).multiply(faceQuat);
+        });
       }
 
       // Faint whole-body weight-shift sway, kept very subtle so it complements (not fights)
@@ -337,14 +568,22 @@ export function UltronStage() {
       renderer.dispose();
       renderer.domElement.remove();
     };
-  }, [liveSignalRef]);
+  }, [liveSignalRef, gazeRef]);
 
   return (
-    <div className="relative h-[calc(100vh-9rem)] min-h-[480px] w-full overflow-hidden rounded-lg border border-cyan-300/15 bg-[#02060f]">
-      <div ref={hostRef} className="h-full w-full" aria-label="Avatar 3D do Ultron" />
+    <div className="relative h-[calc(100vh-9rem)] min-h-[480px] w-full overflow-hidden rounded-lg border border-cyan-300/15 bg-black">
+      {/* Living backdrop: the exact arc reactor from /dashboard/live, driven by the same
+          agent state — it activates when the agents do. Behind the avatar, non-interactive. */}
+      <div className="pointer-events-none absolute inset-0 z-0">
+        <NeuralCoreScene state={coreState} heightClassName="h-full" />
+      </div>
+
+      {/* Avatar canvas on top, transparent so the reactor shows through. Receives pointer
+          events for OrbitControls. */}
+      <div ref={hostRef} className="absolute inset-0 z-10 h-full w-full" aria-label="Avatar 3D do Ultron" />
 
       {/* Cockpit chrome — HUD corners + grid, matching the JARVIS language of the live tab. */}
-      <div className="pointer-events-none absolute inset-0">
+      <div className="pointer-events-none absolute inset-0 z-20">
         <div className="absolute left-4 top-4 font-mono text-[10px] uppercase tracking-[0.28em] text-cyan-200/60">
           ULTRON · PRIME
         </div>
@@ -357,8 +596,34 @@ export function UltronStage() {
         <div className="absolute bottom-3 right-3 h-6 w-6 border-b border-r border-cyan-300/40" />
       </div>
 
+      {/* Opt-in webcam face tracking — Ultron looks at the user. Camera runs on-device. */}
+      <button
+        type="button"
+        onClick={toggleFace}
+        aria-pressed={faceEnabled}
+        title="Liga a webcam (no seu navegador) para o Ultron olhar para você. As imagens não saem do dispositivo."
+        className={`pointer-events-auto absolute bottom-4 left-1/2 z-20 -translate-x-1/2 inline-flex items-center gap-2 rounded-md border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] backdrop-blur-md transition ${
+          faceEnabled
+            ? "border-cyan-300/45 bg-cyan-400/15 text-cyan-100"
+            : "border-white/15 bg-black/40 text-white/65 hover:border-cyan-200/35 hover:text-white"
+        }`}
+      >
+        <span
+          className={`h-2 w-2 rounded-full ${
+            faceStatus === "tracking"
+              ? "bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.9)]"
+              : faceStatus === "denied" || faceStatus === "error"
+                ? "bg-red-400"
+                : faceEnabled
+                  ? "bg-cyan-300"
+                  : "bg-white/30"
+          }`}
+        />
+        {faceEnabled ? FACE_STATUS_LABEL[faceStatus] : "Ultron te observa"}
+      </button>
+
       {status !== "ready" && (
-        <div className="absolute inset-0 grid place-items-center bg-[#02060f]/80">
+        <div className="absolute inset-0 z-30 grid place-items-center bg-black/80">
           {status === "loading" ? (
             <div className="flex flex-col items-center gap-3 font-mono text-xs uppercase tracking-[0.24em] text-cyan-200/70">
               <span className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-300/30 border-t-cyan-200" />
