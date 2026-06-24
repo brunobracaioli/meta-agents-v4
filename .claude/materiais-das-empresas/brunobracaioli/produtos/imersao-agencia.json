@@ -5,14 +5,15 @@
   "shortCode": "IMR",
   "status": "active",
   "tagline": "Pare de ser babá de campanha. Monte uma agência de IA que roda 24/7.",
-  "positioning": "Tire o gestor do operacional manual (abrir o Ads Manager 8x/dia) e coloque-o no comando estratégico. Human-in-the-loop, não execução braçal: você monta times de agentes de IA que operam uma agência de Meta Ads de forma autônoma.",
+  "positioning": "Tire o gestor do operacional manual (abrir o Ads Manager 8x/dia) e coloque-o no comando estratégico. Human-in-the-loop, não execução braçal: você aprende a montar times de agentes de IA que operam uma agência de Meta Ads e Google Ads de forma autônoma.",
   "tone": "tech-hacker",
   "language": "pt-BR",
   "defaultSubdomain": "imersao-agencia",
-  "format": "Workshop ao vivo no Zoom, mão na massa, com gravação disponível para quem participar",
-  "eventDate": "2026-06-20",
-  "schedule": "13h às 18h (5 horas)",
-  "duration": "5h ao vivo",
+  "format": "Workshop ao vivo no Zoom, mão na massa, em 3 dias. Você aprende a CRIAR o projeto da AgêncIA do zero — eu entrego os materiais necessários e mostro o passo a passo detalhado nas lives exclusivas (não é um projeto pronto entregue de mão beijada). A gravação dos 3 dias está inclusa no valor.",
+  "eventDate": "2026-07-11",
+  "eventDatesLabel": "11, 12 e 13 de julho",
+  "schedule": "Sáb 11/07 e dom 12/07: 13h às 19h · Seg 13/07: 20h às 22h",
+  "duration": "3 dias ao vivo",
   "offer": {
     "priceCents": 14700,
     "anchorPriceCents": 49700,
@@ -20,7 +21,7 @@
     "checkoutUrl": "https://pay.hotmart.com/A106205617B?bid=1781362751851",
     "waitlistUrl": "mailto:bruno@b2tech.io?subject=Lista%20de%20espera%20Imers%C3%A3o%20Ag%C3%AAncIA",
     "cartState": "open",
-    "deadline": "2026-06-20T13:00:00-03:00",
+    "deadline": "2026-07-11T13:00:00-03:00",
     "payments": ["Pix", "Cartão", "Boleto"],
     "guarantee": "7 dias de garantia — reembolso 100% via email para bruno@b2tech.io.",
     "scarcity": "Turma ao vivo, 1º lote, vagas limitadas — fecha quando encher.",
@@ -30,26 +31,26 @@
     "installmentsLabel": "ou 12x de R$ 15,20* · 1º lote, à vista",
     "secure": "Pagamento seguro via Hotmart · acesso imediato após a compra",
     "bonuses": [
-      "Sistema de agentes montado e online ao vivo",
-      "Todos os prompts usados na imersão",
-      "Estrutura completa de times + subtimes de agentes",
-      "Cron de otimização 24/7 configurado",
+      "Passo a passo detalhado pra você criar a AgêncIA do zero (Meta Ads + Google Ads)",
+      "Todos os materiais e prompts usados nas lives",
+      "Estrutura completa de times + subtimes de agentes pra replicar",
+      "Como configurar o cron de otimização 24/7",
       "Playbook de replicação por cliente",
-      "Gravação dos 5 blocos pra rever quando quiser"
+      "Gravação dos 3 dias inclusa no valor"
     ]
   },
-  "whatItIs": "Workshop ao vivo onde o participante monta uma estrutura de agentes de IA que operam uma agência de Meta Ads de forma autônoma. Você sai da imersão com os primeiros times de agentes configurados e 'online', prontos para rodar no automático para múltiplos clientes simultaneamente.",
+  "whatItIs": "Workshop ao vivo de 3 dias onde você APRENDE A CRIAR, do zero, uma estrutura de agentes de IA que operam uma agência de tráfego (Meta Ads e Google Ads) de forma autônoma. Não é um projeto pronto entregue de mão beijada: eu dou os materiais necessários e mostro o passo a passo detalhado pra você montar o seu — e sair com os primeiros times de agentes configurados e rodando para múltiplos clientes simultaneamente.",
   "hero": {
-    "badge": "20/06 · ao vivo · 5h · 1º lote",
+    "badge": "11, 12 e 13/07 · 3 dias ao vivo · 1º lote",
     "headline": "Pare de ser babá de campanha.",
     "headlineAccent": "Monte uma agência de IA que roda 24/7.",
-    "subhead": "Workshop ao vivo, mão na massa: você monta times de agentes de IA que criam, otimizam e monitoram Meta Ads no automático — e sai com o sistema online, pronto pra escalar pra múltiplos clientes.",
+    "subhead": "Workshop ao vivo de 3 dias, mão na massa: você aprende a criar, do zero, times de agentes de IA que criam, editam e analisam campanhas no Meta Ads e no Google Ads no automático — com os materiais e o passo a passo detalhado pra montar a sua e escalar pra múltiplos clientes.",
     "ctaLabel": "Garantir minha vaga",
     "terminal": {
       "title": "~/agencia · claude-code",
       "prompt": "claude \"cria a campanha do cliente X e otimiza sozinho\"",
       "lines": [
-        "Conectando ao MCP do Facebook…",
+        "Conectando aos MCPs do Meta e do Google Ads…",
         "Lendo CPA das últimas 72h em 6 conjuntos",
         "Pausando 2 criativos abaixo da meta · duplicando o vencedor",
         "Subindo novo conjunto · aguardando sua aprovação no celular"
@@ -71,47 +72,48 @@
     }
   ],
   "mecanismo": {
-    "loop": "criar · otimizar · monitorar · repetir",
+    "loop": "criar · editar · analisar · repetir",
     "intro": "O sistema é um loop de 4 funções operado por três times de agentes.",
     "times": [
       {
         "name": "Criadores de campanha",
-        "desc": "Claude Code como orquestrador: o briefing vira campanha estruturada (público, criativo, budget, objetivo) via spec, revisada antes de subir."
+        "desc": "Claude Code como orquestrador: o briefing vira campanha estruturada (público, criativo, budget, objetivo) no Meta Ads e no Google Ads via spec, revisada antes de subir."
       },
       {
         "name": "Analistas de desempenho",
-        "desc": "MCP do Facebook conectado lê as métricas reais da conta (ex.: CPA das últimas 72h em N conjuntos) a cada hora."
+        "desc": "MCPs do Meta Ads e do Google Ads conectados leem as métricas reais das contas (ex.: CPA das últimas 72h em N conjuntos) a cada hora."
       },
       {
         "name": "Editores de campanhas ativas",
-        "desc": "Trocam anúncios, duplicam campanhas/conjuntos/anúncios vencedores, trocam públicos e pausam o que não performou."
+        "desc": "Trocam anúncios, duplicam campanhas/conjuntos/anúncios vencedores, trocam públicos e pausam o que não performou — no Meta e no Google."
       }
     ],
     "subtimes": ["Copy", "Geração de anúncios em imagem", "Geração de anúncios em vídeo", "Criação de landing pages", "Traqueamento"],
     "loop247": "Cron + human-in-the-loop: roda sozinho dia e noite; decisões sensíveis pedem sua aprovação — direto do celular."
   },
   "stack": {
-    "cerebro": ["Claude Code (orquestrador)", "MCP do Facebook (ponte oficial Meta Ads)", "GitHub (versionamento do que os agentes produzem)"],
+    "cerebro": ["Claude Code (orquestrador)", "MCPs oficiais do Meta Ads e do Google Ads", "GitHub (versionamento do que os agentes produzem)"],
     "infra": ["Fly.io (onde roda 24/7)", "Supabase (estado das campanhas)", "Upstash (jobs agendados / triggers)"],
     "custoArgumento": "Tudo open-source ou de baixo custo, com planos gratuitos no início — nada de SaaS caro de gestão de tráfego."
   },
   "prereqs": [
     "Claude Code Pro ou Max (assinatura ativa)",
     "Conta no GitHub",
-    "Conta de anúncios de teste (Meta Ads que você administre)",
-    "Não precisa ser dev — só usar o Claude Code no básico; o resto é conduzido ao vivo"
+    "Conta de anúncios que você administre (Meta Ads e/ou Google Ads)",
+    "Não precisa ser dev — só usar o Claude Code no básico; o resto é conduzido ao vivo, passo a passo"
   ],
   "agenda": [
-    { "bloco": "Bloco 01–02 // Setup", "desc": "Conectar Claude Code + MCP do Facebook à conta; primeiro prompt que lê métricas reais e descreve o cenário." },
-    { "bloco": "Bloco 03 // Criação", "desc": "A campanha nasce de uma spec (público, criativo, budget, objetivo) revisada pelo agente antes de subir." },
-    { "bloco": "Bloco 04–05 // Loop & Entrega", "desc": "Cron rodando, human-in-the-loop no celular e playbook de replicação por cliente." }
+    { "bloco": "Dia 1 · Sáb 11/07, 13h às 19h // Fundação", "desc": "Conectar Claude Code aos MCPs do Meta Ads e do Google Ads; primeiro prompt que lê métricas reais e descreve o cenário. Materiais e passo a passo entregues ao vivo." },
+    { "bloco": "Dia 2 · Dom 12/07, 13h às 19h // Criação & análise", "desc": "A campanha nasce de uma spec (público, criativo, budget, objetivo) revisada pelo agente antes de subir; os agentes criam, editam e analisam campanhas no Meta e no Google." },
+    { "bloco": "Dia 3 · Seg 13/07, 20h às 22h // Loop 24/7 & replicação", "desc": "Cron rodando, human-in-the-loop no celular e playbook de replicação por cliente." }
   ],
   "entregaveis": [
-    "Sistema montado e online",
-    "Prompts usados na imersão",
+    "Passo a passo detalhado pra criar a AgêncIA do zero",
+    "Materiais e prompts usados nas lives",
     "Estrutura de agentes (times e subtimes)",
-    "Cron de otimização configurado",
-    "Playbook de replicação por cliente"
+    "Como configurar o cron de otimização 24/7",
+    "Playbook de replicação por cliente",
+    "Gravação dos 3 dias inclusa"
   ],
   "persona": [
     { "icon": "🎯", "title": "Gestor de tráfego solo", "desc": "Vive dentro do Ads Manager e quer recuperar o dia, sem largar a qualidade da operação." },
@@ -123,6 +125,7 @@
     "theirs": "Gestão manual",
     "rows": [
       { "label": "Otimiza 24/7 (madrugada, fim de semana)", "ours": true, "theirs": false },
+      { "label": "Cria, edita e analisa Meta Ads e Google Ads sozinho", "ours": true, "theirs": false },
       { "label": "Escala pra múltiplos clientes sem mais trabalho braçal", "ours": true, "theirs": false },
       { "label": "Decisão estratégica, não execução manual", "ours": true, "theirs": false },
       { "label": "Você preso no Ads Manager o dia todo", "ours": false, "theirs": true },
@@ -186,18 +189,18 @@
     { "value": "10+ anos", "label": "de stack" },
     { "value": "24/7", "label": "loop de otimização" },
     { "value": "3", "label": "partner programs" },
-    { "value": "5h", "label": "de imersão" }
+    { "value": "3", "label": "dias ao vivo" }
   ],
   "faqHints": [
-    { "q": "Preciso ser desenvolvedor?", "a": "Não. Você só precisa usar o Claude Code no básico — o resto é conduzido ao vivo, mão na massa." },
-    { "q": "Vou sair com o sistema funcionando?", "a": "Sim. Você sai da imersão com os primeiros times de agentes configurados e online, prontos pra rodar." },
-    { "q": "Tem gravação?", "a": "Sim, quem participa recebe a gravação dos 5 blocos." },
-    { "q": "O que preciso ter antes?", "a": "Claude Code Pro ou Max, conta no GitHub e uma conta de anúncios de teste que você administre." },
+    { "q": "Preciso ser desenvolvedor?", "a": "Não. Você só precisa usar o Claude Code no básico — o resto é conduzido ao vivo, passo a passo, mão na massa." },
+    { "q": "Vou sair com o sistema funcionando?", "a": "Você aprende a criar o seu, do zero. Não é um projeto pronto entregue de mão beijada: eu dou os materiais necessários e mostro o passo a passo detalhado, e você sai com os primeiros times de agentes configurados e rodando." },
+    { "q": "Tem gravação?", "a": "Sim. A gravação dos 3 dias está inclusa no valor — você assiste quando e quantas vezes quiser." },
+    { "q": "O que preciso ter antes?", "a": "Claude Code Pro ou Max, conta no GitHub e uma conta de anúncios que você administre (Meta Ads e/ou Google Ads)." },
     { "q": "Como funciona a garantia?", "a": "7 dias de garantia — se não for pra você, reembolso de 100% via email para bruno@b2tech.io." }
   ],
   "seo": {
     "title": "Imersão AgêncIA Tráfego Pago — sua agência de IA 24/7",
-    "description": "Workshop ao vivo: monte times de agentes de IA que operam Meta Ads no automático, 24/7. 20/06, 5h, mão na massa. 1º lote R$147."
+    "description": "Workshop ao vivo de 3 dias: aprenda a criar times de agentes de IA que criam, editam e analisam Meta Ads e Google Ads no automático, 24/7. 11, 12 e 13 de julho. Gravação inclusa. 1º lote R$147."
   },
   "assets": {
     "logo": ".claude/materiais-das-empresas/brunobracaioli/logo/logo.png",
