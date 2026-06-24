@@ -1170,4 +1170,182 @@ footer a:hover {
   .cta:hover {
     transform: none;
   }
+  .fade-up {
+    animation: none !important;
+  }
+  .hero-caret {
+    animation: none !important;
+  }
+}
+
+/* ============================================================================
+   Hero "antigravity" wave — white, full-screen, centered. Ported from
+   claude-code.b2tech.io. Self-contained (does NOT reuse the dark `.hero`):
+   WebGL particle wave behind a centered column (wordmark → eyebrow → typewriter
+   H1 → subhead → black pill CTA). See sections/Hero.tsx + HeroParticleField.tsx.
+   ============================================================================ */
+.hero-wave {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100svh;
+  overflow: hidden;
+  background: #ffffff;
+  color: #1a1a1a;
+}
+
+.hero-wave-field {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+/* Soft white scrim so the headline stays legible over the wave. */
+.hero-wave-scrim {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: radial-gradient(
+    58% 46% at 50% 42%,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(255, 255, 255, 0.65) 45%,
+    rgba(255, 255, 255, 0) 78%
+  );
+}
+
+.hero-wave-content {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  padding: 104px 24px 88px;
+  text-align: center;
+}
+
+.hero-wave-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #1a1a1a;
+}
+
+.hero-wave-mark {
+  height: 30px;
+  width: auto;
+  display: block;
+  border-radius: 6px;
+}
+
+.hero-wave-brand {
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.hero-wave-eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #5f6368;
+}
+
+.hero-wave-title {
+  max-width: 660px;
+  margin: 0;
+  font-family: var(--font-title);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #1a1a1a;
+  font-size: clamp(2rem, 6vw, 3.75rem);
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+.hero-wave-lead {
+  max-width: 560px;
+  margin: 0;
+  font-size: clamp(1rem, 2.4vw, 1.2rem);
+  line-height: 1.6;
+  color: #5f6368;
+  text-wrap: balance;
+}
+
+.hero-wave-cta {
+  margin-top: 4px;
+}
+
+/* Black pill CTA (claude-code look) — overrides the orange `.cta` within this hero only. */
+.hero-wave-cta .cta {
+  background: #1a1a1a;
+  color: #ffffff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.hero-wave-cta .cta:hover {
+  background: #000000;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
+}
+
+/* Typewriter caret + screen-reader-only full text (HeroTypedHeader). */
+.hero-caret {
+  display: inline-block;
+  width: 0.08em;
+  height: 1em;
+  margin-bottom: -0.05em;
+  transform: translateY(0.1em);
+  background: currentColor;
+  vertical-align: baseline;
+  animation: blink 1s steps(1) infinite;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fade-up {
+  animation: fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .hero-wave-content {
+    gap: 22px;
+    padding: 92px 20px 72px;
+  }
 }
