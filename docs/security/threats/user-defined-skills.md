@@ -56,11 +56,14 @@ campos da skill no enqueue/materialização.
   operador (reusar `rateLimiters`); só operador autenticado.
 
 ### E — Elevation of privilege
-- **Ameaça:** skill chama tool fora do declarado p/ agir além do pretendido. **Mitigação:**
-  `allowed_tools` no frontmatter (defesa-em-profundidade — **spike Wave 2** confirma a eficácia sob
-  `--dangerously-skip-permissions`); a defesa primária é que a skill nunca excede a autoridade do
-  *próprio* operador, e o gasto é gated (budget cap + PAUSED). `capability='write'` é gate explícito
-  separado de `read`.
+- **Ameaça:** skill chama tool fora do declarado p/ agir além do pretendido. **Realidade (spike
+  2026-06-25):** `allowed_tools` no frontmatter **NÃO** é enforced sob `--dangerously-skip-permissions`
+  — uma skill `allowed-tools: Read` rodou `Bash`. Logo o `allowed_tools` é **advisory**, não uma
+  barreira de runtime. **Mitigação real:** a skill nunca excede a autoridade que o operador já tem
+  sobre os *próprios* clientes (sem cross-tenant — RLS + 3ª barreira do `run-skill.sh`), e o gasto é
+  gated a nível de Meta API (PAUSED + `daily_budget_cap_cents` + ativação explícita). `capability='write'`
+  e a confirmação 2-turnos do Ultron são gates de fluxo/UX, não de runtime. **Futuro:** rodar skills
+  custom sem `--dangerously-skip-permissions` + `settings.json` allow-listado torna isso enforced (ADR 0030).
 - **Ameaça:** prompt-injection de dado externo (página/relatório que a skill lê) reescreve o
   objetivo. **Mitigação:** escopo do operador + gates de gasto limitam o dano ao próprio tenant;
   `allowed_tools` restringe o leque; writes PAUSED dão janela de revisão.

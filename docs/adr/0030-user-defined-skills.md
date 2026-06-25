@@ -66,10 +66,20 @@ autoridade. Os controles são:
   *só* do `allowed-tools` — ver spike abaixo.
 - **Segredos:** `body` é só instrução; tokens Meta/Google/CAPI nunca entram (validação + grep no CI).
 
-**Spike (Wave 2):** confirmar empiricamente se `allowed-tools` no frontmatter é respeitado sob
-`--dangerously-skip-permissions`. Resultado a ser anexado a este ADR. Se insuficiente, a mitigação
-de gasto (budget cap + PAUSED + escopo do operador) permanece como defesa primária e o
-`allowed-tools` como defesa-em-profundidade.
+**Spike (resultado — validado no runner Fly em 2026-06-25):** ❌ **`allowed-tools` no frontmatter
+NÃO é enforced sob `--dangerously-skip-permissions`.** Uma skill com `allowed-tools: Read` conseguiu
+executar `Bash` normalmente (skill de teste `spec018-e2e-deny`, marcador `SHOULD-BE-BLOCKED-IF-ENFORCED`
+saiu na saída). `--dangerously-skip-permissions` pula a verificação de permissão, então o
+`allowed-tools` vira **advisory/documentação**, não uma fronteira de segurança em runtime.
+
+**Consequência para o modelo de segurança:** a defesa primária **não** é o `allowed-tools` — é
+(a) o **escopo do operador** (a skill nunca excede a autoridade que o operador já tem sobre os
+*próprios* clientes; sem cross-tenant via RLS + 3ª barreira do `run-skill.sh`) e (b) os **gates de
+gasto a nível de Meta API** (PAUSED-por-padrão + `daily_budget_cap_cents` + ativação só explícita).
+`capability='write'` e a confirmação 2-turnos do Ultron são controles de *fluxo/UX*, não barreiras de
+runtime. **Trabalho futuro** (fora do escopo v1): executar skills custom **sem**
+`--dangerously-skip-permissions`, com um `settings.json` que allow-liste só as tools da skill — aí o
+`allowed-tools` (ou um permissions equivalente) passa a ser efetivamente enforced.
 
 ## Consequences
 
