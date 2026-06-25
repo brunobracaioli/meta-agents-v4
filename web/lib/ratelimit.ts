@@ -44,6 +44,9 @@ export const rateLimiters = {
   landingEdit: () => limiter("landing-edit", 120, "1 m"),
   // Publish enqueues a heavy build+deploy job — tight cap on top of the per-LP unique index.
   landingPublish: () => limiter("landing-publish", 6, "1 h"),
+  // AI skill drafting (SPEC-018) is a paid Anthropic call; keyed by operator. Generous enough
+  // for an interactive author iterating on a goal, bounded to keep token cost in check.
+  skillDraft: () => limiter("skill-draft", 15, "1 m"),
 };
 
 /**

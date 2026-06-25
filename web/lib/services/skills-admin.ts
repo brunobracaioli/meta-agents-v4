@@ -36,3 +36,32 @@ export async function listClientsLite(): Promise<Array<{ id: string; slug: strin
   if (res.error) throw res.error;
   return res.data ?? [];
 }
+
+export type EditableSkill = {
+  id: string;
+  client_id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  body: string;
+  allowed_tools: string[];
+  capability: "read" | "write";
+  ultron_enabled: boolean;
+  ultron_function: { name: string; description: string; parameters: Record<string, unknown> } | null;
+  status: "draft" | "active" | "disabled";
+  version: number;
+};
+
+/** Full skill row for the editor (RLS-scoped read). null if it does not exist / not owned. */
+export async function getSkillForEdit(id: string): Promise<EditableSkill | null> {
+  const supabase = await getReadClient();
+  const res = await supabase
+    .from("client_skills")
+    .select(
+      "id, client_id, slug, name, description, body, allowed_tools, capability, ultron_enabled, ultron_function, status, version",
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (res.error) throw res.error;
+  return (res.data ?? null) as EditableSkill | null;
+}

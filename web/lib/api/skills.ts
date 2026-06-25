@@ -9,6 +9,14 @@ import { honoCookieAdapter } from "@/lib/auth/hono-cookies";
 import { getCurrentOperatorId, assertOperatorOwnsClient, operatorRunnerReady } from "@/lib/auth/current-operator";
 import { skillCreateSchema, skillPatchSchema } from "@/lib/skills/validate";
 import { expandAllowedTools } from "@/lib/skills/catalog";
+import { buildSkillDraft } from "@/lib/skills/draft";
+import { rateLimiters, enforceLimit } from "@/lib/ratelimit";
+import { z } from "zod";
+
+const draftSchema = z.object({
+  clientId: z.string().uuid(),
+  goal: z.string().trim().min(8).max(2000),
+});
 
 // SPEC-018 §3.2 — operator-authored skills. Reads via the authenticated client (RLS). Writes via
 // service_role + explicit ownership guard. The wizard speaks catalog group ids; we expand them to
@@ -36,6 +44,33 @@ async function loadSkill(id: string, c: Context) {
 }
 
 export const skills = new Hono();
+
+// ---------- POST draft (AI-assisted authoring; does NOT persist) ----------
+skills.post("/draft", async (c) => {
+  const parsed = draftSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "invalid_request", detail: parsed.error.issues[0]?.message }, 400);
+
+  const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+  if (!operatorId) return c.json({ error: "unauthorized" }, 401);
+  if (!(await assertOperatorOwnsClient(parsed.data.clientId, honoCookieAdapter(c)))) {
+    return c.json({ error: "not_found" }, 404);
+  }
+
+  const { allowed } = await enforceLimit(rateLimiters.skillDraft(), operatorId, "skill-draft");
+  if (!allowed) return c.json({ error: "rate_limited" }, 429, { "Retry-After": "10" });
+
+  const client = await db().from("clients").select("slug, name").eq("id", parsed.data.clientId).maybeSingle();
+  if (client.error) throw client.error;
+  if (!client.data) return c.json({ error: "not_found" }, 404);
+
+  try {
+    const draft = await buildSkillDraft({ goal: parsed.data.goal, clientSlug: client.data.slug, clientName: client.data.name });
+    return c.json(draft);
+  } catch (err) {
+    console.error(JSON.stringify({ level: "error", event: "skill_draft_failed", message: err instanceof Error ? err.message : "unknown" }));
+    return c.json({ error: "draft_failed" }, 502);
+  }
+});
 
 // ---------- GET list (operator's own skills, optional client filter) ----------
 skills.get("/", async (c) => {
