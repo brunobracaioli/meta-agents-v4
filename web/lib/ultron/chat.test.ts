@@ -41,6 +41,7 @@ vi.mock("@/lib/ultron/tools", () => ({
   toolSpecs: [],
   runTool,
   CLIENT_TOOLS: new Set(["capture_screen"]),
+  loadDynamicSkillTools: vi.fn(async () => []),
 }));
 vi.mock("@/lib/ultron/memory", () => ({ loadMemory, appendExchange }));
 vi.mock("@/lib/ultron/pending", () => ({ savePending, loadPending, deletePending }));
@@ -215,6 +216,7 @@ describe("resumeChat — chain capture into a data tool", () => {
       "get_campaign_metrics",
       { client_slug: "brunobracaioli" },
       { sessionId: SESSION, operatorId: null },
+      [],
     );
     expect(result.kind).toBe("reply");
     if (result.kind !== "reply") throw new Error("unreachable");
@@ -239,6 +241,7 @@ describe("runChat — mixed turn (capture_screen + data tool together)", () => {
       "get_client_overview",
       { client_slug: "brunobracaioli" },
       { sessionId: SESSION, operatorId: null },
+      [],
     );
 
     createMock.mockResolvedValueOnce(textTurn("Pronto, cruzei tela e dados."));

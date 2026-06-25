@@ -1401,13 +1401,133 @@ export const toolSpecs: Anthropic.Tool[] = [
   CAPTURE_SCREEN_TOOL,
 ];
 
+// --- Dynamic, operator-authored skill tools (SPEC-018 Wave 5) ---
+// Skills flagged ultron_enabled+active are exposed to Ultron as function-callable tools, built per
+// request from the DB (scoped to the operator). The handler only ENQUEUES an agent_jobs row
+// (kind=custom) — it never touches Meta directly. Write-capability skills keep the two-turn confirm.
+
+export type DynamicSkillTool = {
+  spec: Anthropic.Tool;
+  skillId: string;
+  clientId: string;
+  slug: string;
+  capability: "read" | "write";
+};
+
+type UltronFunction = { name: string; description: string; parameters: Record<string, unknown> };
+
+const DYNAMIC_TOOL_PREFIX = "skill_";
+
+function buildDynamicSpec(fn: UltronFunction, capability: "read" | "write"): Anthropic.Tool {
+  // Namespace the tool so it can never collide with a static tool name.
+  const name = `${DYNAMIC_TOOL_PREFIX}${fn.name}`;
+  const base = (fn.parameters && typeof fn.parameters === "object" ? fn.parameters : {}) as Record<string, unknown>;
+  const properties = { ...((base.properties as Record<string, unknown>) ?? {}) };
+  let description = fn.description;
+  if (capability === "write") {
+    // Mirror the static write-tool convention: confirm=false first, read to operator, then confirm=true.
+    properties.confirm = {
+      type: "boolean",
+      description: "false = devolve os detalhes para confirmar; true = enfileira de fato (só após 'sim' explícito)",
+    };
+    description +=
+      " A skill faz ESCRITA (pode gerar gasto). FLUXO OBRIGATÓRIO: chame com confirm=false, leia ao operador e peça confirmação; só chame com confirm=true após um 'sim' explícito. Sobe PAUSED.";
+  }
+  return {
+    name,
+    description,
+    input_schema: { type: "object", properties, ...(base.required ? { required: base.required as string[] } : {}) },
+  };
+}
+
+/** Build the operator's Ultron-callable skill tools from the DB (active + ultron_enabled). */
+export async function loadDynamicSkillTools(operatorId: string | null): Promise<DynamicSkillTool[]> {
+  if (!operatorId) return [];
+  const { data, error } = await db()
+    .from("client_skills")
+    .select("id, client_id, slug, capability, ultron_function")
+    .eq("operator_id", operatorId)
+    .eq("ultron_enabled", true)
+    .eq("status", "active");
+  if (error) throw error;
+  const out: DynamicSkillTool[] = [];
+  for (const row of data ?? []) {
+    const fn = row.ultron_function as UltronFunction | null;
+    if (!fn || typeof fn.name !== "string") continue;
+    const capability = row.capability === "write" ? "write" : "read";
+    out.push({ spec: buildDynamicSpec(fn, capability), skillId: row.id, clientId: row.client_id, slug: row.slug, capability });
+  }
+  return out;
+}
+
+/** Enqueue a custom-skill job from an Ultron tool call. Mirrors the static write-tool flow. */
+async function enqueueDynamicSkill(
+  tool: DynamicSkillTool,
+  input: Record<string, unknown>,
+  ctx: ToolContext,
+): Promise<unknown> {
+  if (!(await operatorRunnerReady(ctx.operatorId))) return { error: RUNNER_NOT_READY };
+
+  if (tool.capability === "write" && input.confirm !== true) {
+    return {
+      confirmation_required: true,
+      action: `executar a skill ${tool.slug}`,
+      note: "A skill faz escrita e sobe PAUSED (gasto só com ativação explícita). Confirme com o operador antes de chamar com confirm=true.",
+    };
+  }
+
+  // Pass the model-provided args through (minus the control flag) for the skill to read.
+  const args: Record<string, unknown> = { ...input };
+  delete args.confirm;
+
+  const { data, error } = await db()
+    .from("agent_jobs")
+    .insert({
+      client_id: tool.clientId,
+      operator_id: ctx.operatorId,
+      skill: tool.slug,
+      skill_id: tool.skillId,
+      kind: "custom",
+      args: args as Json,
+      requested_by: "ultron",
+    })
+    .select("id")
+    .single();
+  if (error) {
+    if (isUniqueViolation(error)) {
+      return { enqueued: false, reason: `já existe uma execução em andamento da skill ${tool.slug}` };
+    }
+    throw error;
+  }
+  return {
+    enqueued: true,
+    job_id: data.id,
+    skill: tool.slug,
+    kind: "custom",
+    queued_at: new Date().toISOString(),
+    message: "Pedido enfileirado. Os agents começam em até um minuto.",
+  };
+}
+
 export async function runTool(
   name: string,
   input: Record<string, unknown>,
   ctx: ToolContext = { sessionId: "", operatorId: null },
+  dynamicTools: DynamicSkillTool[] = [],
 ): Promise<unknown> {
   const tool = tools[name];
-  if (!tool) return { error: `tool desconhecida: ${name}` };
+  if (!tool) {
+    const dyn = dynamicTools.find((t) => t.spec.name === name);
+    if (dyn) {
+      try {
+        return await enqueueDynamicSkill(dyn, input, ctx);
+      } catch (err) {
+        console.warn(JSON.stringify({ level: "warn", event: "ultron_dynamic_tool_error", tool: name, message: err instanceof Error ? err.message : "unknown" }));
+        return { error: "falha ao enfileirar a skill" };
+      }
+    }
+    return { error: `tool desconhecida: ${name}` };
+  }
   try {
     return await tool.handler(input, ctx);
   } catch (err) {
