@@ -1,0 +1,167 @@
+import { Hono } from "hono";
+import type { Context } from "hono";
+import { db } from "@/lib/db/client";
+import { getReadClient } from "@/lib/db/read-client";
+import type { Database, Json } from "@/lib/db/types";
+
+type SkillUpdate = Database["public"]["Tables"]["client_skills"]["Update"];
+import { honoCookieAdapter } from "@/lib/auth/hono-cookies";
+import { getCurrentOperatorId, assertOperatorOwnsClient, operatorRunnerReady } from "@/lib/auth/current-operator";
+import { skillCreateSchema, skillPatchSchema } from "@/lib/skills/validate";
+import { expandAllowedTools } from "@/lib/skills/catalog";
+
+// SPEC-018 §3.2 — operator-authored skills. Reads via the authenticated client (RLS). Writes via
+// service_role + explicit ownership guard. The wizard speaks catalog group ids; we expand them to
+// concrete `allowed-tools` here. AI drafting (POST /draft) lives in Wave 3.
+
+const COLUMNS =
+  "id, client_id, operator_id, slug, name, description, body, allowed_tools, capability, ultron_enabled, ultron_function, status, version";
+
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23505";
+}
+
+/** Load a skill's guard-relevant state, or null if it does not exist OR the operator does not own
+ * its client. Returning null → every caller answers 404 (never reveals a cross-tenant skill). */
+async function loadSkill(id: string, c: Context) {
+  const res = await db()
+    .from("client_skills")
+    .select("id, client_id, slug, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (res.error) throw res.error;
+  if (!res.data) return null;
+  if (!(await assertOperatorOwnsClient(res.data.client_id, honoCookieAdapter(c)))) return null;
+  return res.data;
+}
+
+export const skills = new Hono();
+
+// ---------- GET list (operator's own skills, optional client filter) ----------
+skills.get("/", async (c) => {
+  const clientId = c.req.query("clientId");
+  const supabase = await getReadClient();
+  let q = supabase.from("client_skills").select(COLUMNS).order("created_at", { ascending: true });
+  if (clientId) q = q.eq("client_id", clientId);
+  const res = await q;
+  if (res.error) throw res.error;
+  return c.json(res.data ?? []);
+});
+
+// ---------- POST create ----------
+skills.post("/", async (c) => {
+  const parsed = skillCreateSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "invalid_request", detail: parsed.error.issues[0]?.message }, 400);
+  const d = parsed.data;
+
+  const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+  if (!operatorId) return c.json({ error: "unauthorized" }, 401);
+  if (!(await assertOperatorOwnsClient(d.clientId, honoCookieAdapter(c)))) return c.json({ error: "not_found" }, 404);
+
+  const ins = await db()
+    .from("client_skills")
+    .insert({
+      client_id: d.clientId,
+      operator_id: operatorId,
+      slug: d.slug,
+      name: d.name,
+      description: d.description ?? null,
+      body: d.body,
+      allowed_tools: expandAllowedTools(d.tool_groups),
+      capability: d.capability,
+      ultron_enabled: d.ultron_enabled,
+      ultron_function: (d.ultron_function ?? null) as Json,
+      status: d.status,
+    })
+    .select(COLUMNS)
+    .single();
+  if (ins.error) {
+    if (isUniqueViolation(ins.error)) return c.json({ error: "slug_in_use" }, 409);
+    throw ins.error;
+  }
+  return c.json(ins.data, 201);
+});
+
+// ---------- PATCH update (optimistic version check) ----------
+skills.patch("/:id", async (c) => {
+  const id = c.req.param("id");
+  const parsed = skillPatchSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "invalid_request", detail: parsed.error.issues[0]?.message }, 400);
+  const d = parsed.data;
+
+  const skill = await loadSkill(id, c);
+  if (!skill) return c.json({ error: "not_found" }, 404);
+
+  // Build the patch with only sent fields; expand tool groups when provided.
+  const patch: SkillUpdate = { version: d.version + 1 };
+  if (d.name !== undefined) patch.name = d.name;
+  if (d.description !== undefined) patch.description = d.description ?? null;
+  if (d.body !== undefined) patch.body = d.body;
+  if (d.tool_groups !== undefined) patch.allowed_tools = expandAllowedTools(d.tool_groups);
+  if (d.capability !== undefined) patch.capability = d.capability;
+  if (d.ultron_enabled !== undefined) patch.ultron_enabled = d.ultron_enabled;
+  if (d.ultron_function !== undefined) patch.ultron_function = (d.ultron_function ?? null) as Json;
+  if (d.status !== undefined) patch.status = d.status;
+
+  const upd = await db()
+    .from("client_skills")
+    .update(patch)
+    .eq("id", id)
+    .eq("version", d.version)
+    .select(COLUMNS)
+    .maybeSingle();
+  if (upd.error) {
+    if (isUniqueViolation(upd.error)) return c.json({ error: "slug_in_use" }, 409);
+    throw upd.error;
+  }
+  if (!upd.data) {
+    // No row matched (id, version): a concurrent write bumped it. Return current for reconciliation.
+    const cur = await db().from("client_skills").select(COLUMNS).eq("id", id).maybeSingle();
+    if (cur.error) throw cur.error;
+    if (!cur.data) return c.json({ error: "not_found" }, 404);
+    return c.json({ error: "version_conflict", current: cur.data }, 409);
+  }
+  return c.json(upd.data);
+});
+
+// ---------- DELETE ----------
+skills.delete("/:id", async (c) => {
+  const id = c.req.param("id");
+  const skill = await loadSkill(id, c);
+  if (!skill) return c.json({ error: "not_found" }, 404);
+
+  const del = await db().from("client_skills").delete().eq("id", id);
+  if (del.error) throw del.error;
+  return c.json({ ok: true });
+});
+
+// ---------- POST run now (enqueue agent_jobs kind=custom) ----------
+skills.post("/:id/run", async (c) => {
+  const id = c.req.param("id");
+  const skill = await loadSkill(id, c);
+  if (!skill) return c.json({ error: "not_found" }, 404);
+  if (skill.status === "disabled") return c.json({ error: "skill_disabled" }, 409);
+
+  const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+  // Enqueue gate (ADR 0027): the operator's runner must be ready, else the job sits unclaimed.
+  if (!(await operatorRunnerReady(operatorId))) return c.json({ error: "runner_not_ready" }, 422);
+
+  const ins = await db()
+    .from("agent_jobs")
+    .insert({
+      client_id: skill.client_id,
+      operator_id: operatorId,
+      skill: skill.slug,
+      skill_id: skill.id,
+      kind: "custom",
+      args: {},
+      requested_by: "operator",
+    })
+    .select("id, status")
+    .single();
+  if (ins.error) {
+    if (isUniqueViolation(ins.error)) return c.json({ error: "already_in_flight" }, 409);
+    throw ins.error;
+  }
+  return c.json({ jobId: ins.data.id, status: ins.data.status }, 202);
+});

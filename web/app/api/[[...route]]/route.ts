@@ -24,6 +24,7 @@ import { getPendingNarrations, markNarrationSpoken } from "@/lib/services/narrat
 import { getAutoReviewCandidate } from "@/lib/services/landing-page";
 import { landingPages } from "@/lib/api/landing-pages";
 import { clients } from "@/lib/api/clients";
+import { skills } from "@/lib/api/skills";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -373,6 +374,9 @@ app.route("/landing-pages", landingPages);
 
 // ---------- Client management (SPEC-018) ----------
 app.route("/clients", clients);
+
+// ---------- Operator-authored skills (SPEC-018) ----------
+app.route("/skills", skills);
 
 app.get("/health", (c) => c.json({ ok: true }));
 
