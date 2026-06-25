@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import * as THREE from "three";
+// three is DYNAMICALLY imported inside the effect (see Stage3D.tsx) so it stays out of the
+// initial bundle and never evaluates during SSR/static export. A type-only import keeps the
+// THREE.* type annotations without emitting a runtime dependency.
+import type * as THREE from "three";
 
 /**
  * Interactive particle WAVE for the hero background (Three.js / WebGL).
@@ -139,223 +142,237 @@ export function HeroParticleField({ className }: ParticleFieldProps) {
     const container = containerRef.current;
     if (!container) return;
 
-    const prefersReducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
+    let disposed = false;
+    let cleanup = () => {};
 
-    let width = container.clientWidth || window.innerWidth;
-    let height = container.clientHeight || window.innerHeight;
+    void (async () => {
+      const THREE = await import("three");
+      if (disposed) return;
 
-    // --- Renderer -----------------------------------------------------------
-    let renderer: THREE.WebGLRenderer;
-    try {
-      // Opaque canvas cleared to white each frame: MultiplyBlending needs a real white
-      // destination to darken (it cannot accumulate on a transparent framebuffer, where the
-      // alpha would stay 0 and hide the points). The section background is white too, so
-      // this is seamless.
-      renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: false,
-        powerPreference: "high-performance",
-      });
-    } catch {
-      return; // No WebGL: leave the background plain white.
-    }
-    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-    renderer.setPixelRatio(pixelRatio);
-    renderer.setSize(width, height, false);
-    renderer.setClearColor(0xffffff, 1);
-    const canvas = renderer.domElement;
-    canvas.style.position = "absolute";
-    canvas.style.inset = "0";
-    canvas.style.width = "100%";
-    canvas.style.height = "100%";
-    canvas.style.display = "block";
-    container.appendChild(canvas);
+      const prefersReducedMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
 
-    // --- Scene & camera -----------------------------------------------------
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 200);
-    const camBaseX = 0;
-    const camBaseY = 8;
-    const camBaseZ = 17;
-    camera.position.set(camBaseX, camBaseY, camBaseZ);
-    camera.lookAt(0, 0, -16);
+      let width = container.clientWidth || window.innerWidth;
+      let height = container.clientHeight || window.innerHeight;
 
-    // --- Geometry (grid of points) -----------------------------------------
-    const isMobile = width < 640;
-    const segX = isMobile ? PARAMS.segXMobile : PARAMS.segX;
-    const segZ = isMobile ? PARAMS.segZMobile : PARAMS.segZ;
-    const countX = segX + 1;
-    const countZ = segZ + 1;
-    const count = countX * countZ;
-
-    const positions = new Float32Array(count * 3);
-    const colors = new Float32Array(count * 3);
-    const scales = new Float32Array(count);
-
-    const xStep = (PARAMS.halfWidth * 2) / segX;
-    const zStep = (PARAMS.zNear - PARAMS.zFar) / segZ;
-
-    let ptr = 0;
-    for (let iz = 0; iz < countZ; iz++) {
-      const z = PARAMS.zNear - iz * zStep;
-      for (let ix = 0; ix < countX; ix++) {
-        const x = -PARAMS.halfWidth + ix * xStep;
-        positions[ptr * 3] = x;
-        positions[ptr * 3 + 1] = 0;
-        positions[ptr * 3 + 2] = z;
-
-        const color =
-          Math.random() < BRAND_PROBABILITY
-            ? BRAND[(Math.random() * BRAND.length) | 0]
-            : NEUTRAL;
-        colors[ptr * 3] = color[0];
-        colors[ptr * 3 + 1] = color[1];
-        colors[ptr * 3 + 2] = color[2];
-
-        scales[ptr] = 0.6 + Math.random() * 0.7;
-        ptr++;
+      // --- Renderer ---------------------------------------------------------
+      let renderer: THREE.WebGLRenderer;
+      try {
+        // Opaque canvas cleared to white each frame: MultiplyBlending needs a real white
+        // destination to darken (it cannot accumulate on a transparent framebuffer, where
+        // the alpha would stay 0 and hide the points). The section background is white too,
+        // so this is seamless.
+        renderer = new THREE.WebGLRenderer({
+          antialias: true,
+          alpha: false,
+          powerPreference: "high-performance",
+        });
+      } catch {
+        return; // No WebGL: leave the background plain white.
       }
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
-    geometry.setAttribute("aScale", new THREE.BufferAttribute(scales, 1));
-
-    const uniforms = {
-      uTime: { value: 0 },
-      uMouse: { value: new THREE.Vector2(0, -16) },
-      uMouseActive: { value: 0 },
-      uPixelRatio: { value: pixelRatio },
-      uSizeBase: { value: PARAMS.sizeBase },
-      uFogNear: { value: PARAMS.fogNear },
-      uFogFar: { value: PARAMS.fogFar },
-    };
-
-    const material = new THREE.ShaderMaterial({
-      uniforms,
-      vertexShader: VERTEX_SHADER,
-      fragmentShader: FRAGMENT_SHADER,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-      blending: THREE.MultiplyBlending,
-      // r180 only wires the multiply blend func when this is true; otherwise it logs an
-      // error every frame and falls back to plain overwrite. Our output alpha is 1.0 (opaque
-      // white canvas), so colours are already premultiplied.
-      premultipliedAlpha: true,
-    });
-
-    const points = new THREE.Points(geometry, material);
-    scene.add(points);
-
-    // --- Pointer → plane intersection --------------------------------------
-    const raycaster = new THREE.Raycaster();
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    const ndc = new THREE.Vector2();
-    const hit = new THREE.Vector3();
-    const targetMouse = new THREE.Vector2(0, -16);
-    let targetActive = 0;
-    const swayTarget = new THREE.Vector2(0, 0);
-
-    const onPointerMove = (event: PointerEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      const nx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      const ny = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
-      ndc.set(nx, ny);
-      raycaster.setFromCamera(ndc, camera);
-      // Only engage the wave when the ray actually meets the plane, so the surface bump never
-      // tracks a frozen/stale point above the horizon.
-      if (raycaster.ray.intersectPlane(plane, hit)) {
-        targetMouse.set(hit.x, hit.z);
-        targetActive = 1;
-      }
-      swayTarget.set(nx, ny);
-    };
-    const onPointerLeave = () => {
-      targetActive = 0;
-    };
-
-    if (!prefersReducedMotion) {
-      window.addEventListener("pointermove", onPointerMove, { passive: true });
-      window.addEventListener("pointerdown", onPointerMove, { passive: true });
-      container.addEventListener("pointerleave", onPointerLeave, {
-        passive: true,
-      });
-    }
-
-    // --- Resize -------------------------------------------------------------
-    const resize = () => {
-      width = container.clientWidth || window.innerWidth;
-      height = container.clientHeight || window.innerHeight;
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      renderer.setPixelRatio(ratio);
-      uniforms.uPixelRatio.value = ratio;
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+      renderer.setPixelRatio(pixelRatio);
       renderer.setSize(width, height, false);
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-    };
-    const resizeObserver = new ResizeObserver(resize);
-    resizeObserver.observe(container);
+      renderer.setClearColor(0xffffff, 1);
+      const canvas = renderer.domElement;
+      canvas.style.position = "absolute";
+      canvas.style.inset = "0";
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
+      canvas.style.display = "block";
+      container.appendChild(canvas);
 
-    // --- Reduced motion: one static frame, then stop ------------------------
-    if (prefersReducedMotion) {
-      uniforms.uTime.value = 1.5;
-      renderer.render(scene, camera);
-      return () => {
+      // --- Scene & camera ---------------------------------------------------
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 200);
+      const camBaseX = 0;
+      const camBaseY = 8;
+      const camBaseZ = 17;
+      camera.position.set(camBaseX, camBaseY, camBaseZ);
+      camera.lookAt(0, 0, -16);
+
+      // --- Geometry (grid of points) ----------------------------------------
+      const isMobile = width < 640;
+      const segX = isMobile ? PARAMS.segXMobile : PARAMS.segX;
+      const segZ = isMobile ? PARAMS.segZMobile : PARAMS.segZ;
+      const countX = segX + 1;
+      const countZ = segZ + 1;
+      const count = countX * countZ;
+
+      const positions = new Float32Array(count * 3);
+      const colors = new Float32Array(count * 3);
+      const scales = new Float32Array(count);
+
+      const xStep = (PARAMS.halfWidth * 2) / segX;
+      const zStep = (PARAMS.zNear - PARAMS.zFar) / segZ;
+
+      let ptr = 0;
+      for (let iz = 0; iz < countZ; iz++) {
+        const z = PARAMS.zNear - iz * zStep;
+        for (let ix = 0; ix < countX; ix++) {
+          const x = -PARAMS.halfWidth + ix * xStep;
+          positions[ptr * 3] = x;
+          positions[ptr * 3 + 1] = 0;
+          positions[ptr * 3 + 2] = z;
+
+          const color =
+            Math.random() < BRAND_PROBABILITY
+              ? BRAND[(Math.random() * BRAND.length) | 0]
+              : NEUTRAL;
+          colors[ptr * 3] = color[0];
+          colors[ptr * 3 + 1] = color[1];
+          colors[ptr * 3 + 2] = color[2];
+
+          scales[ptr] = 0.6 + Math.random() * 0.7;
+          ptr++;
+        }
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
+      geometry.setAttribute("aScale", new THREE.BufferAttribute(scales, 1));
+
+      const uniforms = {
+        uTime: { value: 0 },
+        uMouse: { value: new THREE.Vector2(0, -16) },
+        uMouseActive: { value: 0 },
+        uPixelRatio: { value: pixelRatio },
+        uSizeBase: { value: PARAMS.sizeBase },
+        uFogNear: { value: PARAMS.fogNear },
+        uFogFar: { value: PARAMS.fogFar },
+      };
+
+      const material = new THREE.ShaderMaterial({
+        uniforms,
+        vertexShader: VERTEX_SHADER,
+        fragmentShader: FRAGMENT_SHADER,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        blending: THREE.MultiplyBlending,
+        // r180 only wires the multiply blend func when this is true; otherwise it logs an
+        // error every frame and falls back to plain overwrite. Our output alpha is 1.0
+        // (opaque white canvas), so colours are already premultiplied.
+        premultipliedAlpha: true,
+      });
+
+      const points = new THREE.Points(geometry, material);
+      scene.add(points);
+
+      // --- Pointer → plane intersection -------------------------------------
+      const raycaster = new THREE.Raycaster();
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      const ndc = new THREE.Vector2();
+      const hit = new THREE.Vector3();
+      const targetMouse = new THREE.Vector2(0, -16);
+      let targetActive = 0;
+      const swayTarget = new THREE.Vector2(0, 0);
+
+      const onPointerMove = (event: PointerEvent) => {
+        const rect = canvas.getBoundingClientRect();
+        const nx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        const ny = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
+        ndc.set(nx, ny);
+        raycaster.setFromCamera(ndc, camera);
+        // Only engage the wave when the ray actually meets the plane, so the surface bump
+        // never tracks a frozen/stale point above the horizon.
+        if (raycaster.ray.intersectPlane(plane, hit)) {
+          targetMouse.set(hit.x, hit.z);
+          targetActive = 1;
+        }
+        swayTarget.set(nx, ny);
+      };
+      const onPointerLeave = () => {
+        targetActive = 0;
+      };
+
+      if (!prefersReducedMotion) {
+        window.addEventListener("pointermove", onPointerMove, { passive: true });
+        window.addEventListener("pointerdown", onPointerMove, { passive: true });
+        container.addEventListener("pointerleave", onPointerLeave, {
+          passive: true,
+        });
+      }
+
+      // --- Resize -----------------------------------------------------------
+      const resize = () => {
+        width = container.clientWidth || window.innerWidth;
+        height = container.clientHeight || window.innerHeight;
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        renderer.setPixelRatio(ratio);
+        uniforms.uPixelRatio.value = ratio;
+        renderer.setSize(width, height, false);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+      };
+      const resizeObserver = new ResizeObserver(resize);
+      resizeObserver.observe(container);
+
+      // --- Reduced motion: one static frame, then stop ----------------------
+      if (prefersReducedMotion) {
+        uniforms.uTime.value = 1.5;
+        renderer.render(scene, camera);
+        cleanup = () => {
+          resizeObserver.disconnect();
+          geometry.dispose();
+          material.dispose();
+          renderer.dispose();
+          if (canvas.parentNode === container) container.removeChild(canvas);
+        };
+        return;
+      }
+
+      // --- Animation loop ---------------------------------------------------
+      let frameId = 0;
+      let lastTime = 0;
+
+      const tick = (time: number) => {
+        const dt = lastTime === 0 ? 1 / 60 : Math.min((time - lastTime) / 1000, 1 / 30);
+        lastTime = time;
+        const fstep = dt * 60;
+        const ease = Math.min(1, PARAMS.mouseEasing * fstep);
+
+        // Accumulate clamped dt so a backgrounded tab doesn't jump the wave.
+        uniforms.uTime.value += dt;
+        uniforms.uMouse.value.lerp(targetMouse, ease);
+        uniforms.uMouseActive.value +=
+          (targetActive - uniforms.uMouseActive.value) * ease;
+
+        // Subtle camera parallax sway toward the cursor.
+        camera.position.x +=
+          (camBaseX + swayTarget.x * PARAMS.cameraSway * targetActive -
+            camera.position.x) *
+          ease;
+        camera.position.y +=
+          (camBaseY - swayTarget.y * PARAMS.cameraSway * 0.6 * targetActive -
+            camera.position.y) *
+          ease;
+        camera.lookAt(0, 0, -16);
+
+        renderer.render(scene, camera);
+        frameId = requestAnimationFrame(tick);
+      };
+      frameId = requestAnimationFrame(tick);
+
+      // --- Cleanup ----------------------------------------------------------
+      cleanup = () => {
+        cancelAnimationFrame(frameId);
         resizeObserver.disconnect();
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerdown", onPointerMove);
+        container.removeEventListener("pointerleave", onPointerLeave);
         geometry.dispose();
         material.dispose();
         renderer.dispose();
         if (canvas.parentNode === container) container.removeChild(canvas);
       };
-    }
+    })();
 
-    // --- Animation loop -----------------------------------------------------
-    let frameId = 0;
-    let lastTime = 0;
-
-    const tick = (time: number) => {
-      const dt = lastTime === 0 ? 1 / 60 : Math.min((time - lastTime) / 1000, 1 / 30);
-      lastTime = time;
-      const fstep = dt * 60;
-      const ease = Math.min(1, PARAMS.mouseEasing * fstep);
-
-      // Accumulate clamped dt so a backgrounded tab doesn't jump the wave.
-      uniforms.uTime.value += dt;
-      uniforms.uMouse.value.lerp(targetMouse, ease);
-      uniforms.uMouseActive.value +=
-        (targetActive - uniforms.uMouseActive.value) * ease;
-
-      // Subtle camera parallax sway toward the cursor.
-      camera.position.x +=
-        (camBaseX + swayTarget.x * PARAMS.cameraSway * targetActive -
-          camera.position.x) *
-        ease;
-      camera.position.y +=
-        (camBaseY - swayTarget.y * PARAMS.cameraSway * 0.6 * targetActive -
-          camera.position.y) *
-        ease;
-      camera.lookAt(0, 0, -16);
-
-      renderer.render(scene, camera);
-      frameId = requestAnimationFrame(tick);
-    };
-    frameId = requestAnimationFrame(tick);
-
-    // --- Cleanup ------------------------------------------------------------
     return () => {
-      cancelAnimationFrame(frameId);
-      resizeObserver.disconnect();
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerdown", onPointerMove);
-      container.removeEventListener("pointerleave", onPointerLeave);
-      geometry.dispose();
-      material.dispose();
-      renderer.dispose();
-      if (canvas.parentNode === container) container.removeChild(canvas);
+      disposed = true;
+      cleanup();
     };
   }, []);
 
