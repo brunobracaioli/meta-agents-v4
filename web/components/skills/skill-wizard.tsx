@@ -1,16 +1,18 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { TOOL_GROUPS, selectionHasWrite, deriveSelectedGroups } from "@/lib/skills/catalog";
 import type { EditableSkill } from "@/lib/services/skills-admin";
 
-// SPEC-018 Wave 3 — guided, AI-assisted skill authoring. Step 1 turns a plain-language goal into a
-// draft via /api/skills/draft; the operator reviews/edits the body + tool selection, optionally
-// exposes it to Ultron, and creates it. Reused in edit mode (existingSkill set) without step 1.
-// All persistence goes through /api/skills/* where auth + ownership + validation live.
+// SPEC-018 Wave 3 + SPEC-018.1 — guided, AI-assisted skill authoring, scoped to a PRODUCT. The
+// product is fixed by the route (no picker); the wizard only carries its id for the API calls and
+// its slug/name for context + the draft prompt. Step 1 turns a plain-language goal into a draft via
+// /api/skills/draft; the operator reviews/edits the body + tool selection, optionally exposes it to
+// Ultron, and creates it. Reused in edit mode (existingSkill set) without step 1. All persistence
+// goes through /api/skills/* where auth + ownership + validation live.
 
-type ClientLite = { id: string; slug: string; name: string };
+type ProductContext = { id: string; slug: string; name: string };
 
 const input = "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-[var(--color-orange,#fb923c)]";
 const label = "block text-xs font-medium uppercase tracking-wide text-white/45";
@@ -29,16 +31,18 @@ function slugify(s: string): string {
 type UltronFn = { name: string; description: string; parametersText: string };
 
 export function SkillWizard({
-  clients,
+  product,
+  clientSlug,
   existingSkill,
 }: {
-  clients: ClientLite[];
+  product: ProductContext;
+  clientSlug: string;
   existingSkill?: EditableSkill;
 }) {
   const router = useRouter();
   const isEdit = !!existingSkill;
+  const backHref = `/dashboard/clients/${clientSlug}/${product.slug}`;
 
-  const [clientId, setClientId] = useState(existingSkill?.client_id ?? clients[0]?.id ?? "");
   const [goal, setGoal] = useState("");
   const [drafting, setDrafting] = useState(false);
   const [hasDraft, setHasDraft] = useState(isEdit);
@@ -87,7 +91,7 @@ export function SkillWizard({
       const res = await fetch("/api/skills/draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientId, goal: goal.trim() }),
+        body: JSON.stringify({ productId: product.id, goal: goal.trim() }),
       });
       const data = (await res.json().catch(() => null)) as
         | { name?: string; description?: string; body?: string; tool_groups?: string[]; error?: string }
@@ -150,7 +154,7 @@ export function SkillWizard({
         res = await fetch("/api/skills", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...payload, clientId, slug, status: "draft" }),
+          body: JSON.stringify({ ...payload, productId: product.id, slug, status: "draft" }),
         });
       }
       const data = (await res.json().catch(() => null)) as { error?: string; detail?: string } | null;
@@ -158,7 +162,7 @@ export function SkillWizard({
         setError(saveError(data?.error, data?.detail));
         return;
       }
-      router.push("/dashboard/skills");
+      router.push(backHref);
       router.refresh();
     } catch {
       setError("Falha de rede ao salvar.");
@@ -167,24 +171,16 @@ export function SkillWizard({
     }
   }
 
-  const selectedClient = useMemo(() => clients.find((c) => c.id === clientId), [clients, clientId]);
-
   return (
     <div className="space-y-6">
       {/* Step 1 — goal (create only) */}
       {!isEdit && (
         <div className={card}>
           <h2 className="text-lg font-semibold text-white">1 · Objetivo</h2>
-          <div>
-            <label className={label}>Cliente</label>
-            <select value={clientId} onChange={(e) => setClientId(e.target.value)} className={input}>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id} className="bg-[#070b1a]">
-                  {c.name} ({c.slug})
-                </option>
-              ))}
-            </select>
-          </div>
+          <p className="text-xs text-white/40">
+            Produto: <span className="text-cyan-100/80">{product.name}</span>{" "}
+            <span className="font-mono text-white/30">({product.slug})</span>
+          </p>
           <div>
             <label className={label}>O que essa automação deve fazer?</label>
             <textarea
@@ -197,7 +193,7 @@ export function SkillWizard({
           </div>
           <button
             onClick={generate}
-            disabled={drafting || !clientId}
+            disabled={drafting}
             className="rounded-lg border border-orange-300/35 bg-orange-400/15 px-4 py-2 text-sm font-medium text-orange-100 transition hover:bg-orange-400/25 disabled:opacity-50"
           >
             {drafting ? "Gerando com IA…" : "Gerar rascunho com IA"}
@@ -318,14 +314,11 @@ export function SkillWizard({
             {busy ? "Salvando…" : isEdit ? "Salvar alterações" : "Criar skill"}
           </button>
           <a
-            href="/dashboard/skills"
+            href={backHref}
             className="rounded-lg border border-white/10 px-5 py-2 text-sm text-white/60 transition hover:bg-white/[0.04]"
           >
             Cancelar
           </a>
-          {selectedClient && !isEdit && (
-            <span className="self-center text-xs text-white/30">cliente: {selectedClient.slug}</span>
-          )}
         </div>
       )}
     </div>
@@ -339,7 +332,7 @@ function draftError(code?: string): string {
     case "draft_failed":
       return "A IA não conseguiu gerar agora. Tente de novo.";
     case "not_found":
-      return "Cliente inválido.";
+      return "Produto inválido.";
     default:
       return "Não foi possível gerar o rascunho.";
   }
@@ -348,13 +341,13 @@ function draftError(code?: string): string {
 function saveError(code?: string, detail?: string): string {
   switch (code) {
     case "slug_in_use":
-      return "Já existe uma skill com esse slug para o cliente.";
+      return "Já existe uma skill com esse slug para o produto.";
     case "version_conflict":
       return "A skill foi alterada em outra aba. Recarregue a página.";
     case "invalid_request":
       return detail ? `Dados inválidos: ${detail}` : "Dados inválidos.";
     case "not_found":
-      return "Cliente ou skill não encontrado.";
+      return "Produto ou skill não encontrado.";
     default:
       return "Não foi possível salvar a skill.";
   }

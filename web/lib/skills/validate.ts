@@ -34,7 +34,7 @@ const ultronFunctionSchema = z.object({
 });
 
 const baseSkillFields = {
-  clientId: z.string().uuid(),
+  productId: z.string().uuid(),
   slug: z
     .string()
     .regex(SLUG_RE, "slug deve ser [a-z0-9-], 2-40 chars")
@@ -70,7 +70,7 @@ function refineSkill<T extends z.ZodTypeAny>(schema: T): z.ZodEffects<T> {
 
 export const skillCreateSchema = refineSkill(z.object(baseSkillFields));
 
-// PATCH: slug + clientId immutable; everything else optional + a version for optimistic concurrency.
+// PATCH: slug + productId immutable; everything else optional + a version for optimistic concurrency.
 export const skillPatchSchema = refineSkill(
   z.object({
     name: baseSkillFields.name.optional(),

@@ -4,9 +4,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { AdminSkill } from "@/lib/services/skills-admin";
 
-// SPEC-018 — skills list with lifecycle actions (run now / enable-disable / delete). Creation and
-// editing happen in the guided wizard (/dashboard/skills/new and /:id). Writes hit /api/skills/*
-// where auth + ownership + validation live; we router.refresh() after each to re-read via RLS.
+// SPEC-018 (+ SPEC-018.1 nesting) — skills list with lifecycle actions (run now / enable-disable /
+// delete). Creation and editing happen in the guided wizard, nested under the product
+// (/dashboard/clients/<client>/<product>/skills/...). Writes hit /api/skills/* where auth +
+// ownership + validation live; we router.refresh() after each to re-read via RLS.
 
 const STATUS_LABEL: Record<string, string> = { draft: "Rascunho", active: "Ativa", disabled: "Desativada" };
 const STATUS_CLASS: Record<string, string> = {
@@ -15,8 +16,17 @@ const STATUS_CLASS: Record<string, string> = {
   disabled: "border-white/15 text-white/40",
 };
 
-export function SkillsManager({ initialSkills }: { initialSkills: AdminSkill[] }) {
+export function SkillsManager({
+  initialSkills,
+  clientSlug,
+  productSlug,
+}: {
+  initialSkills: AdminSkill[];
+  clientSlug: string;
+  productSlug: string;
+}) {
   const router = useRouter();
+  const skillsBase = `/dashboard/clients/${clientSlug}/${productSlug}/skills`;
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -102,7 +112,6 @@ export function SkillsManager({ initialSkills }: { initialSkills: AdminSkill[] }
                 )}
               </div>
               <p className="truncate text-sm text-white/60">{s.name}</p>
-              <p className="mt-1 text-xs text-white/35">{s.client?.slug ?? "—"}</p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
               <button
@@ -130,7 +139,7 @@ export function SkillsManager({ initialSkills }: { initialSkills: AdminSkill[] }
                 </button>
               )}
               <a
-                href={`/dashboard/skills/${s.id}`}
+                href={`${skillsBase}/${s.id}`}
                 className="rounded-md border border-cyan-200/20 px-3 py-1.5 text-xs text-cyan-100/80 transition hover:bg-white/[0.04]"
               >
                 Editar

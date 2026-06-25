@@ -36,8 +36,9 @@ rascunho de skill.
 Regras:
 - Escreva o corpo (body) em pt-BR, em markdown, com passos NUMERADOS, claros e determinísticos.
   Comece com uma linha de objetivo, depois "## Passos", e inclua uma seção "## Critério de sucesso".
-- Refira-se ao cliente pelo slug fornecido. Resolva constantes (ad account etc.) em runtime
-  consultando o banco — não invente IDs.
+- Refira-se ao cliente e ao PRODUTO pelos slugs fornecidos. A skill é específica do produto:
+  adapte os passos ao contexto do produto (oferta, preço, público). Resolva constantes
+  (ad account etc.) em runtime consultando o banco — não invente IDs.
 - Escolha o MENOR conjunto de grupos de ferramentas necessário, apenas do catálogo abaixo (use os ids).
 - capability = "write" SOMENTE se a skill cria/ativa/pausa campanhas (qualquer grupo "write").
   Caso contrário "read". Skills de escrita devem subir tudo PAUSADO e respeitar o budget cap.
@@ -71,7 +72,16 @@ export async function buildSkillDraft(input: {
   goal: string;
   clientSlug: string;
   clientName: string;
+  productSlug: string;
+  productName: string;
+  productBrief?: string;
 }): Promise<SkillDraft> {
+  // Keep the brief excerpt bounded so a large product brief can't blow the prompt budget.
+  const briefExcerpt = (input.productBrief ?? "").trim().slice(0, 2000);
+  const productLine = `Produto: ${input.productName} (slug: ${input.productSlug}).${
+    briefExcerpt ? `\nContexto do produto:\n${briefExcerpt}` : ""
+  }`;
+
   const res = await anthropic().messages.create({
     model: MODEL,
     max_tokens: MAX_TOKENS,
@@ -81,7 +91,7 @@ export async function buildSkillDraft(input: {
     messages: [
       {
         role: "user",
-        content: `Cliente: ${input.clientName} (slug: ${input.clientSlug}).\nObjetivo do operador:\n${input.goal}`,
+        content: `Cliente: ${input.clientName} (slug: ${input.clientSlug}).\n${productLine}\nObjetivo do operador:\n${input.goal}`,
       },
     ],
   });

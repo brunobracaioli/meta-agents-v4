@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { skillCreateSchema, RESERVED_SLUGS, recurrenceSchema, recurrenceToCron } from "./validate";
 
-const CLIENT = "11111111-1111-1111-1111-111111111111";
+const PRODUCT = "11111111-1111-1111-1111-111111111111";
 
 function base(overrides: Record<string, unknown> = {}) {
   return {
-    clientId: CLIENT,
+    productId: PRODUCT,
     slug: "daily-roas-report",
     name: "Relatório ROAS",
     body: "## Passos\n1. Buscar insights.",

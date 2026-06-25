@@ -7,6 +7,7 @@ import { getReadClient } from "@/lib/db/read-client";
 export type AdminSkill = {
   id: string;
   client_id: string;
+  product_id: string;
   slug: string;
   name: string;
   description: string | null;
@@ -18,28 +19,25 @@ export type AdminSkill = {
   client: { slug: string; name: string } | null;
 };
 
-export async function listSkillsForOperator(): Promise<AdminSkill[]> {
+const ADMIN_SKILL_COLUMNS =
+  "id, client_id, product_id, slug, name, description, capability, ultron_enabled, status, version, allowed_tools, client:clients(slug, name)";
+
+/** Skills attached to a single product (RLS-scoped). Drives the nested product page. */
+export async function listSkillsForProduct(productId: string): Promise<AdminSkill[]> {
   const supabase = await getReadClient();
   const res = await supabase
     .from("client_skills")
-    .select(
-      "id, client_id, slug, name, description, capability, ultron_enabled, status, version, allowed_tools, client:clients(slug, name)",
-    )
+    .select(ADMIN_SKILL_COLUMNS)
+    .eq("product_id", productId)
     .order("created_at", { ascending: true });
   if (res.error) throw res.error;
   return (res.data ?? []) as unknown as AdminSkill[];
 }
 
-export async function listClientsLite(): Promise<Array<{ id: string; slug: string; name: string }>> {
-  const supabase = await getReadClient();
-  const res = await supabase.from("clients").select("id, slug, name").order("created_at", { ascending: true });
-  if (res.error) throw res.error;
-  return res.data ?? [];
-}
-
 export type EditableSkill = {
   id: string;
   client_id: string;
+  product_id: string;
   slug: string;
   name: string;
   description: string | null;
@@ -78,7 +76,7 @@ export async function getSkillForEdit(id: string): Promise<EditableSkill | null>
   const res = await supabase
     .from("client_skills")
     .select(
-      "id, client_id, slug, name, description, body, allowed_tools, capability, ultron_enabled, ultron_function, status, version",
+      "id, client_id, product_id, slug, name, description, body, allowed_tools, capability, ultron_enabled, ultron_function, status, version",
     )
     .eq("id", id)
     .maybeSingle();

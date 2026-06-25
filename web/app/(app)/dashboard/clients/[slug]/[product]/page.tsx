@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProductWithLandingPages } from "@/lib/services/landing-page";
+import { listSkillsForProduct } from "@/lib/services/skills-admin";
+import { SkillsManager } from "@/components/skills/skills-manager";
 import { formatDateTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +24,7 @@ export default async function ProductLandingPagesPage({
   const data = await getProductWithLandingPages(slug, product);
   if (!data) notFound();
   const { product: prod, landingPages } = data;
+  const skills = await listSkillsForProduct(prod.id);
 
   return (
     <div className="space-y-7">
@@ -71,6 +74,25 @@ export default async function ProductLandingPagesPage({
           ))}
         </ul>
       )}
+
+      {/* Skills attached to this product (SPEC-018.1) */}
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Skills</h2>
+            <p className="mt-1 text-sm text-white/40">
+              {skills.length} skill{skills.length === 1 ? "" : "s"} · automações que seus agentes executam para este produto
+            </p>
+          </div>
+          <Link
+            href={`/dashboard/clients/${slug}/${product}/skills/new`}
+            className="rounded-lg border border-orange-300/35 bg-orange-400/10 px-4 py-2 text-sm font-medium text-orange-200 transition hover:bg-orange-400/20"
+          >
+            + Nova skill
+          </Link>
+        </div>
+        <SkillsManager initialSkills={skills} clientSlug={slug} productSlug={product} />
+      </section>
     </div>
   );
 }

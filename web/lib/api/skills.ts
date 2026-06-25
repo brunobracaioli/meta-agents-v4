@@ -15,19 +15,30 @@ import { rateLimiters, enforceLimit } from "@/lib/ratelimit";
 import { z } from "zod";
 
 const draftSchema = z.object({
-  clientId: z.string().uuid(),
+  productId: z.string().uuid(),
   goal: z.string().trim().min(8).max(2000),
 });
 
-// SPEC-018 §3.2 — operator-authored skills. Reads via the authenticated client (RLS). Writes via
-// service_role + explicit ownership guard. The wizard speaks catalog group ids; we expand them to
-// concrete `allowed-tools` here. AI drafting (POST /draft) lives in Wave 3.
+// SPEC-018 §3.2 (re-scoped per SPEC-018.1) — operator-authored skills, now scoped to a PRODUCT.
+// client_id is derived server-side from the product (never trusted from the body). Reads via the
+// authenticated client (RLS). Writes via service_role + explicit ownership guard. The wizard speaks
+// catalog group ids; we expand them to concrete `allowed-tools` here.
 
 const COLUMNS =
-  "id, client_id, operator_id, slug, name, description, body, allowed_tools, capability, ultron_enabled, ultron_function, status, version";
+  "id, client_id, product_id, operator_id, slug, name, description, body, allowed_tools, capability, ultron_enabled, ultron_function, status, version";
 
 function isUniqueViolation(err: unknown): boolean {
   return typeof err === "object" && err !== null && "code" in err && (err as { code?: string }).code === "23505";
+}
+
+/** Resolve a product to its client_id, or null if it does not exist OR the operator does not own
+ * its client. Returning null → callers answer 404 (never reveals a cross-tenant product). */
+async function loadProductClient(productId: string, c: Context): Promise<string | null> {
+  const res = await db().from("products").select("client_id").eq("id", productId).maybeSingle();
+  if (res.error) throw res.error;
+  if (!res.data) return null;
+  if (!(await assertOperatorOwnsClient(res.data.client_id, honoCookieAdapter(c)))) return null;
+  return res.data.client_id;
 }
 
 /** Load a skill's guard-relevant state, or null if it does not exist OR the operator does not own
@@ -35,7 +46,7 @@ function isUniqueViolation(err: unknown): boolean {
 async function loadSkill(id: string, c: Context) {
   const res = await db()
     .from("client_skills")
-    .select("id, client_id, slug, status")
+    .select("id, client_id, product_id, slug, status")
     .eq("id", id)
     .maybeSingle();
   if (res.error) throw res.error;
@@ -53,19 +64,35 @@ skills.post("/draft", async (c) => {
 
   const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
   if (!operatorId) return c.json({ error: "unauthorized" }, 401);
-  if (!(await assertOperatorOwnsClient(parsed.data.clientId, honoCookieAdapter(c)))) {
+
+  // Load the product (+ its client + brief) and verify ownership transitively via the client.
+  const product = await db()
+    .from("products")
+    .select("client_id, slug, name, brief")
+    .eq("id", parsed.data.productId)
+    .maybeSingle();
+  if (product.error) throw product.error;
+  if (!product.data) return c.json({ error: "not_found" }, 404);
+  if (!(await assertOperatorOwnsClient(product.data.client_id, honoCookieAdapter(c)))) {
     return c.json({ error: "not_found" }, 404);
   }
 
   const { allowed } = await enforceLimit(rateLimiters.skillDraft(), operatorId, "skill-draft");
   if (!allowed) return c.json({ error: "rate_limited" }, 429, { "Retry-After": "10" });
 
-  const client = await db().from("clients").select("slug, name").eq("id", parsed.data.clientId).maybeSingle();
+  const client = await db().from("clients").select("slug, name").eq("id", product.data.client_id).maybeSingle();
   if (client.error) throw client.error;
   if (!client.data) return c.json({ error: "not_found" }, 404);
 
   try {
-    const draft = await buildSkillDraft({ goal: parsed.data.goal, clientSlug: client.data.slug, clientName: client.data.name });
+    const draft = await buildSkillDraft({
+      goal: parsed.data.goal,
+      clientSlug: client.data.slug,
+      clientName: client.data.name,
+      productSlug: product.data.slug,
+      productName: product.data.name,
+      ...(product.data.brief ? { productBrief: JSON.stringify(product.data.brief) } : {}),
+    });
     return c.json(draft);
   } catch (err) {
     console.error(JSON.stringify({ level: "error", event: "skill_draft_failed", message: err instanceof Error ? err.message : "unknown" }));
@@ -73,12 +100,14 @@ skills.post("/draft", async (c) => {
   }
 });
 
-// ---------- GET list (operator's own skills, optional client filter) ----------
+// ---------- GET list (operator's own skills, optional product/client filter) ----------
 skills.get("/", async (c) => {
+  const productId = c.req.query("productId");
   const clientId = c.req.query("clientId");
   const supabase = await getReadClient();
   let q = supabase.from("client_skills").select(COLUMNS).order("created_at", { ascending: true });
-  if (clientId) q = q.eq("client_id", clientId);
+  if (productId) q = q.eq("product_id", productId);
+  else if (clientId) q = q.eq("client_id", clientId);
   const res = await q;
   if (res.error) throw res.error;
   return c.json(res.data ?? []);
@@ -92,12 +121,15 @@ skills.post("/", async (c) => {
 
   const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
   if (!operatorId) return c.json({ error: "unauthorized" }, 401);
-  if (!(await assertOperatorOwnsClient(d.clientId, honoCookieAdapter(c)))) return c.json({ error: "not_found" }, 404);
+  // client_id is derived from the product, never trusted from the body.
+  const clientId = await loadProductClient(d.productId, c);
+  if (!clientId) return c.json({ error: "not_found" }, 404);
 
   const ins = await db()
     .from("client_skills")
     .insert({
-      client_id: d.clientId,
+      client_id: clientId,
+      product_id: d.productId,
       operator_id: operatorId,
       slug: d.slug,
       name: d.name,
@@ -186,6 +218,7 @@ skills.post("/:id/run", async (c) => {
     .from("agent_jobs")
     .insert({
       client_id: skill.client_id,
+      product_id: skill.product_id,
       operator_id: operatorId,
       skill: skill.slug,
       skill_id: skill.id,
@@ -234,6 +267,7 @@ skills.post("/:id/schedule", async (c) => {
       {
         skill_id: id,
         client_id: skill.client_id,
+        product_id: skill.product_id,
         operator_id: operatorId,
         recurrence: recurrence as Json,
         cron_expression: recurrenceToCron(recurrence),
