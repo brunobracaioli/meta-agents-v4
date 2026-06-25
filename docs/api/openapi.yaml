@@ -55,6 +55,98 @@ components:
       properties:
         text: { type: string, minLength: 1, maxLength: 2000 }
       required: [text]
+    # --- SPEC-018: gestão de clientes + skills do operador ---
+    # Auth: cookie de sessão Supabase (AUTH_MODE=supabase). RLS por auth.uid() isola por operador;
+    # writes passam por guarda de ownership server-side. operator_id é sempre carimbado de auth.uid().
+    ClientInput:
+      type: object
+      properties:
+        slug: { type: string, pattern: "^[a-z0-9-]{2,40}$" }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        ad_account_id: { type: string, maxLength: 64 }
+        business_manager_id: { type: string, maxLength: 64, nullable: true }
+        facebook_page_id: { type: string, maxLength: 64, nullable: true }
+        default_landing_url: { type: string, format: uri, maxLength: 500, nullable: true }
+        daily_budget_cap_cents: { type: integer, minimum: 0 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        materials_path: { type: string, maxLength: 200, nullable: true }
+      required: [slug, name, ad_account_id, daily_budget_cap_cents, currency]
+    Client:
+      allOf:
+        - $ref: "#/components/schemas/ClientInput"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            operator_id: { type: string, format: uuid }
+          required: [id, operator_id]
+    SkillDraftRequest:
+      type: object
+      properties:
+        clientId: { type: string, format: uuid }
+        goal: { type: string, minLength: 8, maxLength: 2000, description: "Objetivo em linguagem natural." }
+      required: [clientId, goal]
+    SkillDraft:
+      type: object
+      description: "Rascunho redigido pela IA; NÃO persiste até POST /skills."
+      properties:
+        name: { type: string }
+        description: { type: string }
+        body: { type: string, description: "Conteúdo do SKILL.md (instruções)." }
+        allowed_tools: { type: array, items: { type: string } }
+        capability: { type: string, enum: [read, write] }
+      required: [name, description, body, allowed_tools, capability]
+    SkillRecurrence:
+      type: object
+      properties:
+        freq: { type: string, enum: [hourly, daily, weekly, monthly] }
+        time: { type: string, pattern: "^[0-2][0-9]:[0-5][0-9]$", description: "HH:MM (não p/ hourly)." }
+        weekday: { type: integer, minimum: 0, maximum: 6, description: "0=domingo (freq=weekly)." }
+        monthday: { type: integer, minimum: 1, maximum: 28, description: "freq=monthly." }
+        every_n_hours: { type: integer, minimum: 1, maximum: 24, description: "freq=hourly." }
+      required: [freq]
+    SkillScheduleInput:
+      type: object
+      properties:
+        recurrence: { $ref: "#/components/schemas/SkillRecurrence" }
+        timezone: { type: string, default: America/Sao_Paulo }
+        enabled: { type: boolean, default: true }
+      required: [recurrence]
+    SkillInput:
+      type: object
+      properties:
+        clientId: { type: string, format: uuid }
+        slug: { type: string, pattern: "^[a-z0-9-]{2,40}$" }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 500 }
+        body: { type: string, minLength: 1, maxLength: 20000 }
+        allowed_tools: { type: array, items: { type: string }, maxItems: 40 }
+        capability: { type: string, enum: [read, write], default: read }
+        ultron_enabled: { type: boolean, default: false }
+        ultron_function:
+          type: object
+          nullable: true
+          properties:
+            name: { type: string, pattern: "^[a-z0-9_]{2,48}$" }
+            description: { type: string, maxLength: 500 }
+            parameters: { type: object, description: "JSON-schema dos argumentos." }
+          required: [name, description, parameters]
+        status: { type: string, enum: [draft, active, disabled], default: draft }
+      required: [clientId, slug, name, body, allowed_tools, capability]
+    Skill:
+      allOf:
+        - $ref: "#/components/schemas/SkillInput"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            operator_id: { type: string, format: uuid }
+            version: { type: integer }
+          required: [id, operator_id, version]
+    EnqueuedJob:
+      type: object
+      properties:
+        jobId: { type: string, format: uuid }
+        status: { type: string }
+      required: [jobId, status]
   responses:
     Unauthorized:
       description: Sem sessão válida.
@@ -146,3 +238,189 @@ paths:
           description: DTO de overview (forma detalhada nos services).
           content: { application/json: { schema: { type: object } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  # --- SPEC-018 ---
+  /clients:
+    get:
+      summary: Lista os clientes do operador logado (RLS).
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200":
+          description: Clientes do operador.
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Client" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      summary: Cria um cliente (operator_id carimbado de auth.uid()).
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ClientInput" } } }
+      responses:
+        "201":
+          description: Criado.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Client" } } }
+        "400": { description: Validação falhou. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { description: slug/ad_account_id já em uso. }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /clients/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      summary: Edita um cliente do operador (guarda de ownership).
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ClientInput" } } }
+      responses:
+        "200":
+          description: Atualizado.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Client" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Não encontrado ou não pertence ao operador. }
+    delete:
+      summary: Remove um cliente do operador.
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200":
+          description: Removido.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Não encontrado ou não pertence ao operador. }
+  /skills/draft:
+    post:
+      summary: IA redige um rascunho de skill a partir de um objetivo (não persiste).
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SkillDraftRequest" } } }
+      responses:
+        "200":
+          description: Rascunho redigido pela IA.
+          content: { application/json: { schema: { $ref: "#/components/schemas/SkillDraft" } } }
+        "400": { description: Validação falhou. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Cliente não pertence ao operador. }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /skills:
+    get:
+      summary: Lista skills do operador (filtro opcional por cliente).
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - in: query
+          name: clientId
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Skills do operador.
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Skill" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      summary: Cria uma skill (do rascunho revisado).
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SkillInput" } } }
+      responses:
+        "201":
+          description: Criada.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } }
+        "400": { description: Validação falhou (inclui slug reservado/baked). }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Cliente não pertence ao operador. }
+        "409": { description: slug já existe para o cliente. }
+  /skills/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      summary: Edita uma skill (version check otimista).
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/SkillInput"
+                - type: object
+                  properties: { version: { type: integer } }
+                  required: [version]
+      responses:
+        "200":
+          description: Atualizada.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Não encontrada ou não pertence ao operador. }
+        "409": { description: Conflito de versão. }
+    delete:
+      summary: Remove uma skill (agenda em cascata).
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200":
+          description: Removida.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Não encontrada ou não pertence ao operador. }
+  /skills/{id}/run:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      summary: Enfileira a skill agora (agent_jobs kind=custom).
+      security: [{ sessionCookie: [] }]
+      responses:
+        "202":
+          description: Job enfileirado.
+          content: { application/json: { schema: { $ref: "#/components/schemas/EnqueuedJob" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Não encontrada ou não pertence ao operador. }
+        "409": { description: Já há um job desta skill em voo. }
+        "422": { description: Runner do operador não está pronto. }
+  /skills/{id}/schedule:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      summary: Cria/define a recorrência da skill.
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SkillScheduleInput" } } }
+      responses:
+        "200":
+          description: Agenda salva (next_run_at calculado server-side).
+          content: { application/json: { schema: { type: object } } }
+        "400": { description: Recorrência inválida (inclui intervalo < 15 min). }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Não encontrada ou não pertence ao operador. }
+    patch:
+      summary: "Atualiza a recorrência (ex.: enabled)."
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SkillScheduleInput" } } }
+      responses:
+        "200":
+          description: Agenda atualizada.
+          content: { application/json: { schema: { type: object } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Não encontrada. }
+    delete:
+      summary: Remove a recorrência da skill.
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200":
+          description: Agenda removida.
+          content: { application/json: { schema: { $ref: "#/components/schemas/Ok" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Não encontrada. }
