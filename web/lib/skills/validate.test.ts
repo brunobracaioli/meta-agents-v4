@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { skillCreateSchema, RESERVED_SLUGS } from "./validate";
+import { skillCreateSchema, RESERVED_SLUGS, recurrenceSchema, recurrenceToCron } from "./validate";
 
 const CLIENT = "11111111-1111-1111-1111-111111111111";
 
@@ -57,5 +57,30 @@ describe("skillCreateSchema", () => {
 
   it("rejects an over-long body (DoS bound)", () => {
     expect(skillCreateSchema.safeParse(base({ body: "x".repeat(20_001) })).success).toBe(false);
+  });
+});
+
+describe("recurrenceSchema", () => {
+  it("requires the fields each freq needs", () => {
+    expect(recurrenceSchema.safeParse({ freq: "hourly", every_n_hours: 6 }).success).toBe(true);
+    expect(recurrenceSchema.safeParse({ freq: "hourly" }).success).toBe(false);
+    expect(recurrenceSchema.safeParse({ freq: "daily", time: "09:00" }).success).toBe(true);
+    expect(recurrenceSchema.safeParse({ freq: "daily" }).success).toBe(false);
+    expect(recurrenceSchema.safeParse({ freq: "weekly", time: "08:00", weekday: 1 }).success).toBe(true);
+    expect(recurrenceSchema.safeParse({ freq: "weekly", time: "08:00" }).success).toBe(false);
+    expect(recurrenceSchema.safeParse({ freq: "monthly", time: "10:00", monthday: 1 }).success).toBe(true);
+    expect(recurrenceSchema.safeParse({ freq: "monthly", time: "10:00", monthday: 31 }).success).toBe(false);
+  });
+
+  it("rejects malformed times", () => {
+    expect(recurrenceSchema.safeParse({ freq: "daily", time: "25:00" }).success).toBe(false);
+    expect(recurrenceSchema.safeParse({ freq: "daily", time: "9:5" }).success).toBe(false);
+  });
+
+  it("compiles to a cron expression", () => {
+    expect(recurrenceToCron({ freq: "daily", time: "09:30" })).toBe("30 9 * * *");
+    expect(recurrenceToCron({ freq: "weekly", time: "08:00", weekday: 1 })).toBe("0 8 * * 1");
+    expect(recurrenceToCron({ freq: "monthly", time: "10:00", monthday: 5 })).toBe("0 10 5 * *");
+    expect(recurrenceToCron({ freq: "hourly", every_n_hours: 6 })).toBe("0 */6 * * *");
   });
 });

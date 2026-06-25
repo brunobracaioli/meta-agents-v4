@@ -52,6 +52,26 @@ export type EditableSkill = {
   version: number;
 };
 
+export type SkillScheduleView = {
+  recurrence: { freq: string; time?: string; weekday?: number; monthday?: number; every_n_hours?: number };
+  timezone: string;
+  enabled: boolean;
+  next_run_at: string;
+  last_run_at: string | null;
+};
+
+/** The skill's recurrence (RLS-scoped read), or null if none / not owned. One schedule per skill. */
+export async function getScheduleForSkill(skillId: string): Promise<SkillScheduleView | null> {
+  const supabase = await getReadClient();
+  const res = await supabase
+    .from("skill_schedules")
+    .select("recurrence, timezone, enabled, next_run_at, last_run_at")
+    .eq("skill_id", skillId)
+    .maybeSingle();
+  if (res.error) throw res.error;
+  return (res.data ?? null) as SkillScheduleView | null;
+}
+
 /** Full skill row for the editor (RLS-scoped read). null if it does not exist / not owned. */
 export async function getSkillForEdit(id: string): Promise<EditableSkill | null> {
   const supabase = await getReadClient();

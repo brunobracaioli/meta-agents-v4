@@ -7,7 +7,7 @@ import type { Database, Json } from "@/lib/db/types";
 type SkillUpdate = Database["public"]["Tables"]["client_skills"]["Update"];
 import { honoCookieAdapter } from "@/lib/auth/hono-cookies";
 import { getCurrentOperatorId, assertOperatorOwnsClient, operatorRunnerReady } from "@/lib/auth/current-operator";
-import { skillCreateSchema, skillPatchSchema } from "@/lib/skills/validate";
+import { skillCreateSchema, skillPatchSchema, scheduleInputSchema, recurrenceToCron } from "@/lib/skills/validate";
 import { expandAllowedTools } from "@/lib/skills/catalog";
 import { buildSkillDraft } from "@/lib/skills/draft";
 import { rateLimiters, enforceLimit } from "@/lib/ratelimit";
@@ -199,4 +199,92 @@ skills.post("/:id/run", async (c) => {
     throw ins.error;
   }
   return c.json({ jobId: ins.data.id, status: ins.data.status }, 202);
+});
+
+// ---------- Schedule (one recurrence per skill) ----------
+
+/** Compute next_run_at via the DB function (single source of truth, same logic the poller uses). */
+async function nextRunAt(recurrence: Json, timezone: string): Promise<string> {
+  const res = await db().rpc("compute_next_run", {
+    p_recurrence: recurrence,
+    p_tz: timezone,
+    p_from: new Date().toISOString(),
+  });
+  if (res.error) throw res.error;
+  return res.data as unknown as string;
+}
+
+// POST: create or replace the skill's schedule.
+skills.post("/:id/schedule", async (c) => {
+  const id = c.req.param("id");
+  const skill = await loadSkill(id, c);
+  if (!skill) return c.json({ error: "not_found" }, 404);
+  const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+  if (!operatorId) return c.json({ error: "unauthorized" }, 401);
+
+  const parsed = scheduleInputSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "invalid_request", detail: parsed.error.issues[0]?.message }, 400);
+  const { recurrence, timezone, enabled } = parsed.data;
+
+  const next = await nextRunAt(recurrence as Json, timezone);
+  const up = await db()
+    .from("skill_schedules")
+    .upsert(
+      {
+        skill_id: id,
+        client_id: skill.client_id,
+        operator_id: operatorId,
+        recurrence: recurrence as Json,
+        cron_expression: recurrenceToCron(recurrence),
+        timezone,
+        enabled,
+        next_run_at: next,
+      },
+      { onConflict: "skill_id" },
+    )
+    .select("id, recurrence, cron_expression, timezone, enabled, next_run_at, last_run_at")
+    .single();
+  if (up.error) throw up.error;
+  return c.json(up.data);
+});
+
+// PATCH: update the recurrence and/or enabled flag; recompute next_run_at when recurrence changes.
+skills.patch("/:id/schedule", async (c) => {
+  const id = c.req.param("id");
+  const skill = await loadSkill(id, c);
+  if (!skill) return c.json({ error: "not_found" }, 404);
+
+  const parsed = scheduleInputSchema.partial().safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "invalid_request", detail: parsed.error.issues[0]?.message }, 400);
+
+  const patch: Record<string, unknown> = {};
+  if (parsed.data.enabled !== undefined) patch.enabled = parsed.data.enabled;
+  if (parsed.data.recurrence !== undefined) {
+    const tz = parsed.data.timezone ?? "America/Sao_Paulo";
+    patch.recurrence = parsed.data.recurrence as Json;
+    patch.cron_expression = recurrenceToCron(parsed.data.recurrence);
+    patch.timezone = tz;
+    patch.next_run_at = await nextRunAt(parsed.data.recurrence as Json, tz);
+  }
+  if (Object.keys(patch).length === 0) return c.json({ error: "empty_patch" }, 400);
+
+  const upd = await db()
+    .from("skill_schedules")
+    .update(patch)
+    .eq("skill_id", id)
+    .select("id, recurrence, cron_expression, timezone, enabled, next_run_at, last_run_at")
+    .maybeSingle();
+  if (upd.error) throw upd.error;
+  if (!upd.data) return c.json({ error: "not_found" }, 404);
+  return c.json(upd.data);
+});
+
+// DELETE: remove the skill's schedule.
+skills.delete("/:id/schedule", async (c) => {
+  const id = c.req.param("id");
+  const skill = await loadSkill(id, c);
+  if (!skill) return c.json({ error: "not_found" }, 404);
+  const del = await db().from("skill_schedules").delete().eq("skill_id", id);
+  if (del.error) throw del.error;
+  return c.json({ ok: true });
 });

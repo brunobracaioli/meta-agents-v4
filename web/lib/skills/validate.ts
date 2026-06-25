@@ -87,3 +87,56 @@ export const skillPatchSchema = refineSkill(
 
 export type SkillCreateInput = z.infer<typeof skillCreateSchema>;
 export type SkillPatchInput = z.infer<typeof skillPatchSchema>;
+
+// --- Scheduling (SPEC-018 Wave 4) ---
+// The friendly recurrence picker. The finest granularity is hourly (every_n_hours >= 1 ⇒ >= 60min),
+// which already satisfies the >= 15min anti-runaway floor — there is intentionally no by-minute mode.
+const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export const recurrenceSchema = z
+  .object({
+    freq: z.enum(["hourly", "daily", "weekly", "monthly"]),
+    time: z.string().regex(HHMM_RE, "horário deve ser HH:MM").optional(),
+    weekday: z.number().int().min(0).max(6).optional(),
+    monthday: z.number().int().min(1).max(28).optional(),
+    every_n_hours: z.number().int().min(1).max(24).optional(),
+  })
+  .superRefine((v, ctx) => {
+    const need = (cond: boolean, msg: string, path: string) => {
+      if (!cond) ctx.addIssue({ code: z.ZodIssueCode.custom, message: msg, path: [path] });
+    };
+    if (v.freq === "hourly") need(v.every_n_hours !== undefined, "every_n_hours obrigatório", "every_n_hours");
+    if (v.freq === "daily") need(!!v.time, "time obrigatório", "time");
+    if (v.freq === "weekly") {
+      need(!!v.time, "time obrigatório", "time");
+      need(v.weekday !== undefined, "weekday obrigatório", "weekday");
+    }
+    if (v.freq === "monthly") {
+      need(!!v.time, "time obrigatório", "time");
+      need(v.monthday !== undefined, "monthday obrigatório", "monthday");
+    }
+  });
+
+export const scheduleInputSchema = z.object({
+  recurrence: recurrenceSchema,
+  timezone: z.string().trim().min(1).max(64).default("America/Sao_Paulo"),
+  enabled: z.boolean().default(true),
+});
+
+export type RecurrenceInput = z.infer<typeof recurrenceSchema>;
+
+/** Render a cron expression from the recurrence (display/portability only; the poller uses
+ * next_run_at, not this string). Times are in the schedule's timezone. */
+export function recurrenceToCron(r: RecurrenceInput): string {
+  const [hh, mm] = (r.time ?? "00:00").split(":");
+  switch (r.freq) {
+    case "hourly":
+      return `0 */${r.every_n_hours} * * *`;
+    case "daily":
+      return `${Number(mm)} ${Number(hh)} * * *`;
+    case "weekly":
+      return `${Number(mm)} ${Number(hh)} * * ${r.weekday}`;
+    case "monthly":
+      return `${Number(mm)} ${Number(hh)} ${r.monthday} * *`;
+  }
+}
