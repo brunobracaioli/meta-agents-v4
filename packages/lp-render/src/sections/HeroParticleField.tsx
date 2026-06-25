@@ -218,7 +218,7 @@ export function HeroParticleField({ className }: ParticleFieldProps) {
 
           const color =
             Math.random() < BRAND_PROBABILITY
-              ? BRAND[(Math.random() * BRAND.length) | 0]
+              ? BRAND[(Math.random() * BRAND.length) | 0] ?? NEUTRAL
               : NEUTRAL;
           colors[ptr * 3] = color[0];
           colors[ptr * 3 + 1] = color[1];
