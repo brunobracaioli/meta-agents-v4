@@ -1410,6 +1410,7 @@ export type DynamicSkillTool = {
   spec: Anthropic.Tool;
   skillId: string;
   clientId: string;
+  productId: string;
   slug: string;
   capability: "read" | "write";
 };
@@ -1445,7 +1446,7 @@ export async function loadDynamicSkillTools(operatorId: string | null): Promise<
   if (!operatorId) return [];
   const { data, error } = await db()
     .from("client_skills")
-    .select("id, client_id, slug, capability, ultron_function")
+    .select("id, client_id, product_id, slug, capability, ultron_function")
     .eq("operator_id", operatorId)
     .eq("ultron_enabled", true)
     .eq("status", "active");
@@ -1455,7 +1456,14 @@ export async function loadDynamicSkillTools(operatorId: string | null): Promise<
     const fn = row.ultron_function as UltronFunction | null;
     if (!fn || typeof fn.name !== "string") continue;
     const capability = row.capability === "write" ? "write" : "read";
-    out.push({ spec: buildDynamicSpec(fn, capability), skillId: row.id, clientId: row.client_id, slug: row.slug, capability });
+    out.push({
+      spec: buildDynamicSpec(fn, capability),
+      skillId: row.id,
+      clientId: row.client_id,
+      productId: row.product_id,
+      slug: row.slug,
+      capability,
+    });
   }
   return out;
 }
@@ -1484,6 +1492,7 @@ async function enqueueDynamicSkill(
     .from("agent_jobs")
     .insert({
       client_id: tool.clientId,
+      product_id: tool.productId,
       operator_id: ctx.operatorId,
       skill: tool.slug,
       skill_id: tool.skillId,

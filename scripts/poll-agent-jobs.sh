@@ -100,6 +100,7 @@ CURRENT_JOB_ID="${JOB_ID}"
 SKILL=$(echo "${CLAIM}" | jq -r '.[0].skill // empty')
 KIND=$(echo "${CLAIM}" | jq -r '.[0].kind // empty')
 CLIENT_ID=$(echo "${CLAIM}" | jq -r '.[0].client_id // empty')
+PRODUCT_ID=$(echo "${CLAIM}" | jq -r '.[0].product_id // empty')
 SKILL_ID=$(echo "${CLAIM}" | jq -r '.[0].skill_id // empty')
 ARGS=$(echo "${CLAIM}" | jq -r '.[0].args | to_entries | map("\(.key)=\(.value)") | join(" ")')
 
@@ -136,7 +137,7 @@ patch_job "${JOB_ID}" "{\"status\":\"running\",\"started_at\":\"$(now_iso)\"}"
 # it was charset-validated above, so this is safe.
 RUN_LOG=$(mktemp)
 # shellcheck disable=SC2086
-AGENT_JOB_ID="${JOB_ID}" AGENT_JOB_CLIENT_ID="${CLIENT_ID}" AGENT_JOB_SKILL_ID="${SKILL_ID}" /app/scripts/run-skill.sh "${SKILL}" ${ARGS} >"${RUN_LOG}" 2>&1
+AGENT_JOB_ID="${JOB_ID}" AGENT_JOB_CLIENT_ID="${CLIENT_ID}" AGENT_JOB_PRODUCT_ID="${PRODUCT_ID}" AGENT_JOB_SKILL_ID="${SKILL_ID}" /app/scripts/run-skill.sh "${SKILL}" ${ARGS} >"${RUN_LOG}" 2>&1
 EC=$?
 
 if [[ ${EC} -eq 0 ]]; then
