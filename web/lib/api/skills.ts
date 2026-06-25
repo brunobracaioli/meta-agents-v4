@@ -5,6 +5,7 @@ import { getReadClient } from "@/lib/db/read-client";
 import type { Database, Json } from "@/lib/db/types";
 
 type SkillUpdate = Database["public"]["Tables"]["client_skills"]["Update"];
+type ScheduleUpdate = Database["public"]["Tables"]["skill_schedules"]["Update"];
 import { honoCookieAdapter } from "@/lib/auth/hono-cookies";
 import { getCurrentOperatorId, assertOperatorOwnsClient, operatorRunnerReady } from "@/lib/auth/current-operator";
 import { skillCreateSchema, skillPatchSchema, scheduleInputSchema, recurrenceToCron } from "@/lib/skills/validate";
@@ -257,7 +258,7 @@ skills.patch("/:id/schedule", async (c) => {
   const parsed = scheduleInputSchema.partial().safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid_request", detail: parsed.error.issues[0]?.message }, 400);
 
-  const patch: Record<string, unknown> = {};
+  const patch: ScheduleUpdate = {};
   if (parsed.data.enabled !== undefined) patch.enabled = parsed.data.enabled;
   if (parsed.data.recurrence !== undefined) {
     const tz = parsed.data.timezone ?? "America/Sao_Paulo";
