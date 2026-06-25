@@ -31,14 +31,19 @@ execução existente.
 ## 2. Modelo conceitual
 
 ```
-operador ──1:N──> cliente ──1:N──> client_skills ──0:1──> skill_schedules (recorrência)
-                     │                    │
-                     │                    └──0:1──> ultron_function (exposição via function_calling)
-                     └ campanhas / landing pages / análises / agent_jobs
+operador ─1:N─> cliente ─1:N─> produto ─1:N─> client_skills ─0:1─> skill_schedules (recorrência)
+                  │                              │
+                  │                              └─0:1─> ultron_function (function_calling)
+                  └ campanhas / landing pages / análises / agent_jobs
 ```
 
+> **Re-escopo (SPEC-018.1, 2026-06-25):** skills passaram de **cliente** para **produto**. Um cliente
+> tem N produtos (preços/infos diferentes) e a skill pertence ao produto. `client_skills` ganhou
+> `product_id NOT NULL`; mantém `client_id` denormalizado (resolução de ad account + dedup do job).
+> O nome da tabela segue `client_skills` (a skill ainda é de um cliente; ver ADR 0030).
+
 - **Skill (do operador)** — automação declarativa (instruções markdown + `allowed-tools` +
-  capacidade), armazenada em `client_skills`, pertencente a **um** cliente (logo a **um** operador).
+  capacidade), armazenada em `client_skills`, pertencente a **um produto** (logo a um cliente/operador).
 - **Execução** — sempre via `agent_jobs` (kind=`custom`) → runner materializa o `SKILL.md` →
   `claude -p`. Gatilhos: manual ("rodar agora"), agenda (`skill_schedules`), ou Ultron (function call).
 
@@ -57,9 +62,10 @@ budget cap) e prompt-injection de dados externos (`allowed-tools` + PAUSED-por-p
 | coluna | tipo | nota |
 |---|---|---|
 | `id` | uuid pk | `default gen_random_uuid()` |
-| `client_id` | uuid not null | references `clients(id)` on delete cascade |
+| `product_id` | uuid not null | references `products(id)` on delete cascade — **dono da skill** |
+| `client_id` | uuid not null | references `clients(id)` on delete cascade; denormalizado (resolução + dedup) |
 | `operator_id` | uuid not null | references `operators(id)`; denormalizado p/ RLS + scoping (como `agent_jobs`) |
-| `slug` | text not null | runner-safe `^[a-z0-9-]{2,40}$`; **unique (client_id, slug)** |
+| `slug` | text not null | runner-safe `^[a-z0-9-]{2,40}$`; **unique (product_id, slug)** |
 | `name` | text not null | exibição |
 | `description` | text | |
 | `body` | text not null | conteúdo do `SKILL.md` (redigido pela IA + editado); **sem segredos** |

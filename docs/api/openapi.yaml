@@ -82,9 +82,9 @@ components:
     SkillDraftRequest:
       type: object
       properties:
-        clientId: { type: string, format: uuid }
+        productId: { type: string, format: uuid, description: "Produto alvo; o cliente é derivado dele." }
         goal: { type: string, minLength: 8, maxLength: 2000, description: "Objetivo em linguagem natural." }
-      required: [clientId, goal]
+      required: [productId, goal]
     SkillDraft:
       type: object
       description: "Rascunho redigido pela IA; NÃO persiste até POST /skills."
@@ -114,7 +114,7 @@ components:
     SkillInput:
       type: object
       properties:
-        clientId: { type: string, format: uuid }
+        productId: { type: string, format: uuid, description: "Produto dono da skill; o cliente é derivado dele." }
         slug: { type: string, pattern: "^[a-z0-9-]{2,40}$" }
         name: { type: string, minLength: 1, maxLength: 120 }
         description: { type: string, maxLength: 500 }
@@ -131,7 +131,7 @@ components:
             parameters: { type: object, description: "JSON-schema dos argumentos." }
           required: [name, description, parameters]
         status: { type: string, enum: [draft, active, disabled], default: draft }
-      required: [clientId, slug, name, body, allowed_tools, capability]
+      required: [productId, slug, name, body, allowed_tools, capability]
     Skill:
       allOf:
         - $ref: "#/components/schemas/SkillInput"

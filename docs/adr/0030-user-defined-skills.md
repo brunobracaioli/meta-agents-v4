@@ -34,6 +34,14 @@ existentes, sem um segundo executor.
 frontmatter `allowed-tools` e a semântica de skill; (b) re-deploy do runner a cada skill — inviável
 e lento; (c) bucket de skills versionadas sincronizado por pull — complexidade sem ganho sobre o DB.
 
+**Re-escopo cliente → produto (2026-06-25):** a skill pertence a um **produto** (`client_skills.product_id
+NOT NULL`, slug único por produto), não ao cliente direto — um cliente tem N produtos com preços/infos
+distintas. Mantém-se `client_id` denormalizado (resolução de ad account + índice de dedup do job) e o
+**nome da tabela `client_skills`** (renomear para `product_skills` daria churn no runner/types/ultron/
+services sem ganho — a skill ainda é, transitivamente, de um cliente). `agent_jobs`/`skill_schedules`
+ganham `product_id` (rastreio/denormalização). A IA do wizard recebe o contexto do produto (`name` +
+`brief`) para adaptar a skill.
+
 ### 2. Ultron ganha **tools dinâmicas** geradas do banco
 
 As tools do Ultron eram `Anthropic.Tool` hardcoded + allowlists fixas (`CREATE_SKILL_BY_SLUG`).

@@ -202,6 +202,7 @@ export type Database = {
           kind: string
           landing_page_id: string | null
           operator_id: string | null
+          product_id: string | null
           requested_by: string
           result: Json | null
           skill: string
@@ -223,6 +224,7 @@ export type Database = {
           kind: string
           landing_page_id?: string | null
           operator_id?: string | null
+          product_id?: string | null
           requested_by?: string
           result?: Json | null
           skill: string
@@ -244,6 +246,7 @@ export type Database = {
           kind?: string
           landing_page_id?: string | null
           operator_id?: string | null
+          product_id?: string | null
           requested_by?: string
           result?: Json | null
           skill?: string
@@ -271,6 +274,13 @@ export type Database = {
             columns: ["operator_id"]
             isOneToOne: false
             referencedRelation: "operators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_jobs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
           {
@@ -568,6 +578,7 @@ export type Database = {
           id: string
           name: string
           operator_id: string
+          product_id: string
           slug: string
           status: string
           ultron_enabled: boolean
@@ -585,6 +596,7 @@ export type Database = {
           id?: string
           name: string
           operator_id: string
+          product_id: string
           slug: string
           status?: string
           ultron_enabled?: boolean
@@ -602,6 +614,7 @@ export type Database = {
           id?: string
           name?: string
           operator_id?: string
+          product_id?: string
           slug?: string
           status?: string
           ultron_enabled?: boolean
@@ -622,6 +635,13 @@ export type Database = {
             columns: ["operator_id"]
             isOneToOne: false
             referencedRelation: "operators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_skills_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -1538,6 +1558,7 @@ export type Database = {
           last_run_at: string | null
           next_run_at: string
           operator_id: string
+          product_id: string
           recurrence: Json
           skill_id: string
           timezone: string
@@ -1553,6 +1574,7 @@ export type Database = {
           last_run_at?: string | null
           next_run_at: string
           operator_id: string
+          product_id: string
           recurrence: Json
           skill_id: string
           timezone?: string
@@ -1568,6 +1590,7 @@ export type Database = {
           last_run_at?: string | null
           next_run_at?: string
           operator_id?: string
+          product_id?: string
           recurrence?: Json
           skill_id?: string
           timezone?: string
@@ -1593,6 +1616,13 @@ export type Database = {
             columns: ["operator_id"]
             isOneToOne: false
             referencedRelation: "operators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "skill_schedules_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
           {
@@ -1669,6 +1699,7 @@ export type Database = {
           kind: string
           landing_page_id: string | null
           operator_id: string | null
+          product_id: string | null
           requested_by: string
           result: Json | null
           skill: string
@@ -1722,6 +1753,7 @@ export type Database = {
           last_run_at: string | null
           next_run_at: string
           operator_id: string
+          product_id: string
           recurrence: Json
           skill_id: string
           timezone: string
