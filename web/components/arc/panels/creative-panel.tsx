@@ -35,7 +35,7 @@ export function CreativePanel({ data }: { data: unknown }) {
   const current = creatives[Math.min(selected, creatives.length - 1)]!;
 
   return (
-    <div className="w-[min(88vw,420px)] space-y-3">
+    <div className="space-y-3">
       <div className="hud-clip-sm overflow-hidden border border-cyan-300/20 bg-black/30">
         {/* eslint-disable-next-line @next/next/no-img-element -- remote R2/Meta asset, not a static import */}
         <img

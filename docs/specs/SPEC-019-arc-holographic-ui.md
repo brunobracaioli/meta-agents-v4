@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | Draft |
+| Status | Em produção — Waves 0/A/B/C entregues e mergeadas na `main` (PRs #11/#13/#14/#15/#16, + fixes #12/#17); D e E pendentes |
 | Data | 2026-06-26 |
 | Autor | brunobracaioli |
 | ADRs | [0031](../adr/0031-arc-holographic-render-bus.md) |
@@ -104,7 +104,7 @@ Tabela de tools (todas read-only; handler resolve dados e devolve `{ ui_intent: 
 
 ## 4. Waves
 
-### Wave 0 — Fundação (palco + contrato)
+### Wave 0 — Fundação (palco + contrato) ✅ entregue
 **Objetivo:** rota e palco renderizando, contrato e bus vazios prontos.
 **Entrega:**
 - `web/app/(app)/dashboard/arc/page.tsx` + `layout.tsx` (fullscreen, sem chrome do dashboard, dentro do
@@ -121,7 +121,7 @@ Tabela de tools (todas read-only; handler resolve dados e devolve `{ ui_intent: 
 zero regressão no dashboard clássico. `npm run build` verde.
 **Testes:** unit do reducer do Render Bus (push/dismiss/focus/teto de 6/dismiss "all").
 
-### Wave A — Voz → Render → Dismiss (MVP demonstrável)
+### Wave A — Voz → Render → Dismiss (MVP demonstrável) ✅ entregue + validado e2e
 **Objetivo:** o ciclo central funcionando com 2 painéis reais.
 **Entrega:**
 - `tools.ts`: `show_funnel`, `show_daily_summary`, `dismiss_element` (+ `RENDER_TOOLS`,
@@ -137,7 +137,7 @@ resume por voz, "pode tirar" → some. "o que os agentes fizeram ontem?" → pai
 **Testes:** unit de `uiIntentFromToolResult`; integração da render-tool (guard de posse nega cliente alheio);
 validação Zod rejeita intent malformado na borda cliente.
 
-### Wave B — Shell de pastas + clientes (imagens 1–3)
+### Wave B — Shell de pastas + clientes (imagens 1–3) ✅ entregue + validado e2e
 **Objetivo:** navegação espacial das pastas por voz.
 **Entrega:**
 - `tools.ts`: `show_clients`, `open_client`.
@@ -150,7 +150,7 @@ respectivos `show_*` (atalho) ou estado "em breve" nas que não têm painel aind
 **Aceite:** "abrir clientes" → pastas; "abrir brunobracaioli" → lista → card com produtos e skills reais.
 **Testes:** integração `open_client` (RLS/posse); unit do state machine de camadas do painel.
 
-### Wave C — Catálogo completo + popout + narração com render
+### Wave C — Catálogo completo + popout + narração com render ✅ entregue (C.1 painéis + C.2a narração/migration + C.2b popout-espelho); landing preview corrigido p/ same-origin /lp-preview (PR #17). Decisão: popout = ESPELHO (não migra).
 **Objetivo:** completar os painéis e a 2ª superfície.
 **Entrega:**
 - `tools.ts`: `show_analyses`, `show_creative`, `show_landing`, `focus_element`, `popout_element`.
@@ -165,7 +165,7 @@ respectivos `show_*` (atalho) ou estado "em breve" nas que não têm painel aind
 **Testes:** integração da migration (coluna nullable, RLS herdada); validação de origem do iframe; sync
 overlay↔popout via canal mockado.
 
-### Wave D — Gestos por webcam
+### Wave D — Gestos por webcam ⏳ pendente (próxima)
 **Objetivo:** comando por mãos no painel em foco.
 **Entrega:**
 - `components/arc/use-hand-tracking.ts` (template `use-face-tracking.ts`; `@mediapipe/tasks-vision` já
@@ -178,7 +178,7 @@ prioriza a dominante.
 **Aceite:** com webcam, punho→palma abre, swipe dispensa, apontar move foco — só no painel em foco.
 **Testes:** unit do classificador de gesto (landmarks fixtures → ação esperada); histerese determinística.
 
-### Wave E — Polish "surreal"
+### Wave E — Polish "surreal" ⏳ pendente (parcialmente adiantado: HoloPanel já tem largura única default/wide + prefers-reduced-motion + indicador de foco; refactor/arc-panel-polish)
 **Objetivo:** acabamento Tony Stark.
 **Entrega:** transições refinadas, scanlines/glow/parallax sutil, SFX de materialização, boot sequence do
 ARC, tuning de UX e acessibilidade (reduce-motion respeitado). Sem novo contrato.

@@ -50,7 +50,7 @@ export function AnalysesPanel({ data }: { data: unknown }) {
   const findings = Array.isArray(data.findings) ? data.findings : [];
 
   return (
-    <div className="w-[min(88vw,440px)] space-y-3">
+    <div className="space-y-3">
       <div className="flex items-center justify-between gap-3 border-b border-cyan-300/15 pb-2.5">
         <span
           className={`hud-clip-sm border px-2 py-1 font-hud text-[0.65rem] uppercase tracking-[0.16em] ${verdictTone(

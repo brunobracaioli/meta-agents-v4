@@ -35,7 +35,7 @@ export function ClientsFolderPanel({ data }: { data: unknown }) {
   const compact = layer.view === "list";
 
   return (
-    <div className="w-[min(88vw,420px)] space-y-3">
+    <div className="space-y-3">
       {/* Folder row — full grid at root, compact strip once a folder is open. */}
       <div className={compact ? "flex flex-wrap gap-1.5" : "grid grid-cols-3 gap-2"}>
         {FOLDERS.map((folder) => {
