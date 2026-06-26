@@ -59,8 +59,8 @@ describe("validateSection — real generated data round-trips", () => {
     });
   }
 
-  it("has a schema for every one of the 17 section types", () => {
-    expect(Object.keys(SECTION_SCHEMAS)).toHaveLength(17);
+  it("has a schema for every one of the 18 section types", () => {
+    expect(Object.keys(SECTION_SCHEMAS)).toHaveLength(18);
   });
 });
 
