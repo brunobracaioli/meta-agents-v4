@@ -202,9 +202,11 @@ export type Database = {
           kind: string
           landing_page_id: string | null
           operator_id: string | null
+          product_id: string | null
           requested_by: string
           result: Json | null
           skill: string
+          skill_id: string | null
           started_at: string | null
           status: string
         }
@@ -222,9 +224,11 @@ export type Database = {
           kind: string
           landing_page_id?: string | null
           operator_id?: string | null
+          product_id?: string | null
           requested_by?: string
           result?: Json | null
           skill: string
+          skill_id?: string | null
           started_at?: string | null
           status?: string
         }
@@ -242,9 +246,11 @@ export type Database = {
           kind?: string
           landing_page_id?: string | null
           operator_id?: string | null
+          product_id?: string | null
           requested_by?: string
           result?: Json | null
           skill?: string
+          skill_id?: string | null
           started_at?: string | null
           status?: string
         }
@@ -268,6 +274,20 @@ export type Database = {
             columns: ["operator_id"]
             isOneToOne: false
             referencedRelation: "operators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_jobs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_jobs_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "client_skills"
             referencedColumns: ["id"]
           },
         ]
@@ -547,6 +567,85 @@ export type Database = {
           },
         ]
       }
+      client_skills: {
+        Row: {
+          allowed_tools: string[]
+          body: string
+          capability: string
+          client_id: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          operator_id: string
+          product_id: string
+          slug: string
+          status: string
+          ultron_enabled: boolean
+          ultron_function: Json | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          allowed_tools?: string[]
+          body: string
+          capability?: string
+          client_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          operator_id: string
+          product_id: string
+          slug: string
+          status?: string
+          ultron_enabled?: boolean
+          ultron_function?: Json | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          allowed_tools?: string[]
+          body?: string
+          capability?: string
+          client_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          operator_id?: string
+          product_id?: string
+          slug?: string
+          status?: string
+          ultron_enabled?: boolean
+          ultron_function?: Json | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_skills_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_skills_operator_id_fkey"
+            columns: ["operator_id"]
+            isOneToOne: false
+            referencedRelation: "operators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_skills_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           ad_account_id: string
@@ -559,7 +658,7 @@ export type Database = {
           id: string
           materials_path: string | null
           name: string
-          operator_id: string | null
+          operator_id: string
           slug: string
           updated_at: string
         }
@@ -574,7 +673,7 @@ export type Database = {
           id?: string
           materials_path?: string | null
           name: string
-          operator_id?: string | null
+          operator_id: string
           slug: string
           updated_at?: string
         }
@@ -589,7 +688,7 @@ export type Database = {
           id?: string
           materials_path?: string | null
           name?: string
-          operator_id?: string | null
+          operator_id?: string
           slug?: string
           updated_at?: string
         }
@@ -1448,6 +1547,93 @@ export type Database = {
           },
         ]
       }
+      skill_schedules: {
+        Row: {
+          client_id: string
+          created_at: string
+          cron_expression: string | null
+          enabled: boolean
+          id: string
+          last_job_id: string | null
+          last_run_at: string | null
+          next_run_at: string
+          operator_id: string
+          product_id: string
+          recurrence: Json
+          skill_id: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          cron_expression?: string | null
+          enabled?: boolean
+          id?: string
+          last_job_id?: string | null
+          last_run_at?: string | null
+          next_run_at: string
+          operator_id: string
+          product_id: string
+          recurrence: Json
+          skill_id: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          cron_expression?: string | null
+          enabled?: boolean
+          id?: string
+          last_job_id?: string | null
+          last_run_at?: string | null
+          next_run_at?: string
+          operator_id?: string
+          product_id?: string
+          recurrence?: Json
+          skill_id?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skill_schedules_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "skill_schedules_last_job_id_fkey"
+            columns: ["last_job_id"]
+            isOneToOne: false
+            referencedRelation: "agent_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "skill_schedules_operator_id_fkey"
+            columns: ["operator_id"]
+            isOneToOne: false
+            referencedRelation: "operators"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "skill_schedules_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "skill_schedules_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: true
+            referencedRelation: "client_skills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ultron_narrations: {
         Row: {
           created_at: string
@@ -1497,67 +1683,39 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      claim_agent_job:
-        | {
-            Args: { p_worker_id: string }
-            Returns: {
-              args: Json
-              claimed_at: string | null
-              claimed_by: string | null
-              client_id: string
-              confirmed_at: string
-              created_at: string
-              error: string | null
-              exit_code: number | null
-              finished_at: string | null
-              id: string
-              kind: string
-              landing_page_id: string | null
-              operator_id: string | null
-              requested_by: string
-              result: Json | null
-              skill: string
-              started_at: string | null
-              status: string
-            }[]
-            SetofOptions: {
-              from: "*"
-              to: "agent_jobs"
-              isOneToOne: false
-              isSetofReturn: true
-            }
-          }
-        | {
-            Args: { p_operator_id: string; p_worker_id: string }
-            Returns: {
-              args: Json
-              claimed_at: string | null
-              claimed_by: string | null
-              client_id: string
-              confirmed_at: string
-              created_at: string
-              error: string | null
-              exit_code: number | null
-              finished_at: string | null
-              id: string
-              kind: string
-              landing_page_id: string | null
-              operator_id: string | null
-              requested_by: string
-              result: Json | null
-              skill: string
-              started_at: string | null
-              status: string
-            }[]
-            SetofOptions: {
-              from: "*"
-              to: "agent_jobs"
-              isOneToOne: false
-              isSetofReturn: true
-            }
-          }
+      claim_agent_job: {
+        Args: { p_operator_id: string; p_worker_id: string }
+        Returns: {
+          args: Json
+          claimed_at: string | null
+          claimed_by: string | null
+          client_id: string
+          confirmed_at: string
+          created_at: string
+          error: string | null
+          exit_code: number | null
+          finished_at: string | null
+          id: string
+          kind: string
+          landing_page_id: string | null
+          operator_id: string | null
+          product_id: string | null
+          requested_by: string
+          result: Json | null
+          skill: string
+          skill_id: string | null
+          started_at: string | null
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "agent_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_autonomous_watch: {
-        Args: { p_worker_id: string }
+        Args: { p_operator_id: string; p_worker_id: string }
         Returns: {
           agent_job_id: string | null
           client_id: string
@@ -1582,6 +1740,35 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      claim_due_skill_schedule: {
+        Args: { p_operator_id: string }
+        Returns: {
+          client_id: string
+          created_at: string
+          cron_expression: string | null
+          enabled: boolean
+          id: string
+          last_job_id: string | null
+          last_run_at: string | null
+          next_run_at: string
+          operator_id: string
+          product_id: string
+          recurrence: Json
+          skill_id: string
+          timezone: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "skill_schedules"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      compute_next_run: {
+        Args: { p_from: string; p_recurrence: Json; p_tz: string }
+        Returns: string
       }
       operator_owns_client: { Args: { p_client_id: string }; Returns: boolean }
     }
@@ -1741,3 +1928,5 @@ export type AgentJob = Row<"agent_jobs">
 export type Product = Row<"products">
 export type LandingPage = Row<"landing_pages">
 export type LandingPageSection = Row<"landing_page_sections">
+export type ClientSkill = Row<"client_skills">
+export type SkillSchedule = Row<"skill_schedules">

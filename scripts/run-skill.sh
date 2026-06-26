@@ -118,6 +118,48 @@ if [[ -n "${OPERATOR_ID_CLEAN}" && -n "${CLIENT_ID_CLEAN}" ]]; then
   fi
 fi
 
+# SPEC-018: operator-authored skill (ADR 0030). If the skill isn't baked on disk and the job
+# carries a skill_id, materialize an EPHEMERAL SKILL.md from client_skills before running — reusing
+# the existing claude -p path. `body` is plain instructions; `allowed_tools` becomes the frontmatter
+# allow-list. The slug must match what the poller passed (defence in depth).
+SKILL_ID_CLEAN="$(printf '%s' "${AGENT_JOB_SKILL_ID:-}" | tr -d '[:space:]')"
+if [[ ! -f "${SKILL_DIR}/SKILL.md" && -n "${SKILL_ID_CLEAN}" ]]; then
+  if [[ -z "${SUPABASE_URL_CLEAN}" || -z "${SUPABASE_KEY}" ]] || ! command -v jq >/dev/null 2>&1; then
+    echo "ERROR: cannot materialize custom skill (missing Supabase env or jq)" >&2
+    emit_lifecycle "error" "materialização de skill custom indisponível" "2"
+    exit 2
+  fi
+  SKILL_ROW="$(curl -fsS \
+    "${SUPABASE_URL_CLEAN%/}/rest/v1/client_skills?id=eq.${SKILL_ID_CLEAN}&select=slug,name,description,body,allowed_tools" \
+    -H "apikey: ${SUPABASE_KEY}" \
+    -H "Authorization: Bearer ${SUPABASE_KEY}" \
+    --max-time 10 2>/dev/null || true)"
+  [[ -n "${SKILL_ROW}" ]] || SKILL_ROW="[]"
+  DB_SLUG="$(printf '%s' "${SKILL_ROW}" | jq -r '.[0].slug // empty' 2>/dev/null || true)"
+  if [[ -z "${DB_SLUG}" ]]; then
+    echo "ERROR: custom skill ${SKILL_ID_CLEAN} not found in DB" >&2
+    emit_lifecycle "error" "skill custom não encontrada no banco" "2"
+    exit 2
+  fi
+  if [[ "${DB_SLUG}" != "${SKILL}" ]]; then
+    echo "ERROR: skill slug mismatch (job='${SKILL}' db='${DB_SLUG}') — refusing" >&2
+    emit_lifecycle "error" "slug da skill diverge do banco" "3"
+    exit 3
+  fi
+  mkdir -p "${SKILL_DIR}"
+  # Frontmatter: name/description JSON-encoded (valid YAML double-quoted scalars, safe with colons);
+  # allowed-tools is a comma-join of a safe-charset token list. Body is written raw after.
+  {
+    printf -- '---\n'
+    printf 'name: %s\n' "$(printf '%s' "${SKILL_ROW}" | jq -r '(.[0].name // .[0].slug) | tojson')"
+    printf 'description: %s\n' "$(printf '%s' "${SKILL_ROW}" | jq -r '((.[0].description // "") | gsub("[\n\r]";" ")) | tojson')"
+    printf 'allowed-tools: %s\n' "$(printf '%s' "${SKILL_ROW}" | jq -r '(.[0].allowed_tools // []) | join(", ")')"
+    printf -- '---\n\n'
+  } > "${SKILL_DIR}/SKILL.md"
+  printf '%s' "${SKILL_ROW}" | jq -r '.[0].body' >> "${SKILL_DIR}/SKILL.md"
+  echo "MATERIALIZED custom skill ${DB_SLUG} from DB -> ${SKILL_DIR}/SKILL.md"
+fi
+
 if [[ ! -f "${SKILL_DIR}/SKILL.md" ]]; then
   echo "ERROR: skill not found at ${SKILL_DIR}/SKILL.md" >&2
   emit_lifecycle "error" "skill not found at ${SKILL_DIR}/SKILL.md" "2"

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "@/lib/env";
 import { ULTRON_SYSTEM_PROMPT } from "@/lib/ultron/prompt";
-import { toolSpecs, runTool, CLIENT_TOOLS } from "@/lib/ultron/tools";
+import { toolSpecs, runTool, CLIENT_TOOLS, loadDynamicSkillTools, type DynamicSkillTool } from "@/lib/ultron/tools";
 import {
   isLandingEditSignal,
   isLiveReviewSignal,
@@ -50,7 +50,13 @@ export type CapturedImage = {
   data: string; // base64, no data: prefix
 };
 
-type LoopContext = { sessionId: string; priorMemory: ChatTurn[]; userText: string; operatorId: string | null };
+type LoopContext = {
+  sessionId: string;
+  priorMemory: ChatTurn[];
+  userText: string;
+  operatorId: string | null;
+  dynamicTools: DynamicSkillTool[];
+};
 
 function extractText(content: Anthropic.ContentBlock[]): string {
   return content
@@ -154,7 +160,7 @@ async function runLoop(
       model: MODEL,
       max_tokens: MAX_TOKENS,
       system: [{ type: "text", text: ULTRON_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-      tools: toolSpecs,
+      tools: [...toolSpecs, ...ctx.dynamicTools.map((t) => t.spec)],
       messages,
     });
 
@@ -176,10 +182,12 @@ async function runLoop(
         captureToolUseId = block.id;
         continue;
       }
-      const result = await runTool(block.name, (block.input ?? {}) as Record<string, unknown>, {
-        sessionId: ctx.sessionId,
-        operatorId: ctx.operatorId,
-      });
+      const result = await runTool(
+        block.name,
+        (block.input ?? {}) as Record<string, unknown>,
+        { sessionId: ctx.sessionId, operatorId: ctx.operatorId },
+        ctx.dynamicTools,
+      );
       pushAgentTrigger(agentTriggers, agentTriggerFromToolResult(block.name, result));
       pushLandingEdit(landingEdits, landingEditFromToolResult(block.name, result));
       pushLiveReview(liveReviews, liveReviewFromToolResult(block.name, result));
@@ -225,7 +233,14 @@ export async function runChat(
   const messages: Anthropic.MessageParam[] = memory.map((t) => ({ role: t.role, content: t.content }));
   messages.push({ role: "user", content: text });
 
-  const result = await runLoop(messages, [], [], [], [], 0, { sessionId, priorMemory: memory, userText: text, operatorId });
+  const dynamicTools = await loadDynamicSkillTools(operatorId);
+  const result = await runLoop(messages, [], [], [], [], 0, {
+    sessionId,
+    priorMemory: memory,
+    userText: text,
+    operatorId,
+    dynamicTools,
+  });
   if (result.kind === "reply") {
     await appendExchange(sessionId, text, result.reply, memory);
   }
@@ -265,6 +280,7 @@ export async function resumeChat(
   const messages = pending.messages;
   messages.push({ role: "user", content: [...pending.partialResults, captureResult] });
 
+  const dynamicTools = await loadDynamicSkillTools(operatorId);
   const result = await runLoop(
     messages,
     pending.usedTools,
@@ -277,6 +293,7 @@ export async function resumeChat(
       priorMemory: pending.priorMemory,
       userText: pending.userText,
       operatorId,
+      dynamicTools,
     },
   );
 

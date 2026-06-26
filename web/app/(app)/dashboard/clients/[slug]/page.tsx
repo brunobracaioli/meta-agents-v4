@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getClientDetail } from "@/lib/services/client-detail";
-import { getClientProducts } from "@/lib/services/landing-page";
+import { listProductsForClient } from "@/lib/services/products-admin";
+import { ProductsManager } from "@/components/products/products-manager";
 import {
   formatCents,
   formatDateTime,
@@ -28,10 +29,11 @@ export default async function ClientDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [detail, products] = await Promise.all([getClientDetail(slug), getClientProducts(slug)]);
+  const detail = await getClientDetail(slug);
   if (!detail) notFound();
 
   const { client, campaigns, creatives, latestAnalysis } = detail;
+  const products = await listProductsForClient(client.id);
   // North-star view: the campaign-level snapshot with the most spend, if any.
   const top = latestAnalysis?.snapshots.find((s) => s.level === "campaign") ?? latestAnalysis?.snapshots[0];
 
@@ -116,27 +118,8 @@ export default async function ClientDetailPage({
         )}
       </section>
 
-      {/* Products & landing pages */}
-      {products && products.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-white">Produtos &amp; landing pages</h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {products.map((p) => (
-              <Link
-                key={p.id}
-                href={`/dashboard/clients/${slug}/${p.slug}`}
-                className="tech-panel block rounded-xl border border-white/8 p-4 transition hover:border-cyan-200/25"
-              >
-                <p className="truncate text-sm font-medium text-white/90">{p.name}</p>
-                <p className="mt-1 font-mono text-xs text-white/40">{p.slug}</p>
-                <p className="mt-2 text-[11px] text-cyan-200/60">
-                  {p.landingPageCount} landing page{p.landingPageCount === 1 ? "" : "s"} →
-                </p>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Products & skills (CRUD; each product drills into its landing pages + skills) */}
+      <ProductsManager clientId={client.id} clientSlug={slug} initialProducts={products} />
 
       {/* Campaigns */}
       <section className="space-y-3">

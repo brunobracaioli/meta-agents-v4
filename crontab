@@ -22,3 +22,8 @@
 # long task's progress by voice while the operator is away). Own mkdir lock, ~90s cadence per
 # watch. See scripts/poll-autonomous-watches.sh and docs/adr/0019-ultron-autonomous-mode.md.
 * * * * * /app/scripts/poll-autonomous-watches.sh
+
+# Operator-authored skill schedules (SPEC-018): every minute, claim DUE skill_schedules rows and
+# ENQUEUE agent_jobs (kind=custom) for them; poll-agent-jobs.sh executes them. Operator-scoped via
+# OPERATOR_ID. Own mkdir lock. See scripts/poll-skill-schedules.sh and docs/adr/0030-user-defined-skills.md.
+* * * * * /app/scripts/poll-skill-schedules.sh

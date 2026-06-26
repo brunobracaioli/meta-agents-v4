@@ -100,14 +100,26 @@ CURRENT_JOB_ID="${JOB_ID}"
 SKILL=$(echo "${CLAIM}" | jq -r '.[0].skill // empty')
 KIND=$(echo "${CLAIM}" | jq -r '.[0].kind // empty')
 CLIENT_ID=$(echo "${CLAIM}" | jq -r '.[0].client_id // empty')
+PRODUCT_ID=$(echo "${CLAIM}" | jq -r '.[0].product_id // empty')
+SKILL_ID=$(echo "${CLAIM}" | jq -r '.[0].skill_id // empty')
 ARGS=$(echo "${CLAIM}" | jq -r '.[0].args | to_entries | map("\(.key)=\(.value)") | join(" ")')
 
-# Defence in depth: validate the skill name and that it exists on disk.
-if ! [[ "${SKILL}" =~ ^[a-z0-9-]+$ ]] || [[ ! -f "/app/.claude/skills/${SKILL}/SKILL.md" ]]; then
-  log "ERROR: job ${JOB_ID} has invalid/unknown skill '${SKILL}'"
-  patch_job "${JOB_ID}" "{\"status\":\"failed\",\"finished_at\":\"$(now_iso)\",\"error\":\"unknown skill: ${SKILL}\"}"
+# Defence in depth: always validate the skill-name charset. Baked skills must exist on disk; an
+# operator-authored skill (kind=custom with a skill_id, SPEC-018) is materialized from the DB by
+# run-skill.sh, so the on-disk check is skipped for it.
+if ! [[ "${SKILL}" =~ ^[a-z0-9-]+$ ]]; then
+  log "ERROR: job ${JOB_ID} has invalid skill name '${SKILL}'"
+  patch_job "${JOB_ID}" "{\"status\":\"failed\",\"finished_at\":\"$(now_iso)\",\"error\":\"invalid skill name: ${SKILL}\"}"
   FINALIZED=1
   exit 0
+fi
+if [[ "${KIND}" != "custom" || -z "${SKILL_ID}" ]]; then
+  if [[ ! -f "/app/.claude/skills/${SKILL}/SKILL.md" ]]; then
+    log "ERROR: job ${JOB_ID} has unknown skill '${SKILL}'"
+    patch_job "${JOB_ID}" "{\"status\":\"failed\",\"finished_at\":\"$(now_iso)\",\"error\":\"unknown skill: ${SKILL}\"}"
+    FINALIZED=1
+    exit 0
+  fi
 fi
 
 # Restrict arg tokens to a safe charset (no shell metacharacters) before word-splitting.
@@ -125,7 +137,7 @@ patch_job "${JOB_ID}" "{\"status\":\"running\",\"started_at\":\"$(now_iso)\"}"
 # it was charset-validated above, so this is safe.
 RUN_LOG=$(mktemp)
 # shellcheck disable=SC2086
-AGENT_JOB_ID="${JOB_ID}" AGENT_JOB_CLIENT_ID="${CLIENT_ID}" /app/scripts/run-skill.sh "${SKILL}" ${ARGS} >"${RUN_LOG}" 2>&1
+AGENT_JOB_ID="${JOB_ID}" AGENT_JOB_CLIENT_ID="${CLIENT_ID}" AGENT_JOB_PRODUCT_ID="${PRODUCT_ID}" AGENT_JOB_SKILL_ID="${SKILL_ID}" /app/scripts/run-skill.sh "${SKILL}" ${ARGS} >"${RUN_LOG}" 2>&1
 EC=$?
 
 if [[ ${EC} -eq 0 ]]; then
