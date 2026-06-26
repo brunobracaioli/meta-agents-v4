@@ -105,12 +105,17 @@ export function ProductsManager({
 
   return (
     <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">Produtos &amp; skills</h2>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-white">Produtos &amp; skills</h2>
+          <p className="mt-1 text-sm text-white/40">
+            As skills ficam <span className="text-cyan-200/70">dentro de cada produto</span> — abra um produto para criar e gerenciar suas skills.
+          </p>
+        </div>
         {!showForm && (
           <button
             onClick={startCreate}
-            className="rounded-lg border border-orange-300/35 bg-orange-400/10 px-3 py-1.5 text-sm font-medium text-orange-200 transition hover:bg-orange-400/20"
+            className="shrink-0 rounded-lg border border-orange-300/35 bg-orange-400/10 px-3 py-1.5 text-sm font-medium text-orange-200 transition hover:bg-orange-400/20"
           >
             + Novo produto
           </button>
@@ -161,13 +166,18 @@ export function ProductsManager({
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {initialProducts.map((p) => (
-            <div key={p.id} className="tech-panel rounded-xl border border-white/8 p-4">
+            <div key={p.id} className="tech-panel flex flex-col rounded-xl border border-white/8 p-4">
               <Link href={`/dashboard/clients/${clientSlug}/${p.slug}`} className="block transition hover:opacity-80">
                 <p className="truncate text-sm font-medium text-white/90">{p.name}</p>
                 <p className="mt-1 font-mono text-xs text-white/40">{p.slug}</p>
-                <p className="mt-2 text-[11px] text-cyan-200/60">Abrir produto · skills →</p>
               </Link>
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link
+                  href={`/dashboard/clients/${clientSlug}/${p.slug}`}
+                  className="rounded-md border border-orange-300/35 bg-orange-400/10 px-2.5 py-1 text-xs font-medium text-orange-200 transition hover:bg-orange-400/20"
+                >
+                  Abrir · skills →
+                </Link>
                 <button onClick={() => startEdit(p)} className="rounded-md border border-cyan-200/20 px-2.5 py-1 text-xs text-cyan-100/80 transition hover:bg-white/[0.04]">
                   Editar
                 </button>
