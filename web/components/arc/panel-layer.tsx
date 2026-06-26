@@ -2,8 +2,11 @@
 
 // SPEC-019 — renders the active-panel stack from the Render Bus. `renderBody` switches on
 // `panel.element`: every element now has a dedicated panel (Waves A/B/C.1); anything unmapped
-// still falls through to the generic JSON body.
+// still falls through to the generic JSON body. Panels are free-floating windows (Wave E):
+// this layer is their absolute-positioning context and drag-constraints boundary; stack order
+// (array index) drives z-index, and clicking a panel raises it via the existing `focus` op.
 import { AnimatePresence } from "framer-motion";
+import { useRef } from "react";
 import { useRenderBus } from "./use-render-bus";
 import { HoloPanel } from "./holo-panel";
 import { FunnelPanel } from "./panels/funnel-panel";
@@ -35,17 +38,22 @@ const ELEMENT_SIZE: Partial<Record<Panel["element"], PanelSize>> = {
 
 export function PanelLayer() {
   const { panels, focusId, dispatch } = useRenderBus();
+  const constraintsRef = useRef<HTMLDivElement | null>(null);
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 flex flex-wrap content-center items-center justify-center gap-6 overflow-y-auto p-6">
+    <div ref={constraintsRef} className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
       <AnimatePresence>
-        {panels.map((panel) => (
+        {panels.map((panel, index) => (
           <HoloPanel
             key={panel.id}
             title={ELEMENT_TITLES[panel.element]}
             anchor={panel.anchor}
             size={ELEMENT_SIZE[panel.element] ?? "default"}
             focused={panel.id === focusId}
+            index={index}
+            zIndex={index + 1}
+            constraintsRef={constraintsRef}
+            onFocus={() => dispatch({ op: "focus", target: panel.id })}
             onDismiss={() => dispatch({ op: "dismiss", target: panel.id })}
           >
             {renderBody(panel)}
