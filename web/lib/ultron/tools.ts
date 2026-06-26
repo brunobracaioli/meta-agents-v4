@@ -8,6 +8,7 @@ import { validateSection } from "@/lib/landing/section-schemas";
 import { applyScalarEdit } from "@/lib/landing/edit-path";
 import { operatorOwnsClient, operatorRunnerReady } from "@/lib/auth/current-operator";
 import { getLatestFunnel } from "@/lib/services/funnel";
+import { isB2TechUrl } from "@/lib/ultron/arc-url";
 
 // Shown when an operator tries to enqueue work before its Fly runner is provisioned + ready
 // (ADR 0027). In password mode operatorRunnerReady() is always true, so this never fires.
@@ -516,6 +517,168 @@ const tools: Record<string, ToolDef> = {
           },
         },
       };
+    },
+  },
+
+  show_analyses: {
+    spec: {
+      name: "show_analyses",
+      description:
+        "MATERIALIZA na tela (modo ARC) o resultado da ANÁLISE de performance mais recente de um cliente: veredito geral, resumo e os diagnósticos (findings) com severidade e ação recomendada. É read-only. Use quando o operador pedir para VER/MOSTRAR a última análise / diagnóstico (ex.: 'mostra a última análise do Bruno', 'me mostra o diagnóstico do brunobracaioli'). Depois resuma por voz (veredito + principal achado, cruzando métricas) e ofereça tirar. Sem confirmação.",
+      input_schema: {
+        type: "object",
+        properties: { client_slug: { type: "string", description: "slug do cliente, ex.: brunobracaioli" } },
+        required: ["client_slug"],
+      },
+    },
+    handler: async (input, ctx) => {
+      const slug = str(input, "client_slug");
+      if (!slug) return { error: "client_slug é obrigatório" };
+      const client = await resolveClientId(slug);
+      if (!client) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
+      const { data: analysis } = await db()
+        .from("analyses")
+        .select("id, overall_verdict, summary, objective, created_at")
+        .eq("client_id", client.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!analysis) {
+        return { client_slug: slug, note: "nenhuma análise ainda; rode uma análise primeiro (request_analysis)." };
+      }
+      const { data: findings, error } = await db()
+        .from("analysis_findings")
+        .select("severity, metric_focus, diagnosis, recommended_action, recommendation_type, entity_name")
+        .eq("analysis_id", analysis.id)
+        .order("severity", { ascending: true });
+      if (error) throw error;
+      return {
+        client_slug: slug,
+        ui_intent: {
+          op: "show",
+          element: "analyses",
+          id: "analyses",
+          data: { client_name: client.name, analysis, findings: findings ?? [] },
+        },
+      };
+    },
+  },
+
+  show_creative: {
+    spec: {
+      name: "show_creative",
+      description:
+        "MATERIALIZA na tela (modo ARC) os CRIATIVOS (artes de anúncio) mais recentes de um cliente: imagem, headline, texto e CTA. É read-only. Use quando o operador pedir para VER/MOSTRAR o criativo / a arte / o anúncio gerado (ex.: 'mostra o criativo que você gerou', 'me mostra as artes do brunobracaioli'). Depois descreva por voz o que apareceu e ofereça tirar. Sem confirmação.",
+      input_schema: {
+        type: "object",
+        properties: { client_slug: { type: "string", description: "slug do cliente, ex.: brunobracaioli" } },
+        required: ["client_slug"],
+      },
+    },
+    handler: async (input, ctx) => {
+      const slug = str(input, "client_slug");
+      if (!slug) return { error: "client_slug é obrigatório" };
+      const client = await resolveClientId(slug);
+      if (!client) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
+      const { data, error } = await db()
+        .from("creatives")
+        .select("id, headline, primary_text, call_to_action_type, image_url, link_url")
+        .eq("client_id", client.id)
+        .not("image_url", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(6);
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        return { client_slug: slug, note: "nenhum criativo com imagem para este cliente ainda." };
+      }
+      return {
+        client_slug: slug,
+        creative_count: data.length,
+        ui_intent: {
+          op: "show",
+          element: "creative",
+          id: "creative",
+          data: { client_name: client.name, creatives: data },
+        },
+      };
+    },
+  },
+
+  show_landing: {
+    spec: {
+      name: "show_landing",
+      description:
+        "MATERIALIZA na tela (modo ARC) o PREVIEW (iframe) de uma landing page sob *.b2tech.io. É read-only. Use quando o operador pedir para VER/MOSTRAR a landing / a página (ex.: 'mostra a landing do brunobracaioli', 'abre a página que você criou'). Informe landing_page_id (use list_landing_pages) OU client_slug (pega a página mais recente do cliente). Depois descreva por voz e ofereça tirar. Sem confirmação.",
+      input_schema: {
+        type: "object",
+        properties: {
+          client_slug: { type: "string", description: "slug do cliente; pega a LP mais recente" },
+          landing_page_id: { type: "string", description: "uuid da LP (use list_landing_pages)" },
+        },
+      },
+    },
+    handler: async (input, ctx) => {
+      const id = str(input, "landing_page_id");
+      const slug = str(input, "client_slug");
+
+      let lp: { id: string; client_id: string; name: string; subdomain: string; url: string; status: string } | null = null;
+      if (id) {
+        const resolved = await resolveLanding(id);
+        if (resolved) {
+          lp = { id: resolved.id, client_id: resolved.client_id, name: resolved.name, subdomain: resolved.subdomain, url: resolved.url, status: resolved.status };
+        }
+      } else if (slug) {
+        const client = await resolveClientId(slug);
+        if (!client) return { error: `cliente '${slug}' não encontrado` };
+        if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
+        const { data, error } = await db()
+          .from("landing_pages")
+          .select("id, client_id, name, subdomain, url, status")
+          .eq("client_id", client.id)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (error) throw error;
+        lp = data;
+      } else {
+        return { error: "informe client_slug ou landing_page_id" };
+      }
+
+      if (!lp) return { error: "landing page não encontrada" };
+      if (!(await operatorOwnsClient(ctx.operatorId, lp.client_id))) return { error: "landing page não encontrada" };
+      // Only same-family preview URLs may be framed (threat model §I: iframe restrito a *.b2tech.io).
+      if (!isB2TechUrl(lp.url)) {
+        return { landing_name: lp.name, note: `a página '${lp.name}' ainda não tem uma URL pública em b2tech.io para pré-visualizar.` };
+      }
+      return {
+        landing_name: lp.name,
+        ui_intent: {
+          op: "show",
+          element: "landing",
+          id: "landing",
+          data: { name: lp.name, url: lp.url, subdomain: lp.subdomain, status: lp.status },
+        },
+      };
+    },
+  },
+
+  focus_element: {
+    spec: {
+      name: "focus_element",
+      description:
+        "DESTACA (traz para o foco/topo) um painel holográfico já materializado, sem tirar os outros. target = 'funnel', 'daily_summary', 'clients', 'client', 'analyses', 'creative' ou 'landing'. Use quando o operador disser 'foca no funil', 'destaca o criativo', 'volta pro card'. Read-only, sem confirmação.",
+      input_schema: {
+        type: "object",
+        properties: { target: { type: "string", description: "id do painel, ex.: 'funnel'" } },
+        required: ["target"],
+      },
+    },
+    handler: async (input) => {
+      const target = str(input, "target");
+      if (!target) return { error: "target é obrigatório" };
+      return { focused: target, ui_intent: { op: "focus", target } };
     },
   },
 

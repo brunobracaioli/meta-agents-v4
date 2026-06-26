@@ -1,9 +1,8 @@
 "use client";
 
 // SPEC-019 — renders the active-panel stack from the Render Bus. `renderBody` switches on
-// `panel.element`: Wave A ships the funnel and daily-summary panels; the remaining elements
-// (clients, client, analyses, creative, landing) still fall through to the generic JSON body
-// until their waves land.
+// `panel.element`: every element now has a dedicated panel (Waves A/B/C.1); anything unmapped
+// still falls through to the generic JSON body.
 import { AnimatePresence } from "framer-motion";
 import { useRenderBus } from "./use-render-bus";
 import { HoloPanel } from "./holo-panel";
@@ -11,6 +10,9 @@ import { FunnelPanel } from "./panels/funnel-panel";
 import { DailySummaryPanel } from "./panels/daily-summary-panel";
 import { ClientsFolderPanel } from "./panels/clients-folder";
 import { ClientCardPanel } from "./panels/client-card";
+import { AnalysesPanel } from "./panels/analyses-panel";
+import { CreativePanel } from "./panels/creative-panel";
+import { LandingPreviewPanel } from "./panels/landing-preview-panel";
 import { type Panel } from "@/lib/ultron/render-bus-reducer";
 
 const ELEMENT_TITLES: Record<Panel["element"], string> = {
@@ -56,6 +58,12 @@ function renderBody(panel: Panel) {
       return <ClientsFolderPanel data={panel.data} />;
     case "client":
       return <ClientCardPanel data={panel.data} />;
+    case "analyses":
+      return <AnalysesPanel data={panel.data} />;
+    case "creative":
+      return <CreativePanel data={panel.data} />;
+    case "landing":
+      return <LandingPreviewPanel data={panel.data} />;
     default:
       return (
         <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-hud text-xs leading-relaxed text-cyan-100/70">
