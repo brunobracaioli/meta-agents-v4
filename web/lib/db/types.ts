@@ -1640,6 +1640,7 @@ export type Database = {
           id: string
           image_path: string | null
           kind: string
+          render: Json | null
           session_id: string
           spoken_at: string | null
           text: string
@@ -1651,6 +1652,7 @@ export type Database = {
           id?: string
           image_path?: string | null
           kind?: string
+          render?: Json | null
           session_id: string
           spoken_at?: string | null
           text: string
@@ -1662,6 +1664,7 @@ export type Database = {
           id?: string
           image_path?: string | null
           kind?: string
+          render?: Json | null
           session_id?: string
           spoken_at?: string | null
           text?: string
