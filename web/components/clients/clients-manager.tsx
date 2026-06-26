@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { AdminClient } from "@/lib/services/clients-admin";
@@ -227,14 +228,21 @@ export function ClientsManager({ initialClients }: { initialClients: AdminClient
               key={c.id}
               className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-cyan-300/15 bg-[#070b1a]/60 p-4"
             >
-              <div className="min-w-0">
+              <Link href={`/dashboard/clients/${c.slug}`} className="min-w-0 transition hover:opacity-80">
                 <p className="truncate font-mono text-sm font-semibold text-white">{c.slug}</p>
                 <p className="truncate text-sm text-white/60">{c.name}</p>
                 <p className="mt-1 text-xs text-white/35">
                   act_{c.ad_account_id} · cap {c.currency} {(c.daily_budget_cap_cents / 100).toFixed(2)}/dia
                 </p>
-              </div>
+                <p className="mt-1 text-[11px] text-cyan-200/60">Abrir · produtos &amp; skills →</p>
+              </Link>
               <div className="flex shrink-0 gap-2">
+                <Link
+                  href={`/dashboard/clients/${c.slug}`}
+                  className="rounded-md border border-orange-300/30 bg-orange-400/10 px-3 py-1.5 text-xs text-orange-200 transition hover:bg-orange-400/20"
+                >
+                  Abrir
+                </Link>
                 <button
                   onClick={() => startEdit(c)}
                   className="rounded-md border border-cyan-200/20 px-3 py-1.5 text-xs text-cyan-100/80 transition hover:bg-white/[0.04]"
