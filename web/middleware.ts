@@ -75,8 +75,14 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
 
   const isApi = pathname.startsWith("/api");
   const isPublicApi = PUBLIC_API.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-  // The preview shows draft (unpublished) content, so it requires a session too.
-  const isProtected = pathname.startsWith("/dashboard") || isPreview || (isApi && !isPublicApi);
+  // The preview shows draft (unpublished) content, so it requires a session too. /arc-popout is
+  // the ARC second-screen surface (SPEC-019 C.2b): it lives outside /dashboard to skip the voice
+  // layout, but renders client data, so it MUST be auth-gated just like the dashboard.
+  const isProtected =
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/arc-popout") ||
+    isPreview ||
+    (isApi && !isPublicApi);
 
   // Auth gate for protected routes. AUTH_MODE=supabase verifies the per-operator session
   // (ADR 0026) and may refresh tokens — those refreshed cookies are collected here and
