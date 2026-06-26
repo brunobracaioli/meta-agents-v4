@@ -2,8 +2,8 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import type { Json } from "@/lib/db/types";
 import { db } from "@/lib/db/client";
-import { honoCookieAdapter } from "@/lib/auth/hono-cookies";
-import { assertOperatorOwnsClient, getCurrentOperatorId, operatorRunnerReady } from "@/lib/auth/current-operator";
+import { operatorIdFromRequest } from "@/lib/auth/hono-cookies";
+import { operatorOwnsClient, operatorRunnerReady, operatorRequiredButMissing } from "@/lib/auth/current-operator";
 import { getLandingPageFull } from "@/lib/services/landing-page";
 import { rateLimiters, enforceLimit } from "@/lib/ratelimit";
 import {
@@ -67,7 +67,7 @@ async function loadEditState(id: string, c: Context) {
     .maybeSingle();
   if (res.error) throw res.error;
   if (!res.data) return null;
-  if (!(await assertOperatorOwnsClient(res.data.client_id, honoCookieAdapter(c)))) return null;
+  if (!(await operatorOwnsClient(operatorIdFromRequest(c), res.data.client_id))) return null;
   return res.data;
 }
 
@@ -183,7 +183,7 @@ landingPages.patch("/:id/settings", async (c) => {
   if (cur.error) throw cur.error;
   if (!cur.data) return c.json({ error: "not_found" }, 404);
   // Ownership guard (service_role bypasses RLS); 404 on cross-tenant. See loadEditState.
-  if (!(await assertOperatorOwnsClient(cur.data.client_id, honoCookieAdapter(c)))) return c.json({ error: "not_found" }, 404);
+  if (!(await operatorOwnsClient(operatorIdFromRequest(c), cur.data.client_id))) return c.json({ error: "not_found" }, 404);
   if (cur.data.draft_status === "generating" || cur.data.draft_status === "publishing") {
     return c.json({ error: "draft_busy", draft_status: cur.data.draft_status }, 423);
   }
@@ -364,7 +364,8 @@ landingPages.post("/:id/publish", async (c) => {
 
   // Enqueue gate (Phase 6): in supabase mode the operator's runner must be ready, else the job
   // would sit unclaimed. No-op in password mode (operatorId null -> operatorRunnerReady true).
-  const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+  const operatorId = operatorIdFromRequest(c);
+  if (operatorRequiredButMissing(operatorId)) return c.json({ error: "session_expired" }, 401);
   if (!(await operatorRunnerReady(operatorId))) return c.json({ error: "runner_not_ready" }, 409);
 
   const ins = await db()

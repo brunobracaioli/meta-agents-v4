@@ -1,7 +1,8 @@
 import "server-only";
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { env } from "@/lib/env";
-import { getCurrentOperatorId, getOperatorStatus, type OperatorStatus } from "@/lib/auth/current-operator";
+import { OPERATOR_ID_HEADER } from "@/lib/auth/supabase";
+import { getOperatorStatus, type OperatorStatus } from "@/lib/auth/current-operator";
 
 /**
  * Thin onboarding bar shown until the operator's runner is ready (ADR 0027, Phase 6).
@@ -20,11 +21,9 @@ function stepMessage(st: OperatorStatus): string | null {
 
 export async function OnboardingBanner() {
   if (env.authMode() !== "supabase") return null;
-  const store = await cookies();
-  const operatorId = await getCurrentOperatorId({
-    getAll: () => store.getAll().map(({ name, value }) => ({ name, value })),
-    setAll: () => {},
-  });
+  // Identity resolved once by the middleware (ADR 0026), forwarded as a request header. Never call
+  // getUser() here: a second refresh would reuse an already-rotated token and resolve to null.
+  const operatorId = (await headers()).get(OPERATOR_ID_HEADER);
   if (!operatorId) return null;
 
   const st = await getOperatorStatus(operatorId);

@@ -2,8 +2,8 @@ import { Hono } from "hono";
 import { db } from "@/lib/db/client";
 import { getReadClient } from "@/lib/db/read-client";
 import type { Database } from "@/lib/db/types";
-import { honoCookieAdapter } from "@/lib/auth/hono-cookies";
-import { getCurrentOperatorId, assertOperatorOwnsClient } from "@/lib/auth/current-operator";
+import { operatorIdFromRequest } from "@/lib/auth/hono-cookies";
+import { operatorOwnsClient } from "@/lib/auth/current-operator";
 import { clientInputSchema, clientPatchSchema } from "@/lib/clients/validate";
 
 type ClientUpdate = Database["public"]["Tables"]["clients"]["Update"];
@@ -31,7 +31,7 @@ clients.get("/", async (c) => {
 
 // ---------- POST create ----------
 clients.post("/", async (c) => {
-  const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+  const operatorId = operatorIdFromRequest(c);
   // Client creation requires an operator identity (supabase mode). Never stamp a null operator_id
   // into a NOT NULL column; in password mode there is no operator to own the row.
   if (!operatorId) return c.json({ error: "unauthorized" }, 401);
@@ -69,7 +69,7 @@ clients.post("/", async (c) => {
 clients.patch("/:id", async (c) => {
   const id = c.req.param("id");
   // Ownership guard before any service_role write; 404 on cross-tenant never reveals existence.
-  if (!(await assertOperatorOwnsClient(id, honoCookieAdapter(c)))) return c.json({ error: "not_found" }, 404);
+  if (!(await operatorOwnsClient(operatorIdFromRequest(c), id))) return c.json({ error: "not_found" }, 404);
 
   const parsed = clientPatchSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid_request", detail: parsed.error.issues[0]?.message }, 400);
@@ -98,7 +98,7 @@ clients.patch("/:id", async (c) => {
 // ---------- DELETE ----------
 clients.delete("/:id", async (c) => {
   const id = c.req.param("id");
-  if (!(await assertOperatorOwnsClient(id, honoCookieAdapter(c)))) return c.json({ error: "not_found" }, 404);
+  if (!(await operatorOwnsClient(operatorIdFromRequest(c), id))) return c.json({ error: "not_found" }, 404);
 
   const del = await db().from("clients").delete().eq("id", id);
   if (del.error) throw del.error;

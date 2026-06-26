@@ -14,6 +14,15 @@ import type { Database } from "@/lib/db/types";
 
 export type CookieToSet = { name: string; value: string; options?: CookieOptions };
 
+/**
+ * Internal request header the middleware stamps with the verified operator id (auth.uid()) after
+ * its single `getUser()` refresh, so route handlers read identity from here instead of calling
+ * `getUser()` a second time. A second call would try to refresh with an already-rotated refresh
+ * token and silently resolve to null (orphaned, unclaimable agent_jobs). The middleware MUST strip
+ * any inbound value of this header before stamping — it is server-trusted, never client-supplied.
+ */
+export const OPERATOR_ID_HEADER = "x-operator-id";
+
 export interface CookieAdapter {
   getAll(): { name: string; value: string }[];
   setAll(cookies: CookieToSet[]): void;

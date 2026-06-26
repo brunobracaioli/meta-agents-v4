@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/session";
-import { createSupabaseServerClient, type CookieToSet } from "@/lib/auth/supabase";
+import { createSupabaseServerClient, OPERATOR_ID_HEADER, type CookieToSet } from "@/lib/auth/supabase";
 
 // Routes that must NOT require a session (the unauthenticated auth endpoints).
 const PUBLIC_API = ["/api/auth/login", "/api/auth/signup"];
@@ -89,6 +89,9 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
   // applied to whatever response we return. Default "password" keeps the legacy jose gate.
   const authMode = process.env.AUTH_MODE === "supabase" ? "supabase" : "password";
   const pendingCookies: CookieToSet[] = [];
+  // The operator verified by the supabase gate below, forwarded to handlers so they never call
+  // getUser() again (avoids the refresh-token rotation race that silently nulled operator_id).
+  let resolvedOperatorId: string | null = null;
 
   if (isProtected) {
     let ok: boolean;
@@ -103,6 +106,7 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
         },
       });
       const { data } = await supabase.auth.getUser();
+      resolvedOperatorId = data.user?.id ?? null;
       ok = Boolean(data.user);
     } else {
       const token = req.cookies.get(SESSION_COOKIE)?.value;
@@ -120,6 +124,10 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
   // Pass the nonce + CSP on the REQUEST headers so Next.js stamps its scripts with
   // the nonce (and renders dynamically for that request).
   const requestHeaders = new Headers(req.headers);
+  // Identity passthrough: drop any client-supplied value (anti-spoof) and re-stamp with the
+  // operator the gate just verified, so handlers read identity from here, not a second getUser().
+  requestHeaders.delete(OPERATOR_ID_HEADER);
+  if (resolvedOperatorId) requestHeaders.set(OPERATOR_ID_HEADER, resolvedOperatorId);
   if (isProd) {
     requestHeaders.set("x-nonce", nonce);
     requestHeaders.set("Content-Security-Policy", csp);
