@@ -499,7 +499,7 @@ export function useUltronVoice() {
     const status = statusRef.current;
     if (status !== "idle" && status !== "armed") return;
 
-    let narrations: Array<{ id?: unknown; text?: unknown }> = [];
+    let narrations: Array<{ id?: unknown; text?: unknown; render?: unknown }> = [];
     try {
       const res = await fetch(`/api/ultron/narrations?session=${encodeURIComponent(getSessionId())}`);
       if (!res.ok) return;
@@ -526,12 +526,16 @@ export function useUltronVoice() {
 
     narrationBusyRef.current = true;
     patch({ reply: next.text });
+    // ARC (SPEC-019 Wave C.2): an autonomous narration may carry a render directive — materialize
+    // the panel as the Ultron starts speaking. Invalid/absent render is dropped silently by
+    // parseUIIntents and never breaks the narration.
+    if (Array.isArray(next.render)) publishUiIntents(next.render);
     try {
       await speak(next.text);
     } finally {
       narrationBusyRef.current = false;
     }
-  }, [patch, speak]);
+  }, [patch, speak, publishUiIntents]);
 
   // Sends the transcript to Ultron and resolves any capture_screen pauses: when the
   // server replies need_capture, grab a frame from the shared screen and resume.

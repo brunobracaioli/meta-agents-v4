@@ -14,6 +14,9 @@ export type PendingNarration = {
   text: string;
   kind: string;
   image_path: string | null;
+  // SPEC-019 Wave C.2: optional ARC render directive (UIIntent[]) materialized as the tab speaks
+  // this narration. null = no render (legacy). Opaque here; re-validated by Zod on the client.
+  render: unknown;
   ts: string;
 };
 
@@ -28,7 +31,7 @@ export async function getPendingNarrations(sessionId: string): Promise<PendingNa
   const supabase = await getReadClient();
   const { data, error } = await supabase
     .from("ultron_narrations")
-    .select("id, text, kind, image_path, ts")
+    .select("id, text, kind, image_path, render, ts")
     .eq("session_id", sessionId)
     .is("spoken_at", null)
     .gte("ts", since)
