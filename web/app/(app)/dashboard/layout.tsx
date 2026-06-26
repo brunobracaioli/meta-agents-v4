@@ -67,6 +67,12 @@ export default function DashboardLayout({
               >
                 Ultron
               </Link>
+              <Link
+                href="/dashboard/arc"
+                className="rounded-md border border-cyan-300/30 bg-cyan-400/[0.06] px-3 py-2 font-mono uppercase tracking-[0.14em] text-cyan-100 transition hover:border-cyan-200/50 hover:bg-cyan-400/10 hover:text-white"
+              >
+                ARC
+              </Link>
               <LogoutButton />
             </nav>
           </div>

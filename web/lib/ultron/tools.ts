@@ -7,6 +7,7 @@ import { themeSchema } from "@/lib/landing/validate";
 import { validateSection } from "@/lib/landing/section-schemas";
 import { applyScalarEdit } from "@/lib/landing/edit-path";
 import { operatorOwnsClient, operatorRunnerReady } from "@/lib/auth/current-operator";
+import { getLatestFunnel } from "@/lib/services/funnel";
 
 // Shown when an operator tries to enqueue work before its Fly runner is provisioned + ready
 // (ADR 0027). In password mode operatorRunnerReady() is always true, so this never fires.
@@ -331,6 +332,99 @@ const tools: Record<string, ToolDef> = {
         return { note: "sem resumo diário registrado; use get_recent_actions" };
       }
       return data;
+    },
+  },
+
+  // --- ARC render-tools (SPEC-019 / ADR 0031) ---
+  // Read-only "display" tools: they resolve data server-side (reusing the same services as
+  // the dashboard) and return a `ui_intent` directive that the ARC client materializes as a
+  // holographic panel. They never mutate anything and never gain a confirm flow. Client data
+  // is guarded by operatorOwnsClient before it leaves the server (threat model §S/§I).
+  show_funnel: {
+    spec: {
+      name: "show_funnel",
+      description:
+        "MATERIALIZA na tela (modo ARC) o FUNIL de métricas mais recente de um cliente: passos do funil (impressão → clique → LPV → ... → compra), ROAS, gasto e compras. É read-only (não gasta, não mexe na Meta). Use quando o operador pedir para VER/MOSTRAR o funil/desempenho de um cliente (ex.: 'como estão as campanhas do Bruno', 'me mostra o funil do brunobracaioli'). Depois que o painel aparecer, RESUMA por voz cruzando ao menos duas métricas e ofereça tirar o painel. Não precisa de confirmação em dois passos.",
+      input_schema: {
+        type: "object",
+        properties: { client_slug: { type: "string", description: "slug do cliente, ex.: brunobracaioli" } },
+        required: ["client_slug"],
+      },
+    },
+    handler: async (input, ctx) => {
+      const slug = str(input, "client_slug");
+      if (!slug) return { error: "client_slug é obrigatório" };
+      const client = await resolveClientId(slug);
+      if (!client) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
+      const funnel = await getLatestFunnel({ clientId: client.id });
+      if (!funnel) {
+        return { client_slug: slug, note: "ainda não há dados de funil para este cliente; rode uma análise primeiro." };
+      }
+      return {
+        client_slug: slug,
+        // The directive the ARC client renders. The model also reads `data` here to speak the summary.
+        ui_intent: { op: "show", element: "funnel", id: "funnel", data: funnel },
+      };
+    },
+  },
+
+  show_daily_summary: {
+    spec: {
+      name: "show_daily_summary",
+      description:
+        "MATERIALIZA na tela (modo ARC) o RESUMO DIÁRIO do que os agents fizeram para um cliente (gerado por IA). É read-only. Use quando o operador pedir para VER/MOSTRAR o resumo do dia / o que foi feito (ex.: 'o que os agentes fizeram hoje pro Bruno', 'mostra o resumo do dia do brunobracaioli'). Depois que aparecer, RESUMA por voz e ofereça tirar. Não precisa de confirmação. Se não houver resumo, caia para get_daily_summary/get_recent_actions e apenas fale.",
+      input_schema: {
+        type: "object",
+        properties: {
+          client_slug: { type: "string", description: "slug do cliente, ex.: brunobracaioli" },
+          date: { type: "string", description: "YYYY-MM-DD; padrão: mais recentes" },
+        },
+        required: ["client_slug"],
+      },
+    },
+    handler: async (input, ctx) => {
+      const slug = str(input, "client_slug");
+      const date = str(input, "date");
+      if (!slug) return { error: "client_slug é obrigatório" };
+      const client = await resolveClientId(slug);
+      if (!client) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
+      let query = db()
+        .from("daily_summaries")
+        .select("summary_date, summary, structured")
+        .eq("client_id", client.id)
+        .order("summary_date", { ascending: false })
+        .limit(7);
+      if (date) query = query.eq("summary_date", date);
+      const { data, error } = await query;
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        return { client_slug: slug, note: "sem resumo diário registrado para este cliente; use get_recent_actions." };
+      }
+      return {
+        client_slug: slug,
+        ui_intent: { op: "show", element: "daily_summary", id: "daily_summary", data: { client_name: client.name, summaries: data } },
+      };
+    },
+  },
+
+  dismiss_element: {
+    spec: {
+      name: "dismiss_element",
+      description:
+        "TIRA da tela (modo ARC) um painel holográfico que você materializou. target = 'funnel' (funil), 'daily_summary' (resumo do dia), ou 'all' para limpar tudo. Use quando o operador disser 'pode tirar', 'fecha o funil', 'tira isso', 'limpa tudo'. Read-only, sem confirmação.",
+      input_schema: {
+        type: "object",
+        properties: {
+          target: { type: "string", description: "'funnel', 'daily_summary' ou 'all'" },
+        },
+        required: ["target"],
+      },
+    },
+    handler: async (input) => {
+      const target = str(input, "target") ?? "all";
+      return { dismissed: target, ui_intent: { op: "dismiss", target } };
     },
   },
 
