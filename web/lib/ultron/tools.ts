@@ -610,7 +610,7 @@ const tools: Record<string, ToolDef> = {
     spec: {
       name: "show_landing",
       description:
-        "MATERIALIZA na tela (modo ARC) o PREVIEW (iframe) de uma landing page sob *.b2tech.io. É read-only. Use quando o operador pedir para VER/MOSTRAR a landing / a página (ex.: 'mostra a landing do brunobracaioli', 'abre a página que você criou'). Informe landing_page_id (use list_landing_pages) OU client_slug (pega a página mais recente do cliente). Depois descreva por voz e ofereça tirar. Sem confirmação.",
+        "MATERIALIZA na tela (modo ARC) o PREVIEW (iframe) de uma landing page. É read-only. Use quando o operador pedir para VER/MOSTRAR a landing / a página (ex.: 'mostra a landing do brunobracaioli', 'abre a página que você criou'). Informe landing_page_id (use list_landing_pages) OU client_slug (pega a página mais recente do cliente). Depois descreva por voz e ofereça tirar. Sem confirmação.",
       input_schema: {
         type: "object",
         properties: {
@@ -648,17 +648,23 @@ const tools: Record<string, ToolDef> = {
 
       if (!lp) return { error: "landing page não encontrada" };
       if (!(await operatorOwnsClient(ctx.operatorId, lp.client_id))) return { error: "landing page não encontrada" };
-      // Only same-family preview URLs may be framed (threat model §I: iframe restrito a *.b2tech.io).
-      if (!isB2TechUrl(lp.url)) {
-        return { landing_name: lp.name, note: `a página '${lp.name}' ainda não tem uma URL pública em b2tech.io para pré-visualizar.` };
-      }
+      // Frame the SAME-ORIGIN draft preview route (like the editor + live review do), not the public
+      // b2tech.io URL: the app CSP is frame-src 'self', and the published page may set X-Frame-Options.
+      // The preview renders the same sections from the draft. The public URL is passed only for the
+      // "open in a new tab" link, validated as *.b2tech.io (threat model §I).
       return {
         landing_name: lp.name,
         ui_intent: {
           op: "show",
           element: "landing",
           id: "landing",
-          data: { name: lp.name, url: lp.url, subdomain: lp.subdomain, status: lp.status },
+          data: {
+            name: lp.name,
+            previewUrl: `/lp-preview/${lp.id}`,
+            url: isB2TechUrl(lp.url) ? lp.url : null,
+            subdomain: lp.subdomain,
+            status: lp.status,
+          },
         },
       };
     },
