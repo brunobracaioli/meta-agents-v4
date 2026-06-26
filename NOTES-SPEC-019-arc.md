@@ -1,6 +1,7 @@
 # NOTES — SPEC-019 / ARC: interface holográfica do Ultron ("Tony Stark Mode")
 
-> Branch: `feat/spec-019-arc-holographic-ui` (criada a partir de `feat/spec-018-client-skill-management`).
+> Status: **Waves 0/A/B/C entregues e MERGEADAS na `main`** (PRs #11/#13/#14/#15/#16 + fixes #12/#17);
+> polish parcial em `refactor/arc-panel-polish`. **Próxima = Wave D (gestos webcam)**. Deploys automáticos na Vercel.
 > Última atualização: 2026-06-26 · Documento de trabalho (status + achados + receita executável).
 > **LER ISTO PRIMEIRO** ao retomar a feature. NÃO confundir com `NOTES.md` (raiz) que é da feature multi-tenant.
 
@@ -82,10 +83,30 @@ Implementado (tudo aditivo, espelhando o padrão agentTriggers/landingEdits):
 
 **Aceite Wave A** (validar ao vivo): `/dashboard/arc` → "como estão as campanhas do brunobracaioli?" → painel de funil materializa, Ultron resume, "pode tirar" → some. `uiIntents` no retorno de `/api/ultron/chat`.
 
-### ⬜ Wave B — Shell de pastas + clientes (imagens 1–3) — PRÓXIMA
-### ⬜ Wave C — Análises/criativo/landing + popout + narração com `render`
-### ⬜ Wave D — Gestos por webcam (MediaPipe HandLandmarker)
-### ⬜ Wave E — Polish "surreal"
+### ✅ Wave B — Shell de pastas + clientes (imagens 1–3) — DONE, na main (PR #13)
+`show_clients` (lista escopada por `operator_id`) + `open_client` (card nome/site/produtos/skills via
+products+client_skills, guard `operatorOwnsClient`); painéis `clients-folder.tsx` (5 pastas → lista rolante,
+clicável) + `client-card.tsx`; state machine PURA `lib/ultron/arc-folders.ts` (`folderShellReducer`, só
+"clientes" ready, +7 testes). Validado e2e ao vivo.
+
+### ✅ Wave C — Análises/criativo/landing + popout + narração com `render` — DONE, na main (PRs #14/#15/#16 + fix #17)
+- **C.1** (PR #14): `show_analyses`/`show_creative`/`show_landing`/`focus_element` + painéis. Guard de iframe
+  `lib/ultron/arc-url.ts#isB2TechUrl` (PURO, testado), validado nos 2 lados.
+- **C.2a** (PR #15): migration `ultron_narrations.render jsonb` **aplicada em prod** + `getPendingNarrations`
+  seleciona render + `pollNarrations` faz `publishUiIntents(next.render)` antes do speak.
+- **C.2b** (PR #16): popout = **ESPELHO** (decisão do operador). `popout_element` + botão "⧉ 2ª tela" abrem
+  `/arc-popout` (FORA de /dashboard p/ não duplicar voz; auth-gate no middleware); canal `ARC_POPOUT_CHANNEL`
+  faz hello/sync (catch-up dos painéis já abertos).
+- **fix #17:** landing preview embedava `*.b2tech.io` → bloqueado pelo CSP `frame-src 'self'`. Corrigido p/
+  embedar a rota MESMA-ORIGEM `/lp-preview/<id>` (o que o editor + live-review já usam); URL pública vira só
+  link ↗. Também: prompt mapeia palavra falada→id (focus/dismiss) e prefere show_* a get_* no ARC.
+
+### ✅/⏳ Wave E (parcial — adiantado em refactor/arc-panel-polish) — Polish
+HoloPanel virou **fonte única de largura** (`size` default/wide; landing/creative/analyses = wide), os painéis
+deixaram de fixar largura própria; +`prefers-reduced-motion` (fade simples); indicador de foco mais claro
+(header tint + dot). Layer ganhou `overflow-y-auto`. Resto da Wave E (SFX, boot, parallax) segue pendente.
+
+### ⬜ Wave D — Gestos por webcam (MediaPipe HandLandmarker) — PRÓXIMA
 
 ## 5. RECEITA EXECUTÁVEL da Wave A (com caminhos e âncoras reais)
 

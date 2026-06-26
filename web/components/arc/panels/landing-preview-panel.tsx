@@ -34,7 +34,7 @@ export function LandingPreviewPanel({ data }: { data: unknown }) {
   const externalUrl = data.url && isB2TechUrl(data.url) ? data.url : null;
 
   return (
-    <div className="w-[min(90vw,440px)] space-y-2">
+    <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         {externalUrl ? (
           <a

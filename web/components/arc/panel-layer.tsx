@@ -13,6 +13,7 @@ import { ClientCardPanel } from "./panels/client-card";
 import { AnalysesPanel } from "./panels/analyses-panel";
 import { CreativePanel } from "./panels/creative-panel";
 import { LandingPreviewPanel } from "./panels/landing-preview-panel";
+import { type PanelSize } from "./holo-panel";
 import { type Panel } from "@/lib/ultron/render-bus-reducer";
 
 const ELEMENT_TITLES: Record<Panel["element"], string> = {
@@ -25,17 +26,25 @@ const ELEMENT_TITLES: Record<Panel["element"], string> = {
   landing: "Landing page",
 };
 
+// Content-heavy panels get the wide frame; compact readouts stay default.
+const ELEMENT_SIZE: Partial<Record<Panel["element"], PanelSize>> = {
+  landing: "wide",
+  creative: "wide",
+  analyses: "wide",
+};
+
 export function PanelLayer() {
   const { panels, focusId, dispatch } = useRenderBus();
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 flex flex-wrap content-center items-center justify-center gap-6 p-6">
+    <div className="pointer-events-none absolute inset-0 z-20 flex flex-wrap content-center items-center justify-center gap-6 overflow-y-auto p-6">
       <AnimatePresence>
         {panels.map((panel) => (
           <HoloPanel
             key={panel.id}
             title={ELEMENT_TITLES[panel.element]}
             anchor={panel.anchor}
+            size={ELEMENT_SIZE[panel.element] ?? "default"}
             focused={panel.id === focusId}
             onDismiss={() => dispatch({ op: "dismiss", target: panel.id })}
           >

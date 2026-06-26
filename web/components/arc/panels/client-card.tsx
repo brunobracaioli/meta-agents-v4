@@ -53,7 +53,7 @@ export function ClientCardPanel({ data }: { data: unknown }) {
   const link = safeUrl(data.site);
 
   return (
-    <div className="w-[min(88vw,420px)] space-y-4">
+    <div className="space-y-4">
       <div className="flex items-center gap-3 border-b border-cyan-300/15 pb-3">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-cyan-300/40 font-hud text-lg text-cyan-50 shadow-[0_0_18px_rgba(103,232,249,0.3)]">
           {data.name.trim().charAt(0).toUpperCase() || "?"}
