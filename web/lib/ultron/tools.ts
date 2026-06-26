@@ -413,7 +413,7 @@ const tools: Record<string, ToolDef> = {
     spec: {
       name: "dismiss_element",
       description:
-        "TIRA da tela (modo ARC) um painel holográfico que você materializou. target = 'funnel' (funil), 'daily_summary' (resumo do dia), ou 'all' para limpar tudo. Use quando o operador disser 'pode tirar', 'fecha o funil', 'tira isso', 'limpa tudo'. Read-only, sem confirmação.",
+        "TIRA da tela (modo ARC) um painel holográfico que você materializou. target = 'funnel' (funil), 'daily_summary' (resumo do dia), 'clients' (pastas/lista de clientes), 'client' (card do cliente), ou 'all' para limpar tudo. Use quando o operador disser 'pode tirar', 'fecha o funil', 'volta', 'tira isso', 'limpa tudo'. Read-only, sem confirmação.",
       input_schema: {
         type: "object",
         properties: {
@@ -425,6 +425,97 @@ const tools: Record<string, ToolDef> = {
     handler: async (input) => {
       const target = str(input, "target") ?? "all";
       return { dismissed: target, ui_intent: { op: "dismiss", target } };
+    },
+  },
+
+  show_clients: {
+    spec: {
+      name: "show_clients",
+      description:
+        "MATERIALIZA na tela (modo ARC) a navegação de PASTAS do operador (Clientes / Funil / Pages / Configs / Ultron) com a lista rolante de clientes na pasta Clientes. É read-only. Use quando o operador pedir para VER/ABRIR clientes ou as pastas (ex.: 'abrir clientes', 'mostra meus clientes', 'abre as pastas'). Depois que aparecer, diga quantos clientes há e ofereça abrir um deles. Não precisa de confirmação.",
+      input_schema: { type: "object", properties: {} },
+    },
+    handler: async (_input, ctx) => {
+      let query = db()
+        .from("clients")
+        .select("slug, name, default_landing_url, currency, operator_id")
+        .order("created_at", { ascending: true });
+      // Multi-tenant (ADR 0026): in supabase mode scope to the operator's own clients; in
+      // password mode (operatorId === null) the single tenant sees all.
+      if (ctx.operatorId !== null) query = query.eq("operator_id", ctx.operatorId);
+      const { data, error } = await query;
+      if (error) throw error;
+      const clients = (data ?? []).map((c) => ({
+        slug: c.slug,
+        name: c.name,
+        site: c.default_landing_url,
+        currency: c.currency,
+      }));
+      return {
+        client_count: clients.length,
+        ui_intent: { op: "show", element: "clients", id: "clients", data: { clients } },
+      };
+    },
+  },
+
+  open_client: {
+    spec: {
+      name: "open_client",
+      description:
+        "MATERIALIZA na tela (modo ARC) o CARD de um cliente: nome, site, produtos e skills (habilidades dos agents). É read-only. Use quando o operador pedir para ABRIR/VER um cliente específico (ex.: 'abrir brunobracaioli', 'abre o card do Bruno', 'me mostra os produtos e skills do brunobracaioli'). Depois que aparecer, resuma por voz (quantos produtos e skills) e ofereça tirar. Não precisa de confirmação.",
+      input_schema: {
+        type: "object",
+        properties: { client_slug: { type: "string", description: "slug do cliente, ex.: brunobracaioli" } },
+        required: ["client_slug"],
+      },
+    },
+    handler: async (input, ctx) => {
+      const slug = str(input, "client_slug");
+      if (!slug) return { error: "client_slug é obrigatório" };
+      const { data: client, error: clientErr } = await db()
+        .from("clients")
+        .select("id, name, slug, default_landing_url, currency")
+        .eq("slug", slug)
+        .maybeSingle();
+      if (clientErr) throw clientErr;
+      if (!client) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
+
+      // Products + skills are scoped by the already-owned client_id (parent ownership verified
+      // above), so the service-role reads are safe (threat model §I).
+      const [productsRes, skillsRes] = await Promise.all([
+        db()
+          .from("products")
+          .select("slug, name, default_subdomain, status")
+          .eq("client_id", client.id)
+          .order("created_at", { ascending: true }),
+        db()
+          .from("client_skills")
+          .select("slug, name, capability, status, ultron_enabled, product_id")
+          .eq("client_id", client.id)
+          .order("created_at", { ascending: true }),
+      ]);
+      if (productsRes.error) throw productsRes.error;
+      if (skillsRes.error) throw skillsRes.error;
+
+      return {
+        client_slug: slug,
+        product_count: productsRes.data?.length ?? 0,
+        skill_count: skillsRes.data?.length ?? 0,
+        ui_intent: {
+          op: "show",
+          element: "client",
+          id: "client",
+          data: {
+            slug: client.slug,
+            name: client.name,
+            site: client.default_landing_url,
+            currency: client.currency,
+            products: productsRes.data ?? [],
+            skills: skillsRes.data ?? [],
+          },
+        },
+      };
     },
   },
 

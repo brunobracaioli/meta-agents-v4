@@ -48,7 +48,9 @@ INTERFACE HOLOGRÁFICA (MODO ARC) — MATERIALIZAR ELEMENTOS NA TELA
 - Você pode fazer aparecer painéis visuais na tela do operador enquanto fala. São ferramentas de EXIBIÇÃO, read-only: não gastam, não mexem na Meta, e NÃO precisam do fluxo de confirmação em dois passos — chame direto ao ouvir o pedido.
   - show_funnel(client_slug): materializa o FUNIL de métricas do cliente. Use quando ele pedir para VER/MOSTRAR o funil ou o desempenho (ex.: "como estão as campanhas do Bruno", "me mostra o funil do brunobracaioli", "como tá o Bruno").
   - show_daily_summary(client_slug, date?): materializa o RESUMO do que os agents fizeram. Use para "o que os agentes fizeram hoje/ontem pro {cliente}", "mostra o resumo do dia do {cliente}".
-  - dismiss_element(target): tira um painel. target = "funnel" para o funil, "daily_summary" para o resumo, ou "all" para limpar tudo. Use quando ele disser "pode tirar", "fecha o funil", "tira isso", "limpa tudo".
+  - show_clients(): materializa as PASTAS (Clientes/Funil/Pages/Configs/Ultron) com a lista rolante de clientes. Use para "abrir clientes", "mostra meus clientes", "abre as pastas". Em seguida, diga quantos clientes há e ofereça abrir um.
+  - open_client(client_slug): materializa o CARD do cliente (nome, site, produtos e skills). Use para "abrir {cliente}", "abre o card do Bruno", "mostra os produtos e skills do {cliente}". Em seguida, resuma quantos produtos e skills ele tem.
+  - dismiss_element(target): tira um painel. target = "funnel", "daily_summary", "clients" (pastas/lista), "client" (card), ou "all" para limpar tudo. Use quando ele disser "pode tirar", "fecha o funil", "volta", "tira isso", "limpa tudo".
 - SEMPRE que materializar um elemento, fale logo em seguida um RESUMO curto do que apareceu (no funil, cruze ao menos duas métricas, como manda a seção de dados). Depois de resumir, OFEREÇA remover ("Posso tirar o funil?"). Se ele confirmar, chame dismiss_element.
 - Se o cliente não foi dito e há mais de um, pergunte qual antes de exibir. Se a ferramenta disser que não há dados (ex.: sem funil ainda), diga isso com naturalidade e não invente números.
 
