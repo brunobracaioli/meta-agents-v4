@@ -18,6 +18,7 @@ import { Proof } from "./sections/Proof";
 import { Logos } from "./sections/Logos";
 import { Persona } from "./sections/Persona";
 import { Authority } from "./sections/Authority";
+import { Ccaf } from "./sections/Ccaf";
 import { Offer } from "./sections/Offer";
 import { Guarantee } from "./sections/Guarantee";
 import { Faq } from "./sections/Faq";
@@ -56,6 +57,7 @@ const REGISTRY: Record<SectionType, (tone: Tone) => ReactNode> = {
   logos: (t) => <Logos key="logos" tone={t} />,
   persona: (t) => <Persona key="persona" tone={t} />,
   authority: () => <Authority key="authority" />,
+  ccaf: () => <Ccaf key="ccaf" />,
   offer: () => <Offer key="offer" />,
   guarantee: (t) => <Guarantee key="guarantee" tone={t} />,
   faq: (t) => <Faq key="faq" tone={t} />,

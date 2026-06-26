@@ -33,6 +33,7 @@ const SECTION_LABELS: Record<string, string> = {
   logos: "Logos",
   persona: "Persona",
   authority: "Autoridade",
+  ccaf: "Certificação",
   offer: "Oferta",
   guarantee: "Garantia",
   faq: "FAQ",

@@ -17,6 +17,7 @@ export const SECTION_IMAGE_KEYS: Record<string, string[]> = {
   features: ["image"],
   proof: ["image"],
   authority: ["image"],
+  ccaf: ["image"],
 };
 
 /** Heuristic for image fields nested inside arrays/objects (e.g. an item with an `image`). */

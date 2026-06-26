@@ -45,6 +45,11 @@
   /* Discreet aurora used only on accent words/labels — orange stays the dominant brand. */
   --accent-aurora: linear-gradient(135deg, #d3eef4 0%, #f1eec8 42%, var(--orange-hi) 100%);
 
+  /* Cyber accents imported from claude-code.b2tech.io — used by the instructor/ccaf authority
+     blocks: cyan rule on the pull-quote, neon-green on certification stats/weights. */
+  --cyber-cyan: #d3eef4;
+  --cyber-green: #00ff9f;
+
   /* fixed site header */
   --header-h: 64px;
 }
@@ -815,31 +820,49 @@ a {
   margin-bottom: 12px;
 }
 
-/* ---------- authority (glass on dark) ---------- */
+/* ---------- authority (open, wide — claude-code instructor-section parity) ---------- */
 .authority {
   display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 32px;
-  align-items: center;
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: var(--radius-card);
-  padding: 32px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 48px;
+  align-items: start;
+  max-width: 1040px;
+  margin: 0 auto;
 }
 
 .authority--solo {
   grid-template-columns: 1fr;
+  max-width: 720px;
   text-align: center;
 }
 
+/* gradient ring around the square photo */
+.authority-photo-frame {
+  aspect-ratio: 1 / 1;
+  border-radius: 18px;
+  padding: 1.5px;
+  background: var(--accent-aurora);
+  overflow: hidden;
+}
+
+.authority--solo .authority-photo-frame {
+  max-width: 280px;
+  margin: 0 auto;
+}
+
 .authority-photo {
+  display: block;
   width: 100%;
+  height: 100%;
   aspect-ratio: 1 / 1;
   object-fit: cover;
-  border-radius: var(--radius-card);
+  border-radius: 16.5px;
   background: var(--navy-800);
+}
+
+.authority-name {
+  font-size: 1.9rem;
+  margin: 0 0 4px;
 }
 
 /* Optional per-section illustration (problem/solution/features/proof). Plain <img>,
@@ -875,11 +898,16 @@ a {
 @media (max-width: 720px) {
   .authority {
     grid-template-columns: 1fr;
+    gap: 28px;
     text-align: center;
   }
-  .authority-photo {
-    max-width: 220px;
+  .authority-photo-frame {
+    max-width: 240px;
     margin: 0 auto;
+  }
+  .authority-creds,
+  .authority-products-list {
+    justify-content: center;
   }
   .compare-row {
     grid-template-columns: 1.4fr 0.8fr 0.8fr;
@@ -887,6 +915,266 @@ a {
   .compare-row > div {
     padding: 12px 10px;
     font-size: 0.92rem;
+  }
+}
+
+/* role line under the instructor name — mono, aurora-clipped (claude-code parity) */
+.authority-role {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0 0 14px;
+  background: var(--accent-aurora);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* pull-quote with a cyan rule */
+.authority-quote {
+  margin: 18px 0;
+  padding: 4px 0 4px 16px;
+  border-left: 2px solid var(--cyber-cyan);
+  font-style: italic;
+  color: var(--text-invert);
+}
+
+.authority-products {
+  margin-top: 22px;
+}
+
+.authority-products-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-invert-dim);
+  margin: 0 0 10px;
+}
+
+.authority-products-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.prod {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--navy-border);
+  background: var(--navy-800);
+  color: var(--text-invert-dim);
+}
+
+/* ---------- ccaf (certification authority, dark band) ---------- */
+.ccaf {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  align-items: center;
+  max-width: var(--maxw-narrow);
+  margin: 0 auto;
+}
+
+.ccaf-cert {
+  display: block;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--navy-800);
+}
+
+.ccaf-cert--link {
+  cursor: pointer;
+}
+
+.ccaf-cert-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  transition: filter 0.3s ease;
+}
+
+.ccaf-cert--link:hover .ccaf-cert-img {
+  filter: brightness(1.1);
+}
+
+.ccaf-scarcity {
+  margin-bottom: 18px;
+}
+
+.ccaf-scarcity-number {
+  display: block;
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: 3.6rem;
+  line-height: 1;
+}
+
+.ccaf-scarcity-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-invert-dim);
+  margin-top: 8px;
+}
+
+.ccaf-line {
+  color: var(--text-invert) !important;
+  font-weight: 600;
+  font-size: 1.1rem;
+  margin: 0 0 12px;
+}
+
+.ccaf-verify {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 13px 28px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-aurora);
+  color: #0a0f1a;
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 0.92rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  transition: filter 0.3s ease, transform 0.15s ease;
+}
+
+.ccaf-verify:hover {
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+}
+
+.ccaf-verify-hint {
+  font-size: 0.8rem;
+  color: var(--text-invert-dim) !important;
+  margin: 12px 0 0;
+}
+
+.ccaf-exam {
+  max-width: var(--maxw-narrow);
+  margin: 56px auto 0;
+  border: 1px solid var(--navy-border);
+  border-radius: var(--radius-card);
+  background: var(--navy-800);
+  padding: 40px;
+}
+
+.ccaf-exam h3 {
+  font-size: 1.5rem;
+  margin: 0 0 4px;
+}
+
+.ccaf-exam-note {
+  margin: 0 0 28px;
+}
+
+.ccaf-facts {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+  margin-bottom: 44px;
+}
+
+.ccaf-fact {
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--navy-900);
+  border: 1px solid var(--navy-border);
+}
+
+.ccaf-fact-title {
+  font-family: var(--font-title);
+  font-weight: 600;
+  color: var(--text-invert) !important;
+  margin: 0 0 6px;
+  font-size: 0.95rem;
+}
+
+.ccaf-fact-desc {
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.ccaf-domains-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.ccaf-domains-head h4 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.ccaf-domains-sub {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-invert-dim);
+}
+
+.ccaf-domains {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ccaf-domain-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+  color: var(--text-invert);
+}
+
+.ccaf-domain-weight {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--cyber-green);
+  flex-shrink: 0;
+}
+
+.ccaf-bar {
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--navy-900);
+  overflow: hidden;
+}
+
+.ccaf-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent-aurora);
+}
+
+@media (max-width: 720px) {
+  .ccaf {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .ccaf-exam {
+    padding: 24px;
+  }
+  .ccaf-facts {
+    grid-template-columns: 1fr 1fr;
+  }
+  .ccaf-scarcity-number {
+    font-size: 3rem;
   }
 }
 

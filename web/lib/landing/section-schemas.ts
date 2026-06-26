@@ -89,10 +89,37 @@ export const SECTION_SCHEMAS: Record<SectionType, z.ZodTypeAny> = {
   authority: z
     .object({
       eyebrow: txt.optional(),
+      title: txt.optional(),
       name: txt.optional(),
+      role: txt.optional(),
       bio: txt.optional(),
+      quote: txt.optional(),
       credentials: arr(txt).optional(),
+      productsLabel: txt.optional(),
+      products: arr(txt).optional(),
       image: txt.optional(),
+    })
+    .strict(),
+  ccaf: z
+    .object({
+      eyebrow: txt.optional(),
+      heading: txt.optional(),
+      subhead: txt.optional(),
+      badge: txt.optional(),
+      image: txt.optional(),
+      verifyUrl: href.optional(),
+      verifyLabel: txt.optional(),
+      verifyHint: txt.optional(),
+      scarcityNumber: txt.optional(),
+      scarcityLabel: txt.optional(),
+      scarcityLine: txt.optional(),
+      lead: txt.optional(),
+      examTitle: txt.optional(),
+      examNote: txt.optional(),
+      examFacts: arr(z.object({ title: txt.optional(), description: txt.optional() }).strict()).optional(),
+      domainsTitle: txt.optional(),
+      domainsSubtitle: txt.optional(),
+      domains: arr(z.object({ label: txt.optional(), weight: z.number().min(0).max(100) }).strict()).optional(),
     })
     .strict(),
   guarantee: z.object({ heading: txt.optional(), body: txt.optional(), seal: txt.optional() }).strict(),

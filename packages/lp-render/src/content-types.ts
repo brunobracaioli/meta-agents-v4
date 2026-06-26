@@ -17,6 +17,7 @@ export type SectionType =
   | "logos"
   | "persona"
   | "authority"
+  | "ccaf"
   | "offer"
   | "guarantee"
   | "faq"
@@ -97,7 +98,47 @@ export interface Messages {
     proof?: { eyebrow?: string; heading: string; subhead?: string; image?: string; testimonials: { quote: string; author: string }[] };
     logos?: { heading?: string; items: string[] };
     persona?: { eyebrow?: string; heading: string; subhead?: string; items: { icon?: string; title: string; desc: string }[] };
-    authority?: { eyebrow?: string; name: string; bio: string; credentials?: string[]; image?: string };
+    /** `role` = mono accent line under the name; `quote` = pull-quote with a cyan rule;
+     * `products` = mono pills under `productsLabel`. All optional ⇒ the block degrades to the
+     * legacy photo + bio + credentials layout. (claude-code instructor-section parity.) */
+    authority?: {
+      eyebrow?: string;
+      /** Big centered section title above the photo+bio grid (claude-code SectionHeader).
+       * Absent ⇒ the header collapses (only the eyebrow, or nothing). */
+      title?: string;
+      name: string;
+      role?: string;
+      bio: string;
+      quote?: string;
+      credentials?: string[];
+      productsLabel?: string;
+      products?: string[];
+      image?: string;
+    };
+    /** Certification authority block (claude-code ccaf-section parity): certificate image +
+     * scarcity stat + verify CTA + exam-facts grid + weighted domain bars. `image` is the
+     * certificate; `verifyUrl` makes the image and CTA clickable. Everything optional except
+     * the title, so a partially-filled draft never crashes. */
+    ccaf?: {
+      eyebrow?: string;
+      heading: string;
+      subhead?: string;
+      badge?: string;
+      image?: string;
+      verifyUrl?: string;
+      verifyLabel?: string;
+      verifyHint?: string;
+      scarcityNumber?: string;
+      scarcityLabel?: string;
+      scarcityLine?: string;
+      lead?: string;
+      examTitle?: string;
+      examNote?: string;
+      examFacts?: { title: string; description: string }[];
+      domainsTitle?: string;
+      domainsSubtitle?: string;
+      domains?: { label: string; weight: number }[];
+    };
     guarantee?: { heading: string; body: string; seal?: string };
   };
   offer: {
@@ -139,6 +180,7 @@ export const MIDDLE_SECTION_TYPES = [
   "logos",
   "persona",
   "authority",
+  "ccaf",
   "guarantee",
 ] as const satisfies readonly SectionType[];
 

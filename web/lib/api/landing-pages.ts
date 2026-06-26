@@ -20,7 +20,7 @@ import { validateSection } from "@/lib/landing/section-schemas";
 
 const SECTION_TYPES = new Set([
   "hero", "urgency", "problem", "comparison", "solution", "features", "curriculum",
-  "stats", "proof", "logos", "persona", "authority", "offer", "guarantee", "faq",
+  "stats", "proof", "logos", "persona", "authority", "ccaf", "offer", "guarantee", "faq",
   "finalCta", "footer",
 ]);
 
