@@ -75,6 +75,76 @@ const SPINE_AMP = 0.02; // slow torso sway / breathing
 const SHOULDER_AMP = 0.018; // idle shoulder drift
 const SHOULDER_ENGAGE = 0.03; // shoulders retract/settle a bit when speaking / active
 
+// === Conversational gestures (robot, speech-synced) =====================================
+// Ultron is a ROBOT (Iron-Man-ish), so the motion has a specific quality — not human jitter.
+// Three layers compose, all in CANONICAL limb space then mirrored per side:
+//   1. POSTURE — when he starts SPEAKING the forearms rise from a contained idle into a
+//      "ready to talk" zone (elbows bent, hands in front at chest); they relax on silence.
+//      This is what reads as natural — NOT raising the whole arm from the side.
+//   2. BASE — a small RMS-driven life: louder speech recruits more of the chain
+//      (wrist→elbow→shoulder). Subtle ("sutil vivo"), heavy/slow easing, no jitter.
+//   3. ACCENTS — discrete gesture strokes triggered by speech ONSETS (so they land on the
+//      stressed syllables), each prep→stroke→hold→retract back to the posture. Mostly a
+//      fluid-weighted profile; ~1 in 5 (and the strongest onsets) snap to a dry SERVO/STACCATO
+//      profile — that fluid→staccato contrast is the "cold AI" personality.
+//
+// The rig is "Y-up per bone" (every child sits at [0, len, 0] of its parent), so local axes
+// are uniform across the arm chain:
+//   X local = FLEX  (bend the elbow / lift the forearm forward-up)  → same sign both arms
+//   Y local = TWIST (supinate = palm up / pronate = palm down)      → mirrored per side
+//   Z local = ABDUCT (swing the arm out from the body)              → mirrored per side
+// The exact SENSE of each can only be eyeballed in a render, so each is one sign constant.
+const GESTURE_INTENSITY = 1.0; // global scale of accent angles (1 = moderate/natural)
+const FLEX_SIGN = -1; // bends the elbow / lifts the forearm FORWARD-UP (was +1 → bent backward)
+const FINGER_SIGN = 1; // curls the fingers toward the palm (decoupled from FLEX_SIGN; flip if they hyperextend)
+const TWIST_SIGN = 1; // + SUPINATES (palm up) on the right arm (flip if it pronates)
+const ABDUCT_SIGN = 1; // + swings the arm OUT from the body (flip if it crosses inward)
+
+// Idle (silent) contained neutral — every motion departs from and returns to this.
+const NEUTRAL_ELBOW = 0.16; // slight bend so the arm never reads as a stiff straight rod
+const NEUTRAL_ABDUCT = -0.55; // pull the upper arms IN toward the body at rest (the GLB bind pose
+//                               spreads them wide); canonical, mirrored per side. Flip sign if they spread MORE.
+const FINGER_REST_CURL = 0.2; // hands half-open, not a flat board
+// "Ready to talk" posture blended in by `speakingPosture` (0→1 when speaking): forearms come
+// UP IN FRONT (big elbow bend), a touch of shoulder flex + supination, hands a bit more open.
+const POSTURE_ELBOW = 0.78; // forearms rise to chest height (hands enter the close frame)
+const POSTURE_UPPER_ARM_FLEX = 0.12; // small — the upper arm stays near the torso (no "maluco")
+const POSTURE_FOREARM_TWIST = 0.25; // palms angle slightly inward/up, conversational
+const POSTURE_FINGER = 0.14; // hands open a little more when engaged
+const POSTURE_RATE = 2.6; // rise/fall speed of the talk posture, per second (dt-normalized)
+
+// BASE: RMS (level 0..1) → subtle chain recruitment while speaking. Small amplitudes.
+const BASE_WRIST = 0.18; // wrist/hand respond first (lowest level)
+const BASE_ELBOW = 0.22; // elbow joins past BASE_ELBOW_FLOOR
+const BASE_ELBOW_FLOOR = 0.25;
+const BASE_UPPER = 0.16; // upper-arm/shoulder only on the loud peaks
+const BASE_UPPER_FLOOR = 0.5;
+const BASE_RATE = 5; // how fast the heavy base eases toward its target, per second (dt-normalized)
+// The raw RMS (`level`) is instantaneous and jumpy — driving the arm off it shivers per-syllable.
+// `levelSlow` is a slow envelope of it so the base swells over phrases instead of trembling.
+const LEVEL_SLOW_RATE = 4; // smoothing rate of the loudness that drives the arm base, per second
+
+// ONSET detection over the (already smoothed) RMS envelope → fires accents on stressed beats.
+const ONSET_FLOOR = 0.16; // absolute level an onset must exceed
+const ONSET_MARGIN = 0.09; // how far above the adaptive baseline counts as an onset
+const ONSET_BASELINE_EASE = 0.04; // EMA rate of the loudness baseline
+const ONSET_REFRACTORY_S = 0.7; // min gap between accents (spaced so each reads as deliberate/complete)
+const ONSET_FALLBACK_S = 2.6; // if speaking but no onset fired this long, gesture anyway
+const STACCATO_STRONG = 0.2; // onset strength above which a dry staccato is likely
+const STACCATO_CHANCE = 0.22; // base probability an accent uses the staccato profile
+const GESTURE_BOTH_CHANCE = 0.18; // probability an accent uses BOTH arms
+
+// Motion profiles (seconds). Fluid = weighted/elegant, no overshoot. Staccato = servo snap.
+const FLUID_RISE_S = 0.28;
+const FLUID_HOLD_MIN_S = 0.3;
+const FLUID_HOLD_MAX_S = 0.7;
+const FLUID_RETURN_S = 0.45;
+const STACCATO_RISE_S = 0.1; // fast, near-linear
+const STACCATO_OVERSHOOT = 0.08; // tiny 1–2 frame overshoot, then locks
+const STACCATO_HOLD_MIN_S = 0.18;
+const STACCATO_HOLD_MAX_S = 0.32;
+const STACCATO_RETURN_S = 0.18;
+
 // Gaze tracking: when the webcam locates the user's face, the head + eyes turn toward them.
 // Eyes lead (snap), head eases behind; ambient motion stays but reduced so he's anchored on
 // the user without freezing. Limits keep him from over-rotating off a glance.
@@ -110,6 +180,85 @@ const FACE_STATUS_LABEL: Record<FaceTrackStatus, string> = {
 type LoadStatus = "loading" | "ready" | "error";
 
 type BonePose = { bone: THREE.Object3D; rest: THREE.Quaternion };
+
+// One side's arm chain. Each entry carries its rest quaternion so a gesture is applied as
+// rest · Δ(local-axis rotation); `side` is +1 (right) / −1 (left) for mirroring twist+abduct.
+type ArmChain = {
+  side: number;
+  upperArm: BonePose | null; // "arm * shoulder 2" — flex (X), abduct (Z), twist (Y)
+  rollUpper: BonePose | null; // upper-arm twist bone — carries part of the supination
+  elbow: BonePose | null; // forearm — flex (X)
+  rollLower: BonePose | null; // forearm twist bone — carries most of the supination (palm up)
+  wrist: BonePose | null; // hand — slight flex (X) + twist (Y)
+  fingers: BonePose[]; // proximal finger segments — curl (X)
+};
+
+// A gesture stroke as ADDITIVE deltas (radians) on top of the talk posture — NOT an absolute
+// pose. Small and forearm-centric (twist/elbow/wrist/fingers), barely any upper arm, so it
+// reads as conversational hand-talk, not "raising the whole arm". Supination is split across
+// both forearm-twist bones. `both` = both arms; `prefersStaccato` biases the dry servo profile.
+type GesturePose = {
+  name: string;
+  both?: boolean;
+  prefersStaccato?: boolean;
+  weight?: number;
+  upperArmFlex?: number;
+  upperArmAbduct?: number;
+  upperArmTwist?: number;
+  elbowFlex?: number;
+  forearmTwist?: number; // supination delta; distributed rollUpper(0.35) + rollLower(0.65)
+  wristFlex?: number;
+  wristTwist?: number;
+  fingerCurl?: number; // delta: negative opens the hand, positive closes it
+};
+
+// Small conversational strokes layered over the "ready to talk" posture (elbows already bent,
+// hands in front). The expression lives in the forearm twist (palm up/down), small elbow lifts
+// and the hand — the upper arm hardly moves.
+const GESTURE_LIBRARY: GesturePose[] = [
+  // Signature "here's the idea": palm rolls up, hand opens, tiny forearm lift.
+  { name: "palmUp", weight: 3, forearmTwist: 0.5, elbowFlex: 0.12, wristFlex: 0.05, upperArmFlex: 0.06, fingerCurl: -0.06 },
+  // Emphasis beat — a short downward stab of the forearm + hand a bit more closed (staccato-friendly).
+  { name: "beat", weight: 2.5, prefersStaccato: true, elbowFlex: 0.2, wristFlex: 0.12, forearmTwist: 0.1, fingerCurl: 0.12 },
+  // Both hands present, palms up/inward — "let me explain".
+  { name: "present", both: true, weight: 1.2, forearmTwist: 0.4, elbowFlex: 0.08, upperArmAbduct: 0.08, fingerCurl: -0.05 },
+  // Subtle point/indicate — slight pronation toward neutral, hand a touch closed.
+  { name: "point", weight: 1.5, elbowFlex: 0.14, wristFlex: 0.08, forearmTwist: -0.16, fingerCurl: 0.1 },
+  // Open outward — a bit of abduction, palm up.
+  { name: "openOut", weight: 1.2, upperArmAbduct: 0.18, forearmTwist: 0.32, elbowFlex: 0.05, fingerCurl: -0.05 },
+];
+
+function smoothstep(t: number): number {
+  const x = t < 0 ? 0 : t > 1 ? 1 : t;
+  return x * x * (3 - 2 * x);
+}
+
+// Smootherstep (Ken Perlin) — flatter ends than smoothstep, for the weighted fluid profile.
+function smootherstep(t: number): number {
+  const x = t < 0 ? 0 : t > 1 ? 1 : t;
+  return x * x * x * (x * (x * 6 - 15) + 10);
+}
+
+// easeOutBack — overshoots slightly past 1 then settles exactly to 1 at t=1. Drives the dry
+// SERVO/STACCATO snap (a 1–2 frame overshoot, then locks). `overshoot` ≈ the peak fraction over 1.
+function easeOutBack(t: number, overshoot: number): number {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  const c1 = overshoot * 17;
+  const c3 = c1 + 1;
+  const x = t - 1;
+  return 1 + c3 * x * x * x + c1 * x * x;
+}
+
+function pickGesture(): GesturePose {
+  const total = GESTURE_LIBRARY.reduce((s, g) => s + (g.weight ?? 1), 0);
+  let r = Math.random() * total;
+  for (const g of GESTURE_LIBRARY) {
+    r -= g.weight ?? 1;
+    if (r <= 0) return g;
+  }
+  return GESTURE_LIBRARY[0]!;
+}
 
 export function UltronStage({
   heightClassName = "h-[calc(100vh-9rem)] min-h-[480px]",
@@ -210,6 +359,11 @@ export function UltronStage({
     let neckLower: BonePose | null = null;
     let spineUpper: BonePose | null = null;
     const shoulders: BonePose[] = [];
+    // Per-side arm chains for conversational gestures (filled in the bone traverse below).
+    const arms: Record<"left" | "right", ArmChain> = {
+      left: { side: -1, upperArm: null, rollUpper: null, elbow: null, rollLower: null, wrist: null, fingers: [] },
+      right: { side: 1, upperArm: null, rollUpper: null, elbow: null, rollLower: null, wrist: null, fingers: [] },
+    };
     const lowerLips: BonePose[] = [];
     const upperLips: BonePose[] = [];
     const eyelids: BonePose[] = []; // upper eyelids (blink + widen)
@@ -221,6 +375,37 @@ export function UltronStage({
     const emissiveMaterials: THREE.MeshStandardMaterial[] = [];
     let mouthOpen = 0; // enveloped 0..1 mouth openness; also drives the emissive/bloom pulse
     let engage = 0; // 0..1 facial "engagement": rises while speaking and when agents are active
+
+    // --- Gesture runtime (live browser rAF → Math.random is fine for variety) ----------------
+    let speakingPosture = 0; // 0..1 — forearms relaxed-down → "ready to talk" (rises while speaking)
+    let levelSlow = 0; // slow envelope of the RMS, drives the arm base (no per-syllable shiver)
+    let levelBaseline = 0; // EMA of the RMS envelope, for onset detection
+    let lastAccentAt = -10; // elapsed of the last accent trigger (refractory + fallback)
+
+    // Active accent stroke (additive over the posture/base).
+    type GesturePhase = "idle" | "rising" | "holding" | "returning";
+    let gPhase: GesturePhase = "idle";
+    let gActive: GesturePose | null = null;
+    let gStaccato = false; // motion profile of the active accent
+    let gUseLeft = false;
+    let gUseRight = false;
+    let gLastRight = false; // alternate the leading arm between accents
+    let gPhaseStart = 0; // elapsed at the start of the current phase
+    let gHoldDur = 0; // randomized hold duration for this accent
+    let gAmount = 0; // 0..1 accent envelope (rise → [overshoot] → hold → return)
+
+    // Per-side current (eased) canonical angles. `base` carries neutral+posture+RMS (slow/heavy);
+    // the accent is added on top per frame. Keeping base eased gives the weighted, no-jitter feel.
+    type ArmAngles = {
+      upperArmFlex: number; upperArmAbduct: number; upperArmTwist: number;
+      elbowFlex: number; forearmTwist: number; wristFlex: number; wristTwist: number; fingerCurl: number;
+    };
+    const zeroAngles = (): ArmAngles => ({
+      upperArmFlex: 0, upperArmAbduct: NEUTRAL_ABDUCT, upperArmTwist: 0,
+      elbowFlex: NEUTRAL_ELBOW, forearmTwist: 0, wristFlex: 0, wristTwist: 0, fingerCurl: FINGER_REST_CURL,
+    });
+    const armBase: Record<"left" | "right", ArmAngles> = { left: zeroAngles(), right: zeroAngles() };
+
     const baseBloom = bloomPass.strength;
     let disposed = false;
 
@@ -231,6 +416,9 @@ export function UltronStage({
     const headEuler = new THREE.Euler();
     const faceQuat = new THREE.Quaternion();
     const eyeEuler = new THREE.Euler();
+    // Scratch for the arm/hand gesture rotations (built once; set per-bone each frame).
+    const armEuler = new THREE.Euler();
+    const armQuat = new THREE.Quaternion();
     // Scratch quaternions for the world-space gaze turn of the head (see the head block).
     const gazeParentQuat = new THREE.Quaternion();
     const gazeWorldDelta = new THREE.Quaternion();
@@ -319,6 +507,24 @@ export function UltronStage({
               spineUpper = pose();
             } else if (name.includes("shoulder") && name.endsWith("1")) {
               shoulders.push(pose()); // primary shoulder bone per side (carries the arm)
+            } else if (name.includes("arm") && name.includes("left")) {
+              // Left arm chain → gesture rig.
+              const a = arms.left;
+              if (name.includes("shoulder") && name.endsWith("2")) a.upperArm = pose();
+              else if (name.includes("roll") && name.includes("upper")) a.rollUpper = pose();
+              else if (name.includes("roll") && name.includes("lower")) a.rollLower = pose();
+              else if (name.includes("elbow")) a.elbow = pose();
+              else if (name.includes("wrist")) a.wrist = pose();
+              else if (name.includes("finger") && name.endsWith("a")) a.fingers.push(pose());
+            } else if (name.includes("arm") && name.includes("right")) {
+              // Right arm chain → gesture rig.
+              const a = arms.right;
+              if (name.includes("shoulder") && name.endsWith("2")) a.upperArm = pose();
+              else if (name.includes("roll") && name.includes("upper")) a.rollUpper = pose();
+              else if (name.includes("roll") && name.includes("lower")) a.rollLower = pose();
+              else if (name.includes("elbow")) a.elbow = pose();
+              else if (name.includes("wrist")) a.wrist = pose();
+              else if (name.includes("finger") && name.endsWith("a")) a.fingers.push(pose());
             }
           }
         });
@@ -381,6 +587,76 @@ export function UltronStage({
       // Drives brow lift, eye widening/squint and saccade energy so Ultron reacts to work.
       const targetEngage = Math.max(speaking ? 0.45 : 0, mouthOpen, coreActiveRef.current ? 0.8 : 0);
       engage += (targetEngage - engage) * ENGAGE_SMOOTH;
+
+      // --- Speech-driven gestures: posture rises while speaking; accents fire on speech onsets.
+      const level = live.level; // instantaneous RMS of the spoken audio (jumpy — good for onsets)
+      // Slow envelope of the loudness for the arm base (swells over phrases, no per-syllable shiver),
+      // plus dt-normalized eases so motion stays smooth even when the FPS is uneven (2 WebGL canvases).
+      levelSlow += (level - levelSlow) * (1 - Math.exp(-LEVEL_SLOW_RATE * dt));
+      const postureE = 1 - Math.exp(-POSTURE_RATE * dt);
+      // Talk posture: forearms rise into the "ready to talk" zone while speaking, relax on silence.
+      speakingPosture += ((speaking ? 1 : 0) - speakingPosture) * postureE;
+
+      // Adaptive loudness baseline + onset detection → accents land on the stressed syllables.
+      levelBaseline += (level - levelBaseline) * ONSET_BASELINE_EASE;
+      const onsetStrength = level - levelBaseline;
+      const canTrigger = elapsed - lastAccentAt >= ONSET_REFRACTORY_S;
+      const onset = speaking && level > ONSET_FLOOR && onsetStrength > ONSET_MARGIN;
+      const fallback = speaking && elapsed - lastAccentAt >= ONSET_FALLBACK_S; // keep alive on flat speech
+      if (gPhase === "idle" && canTrigger && (onset || fallback)) {
+        gActive = pickGesture();
+        // Strong onsets (or a "beat") tend to snap as a dry servo/staccato — the cold-AI accent.
+        const strong = onsetStrength >= STACCATO_STRONG;
+        gStaccato =
+          Math.random() < STACCATO_CHANCE + (strong ? 0.35 : 0) + (gActive.prefersStaccato ? 0.25 : 0);
+        if (gActive.both || Math.random() < GESTURE_BOTH_CHANCE) {
+          gUseLeft = true;
+          gUseRight = true;
+        } else {
+          gLastRight = !gLastRight; // alternate the leading arm between accents
+          gUseRight = gLastRight;
+          gUseLeft = !gLastRight;
+        }
+        const hMin = gStaccato ? STACCATO_HOLD_MIN_S : FLUID_HOLD_MIN_S;
+        const hMax = gStaccato ? STACCATO_HOLD_MAX_S : FLUID_HOLD_MAX_S;
+        gHoldDur = hMin + Math.random() * (hMax - hMin);
+        gPhase = "rising";
+        gPhaseStart = elapsed;
+        lastAccentAt = elapsed;
+      } else if (!speaking && (gPhase === "rising" || gPhase === "holding")) {
+        gPhase = "returning"; // cut to the return as soon as he stops talking
+        gPhaseStart = elapsed;
+      }
+      // Advance the accent envelope with its motion profile.
+      const riseS = gStaccato ? STACCATO_RISE_S : FLUID_RISE_S;
+      const returnS = gStaccato ? STACCATO_RETURN_S : FLUID_RETURN_S;
+      if (gPhase === "rising") {
+        const t = (elapsed - gPhaseStart) / riseS;
+        gAmount = gStaccato ? easeOutBack(t, STACCATO_OVERSHOOT) : smootherstep(t);
+        if (t >= 1) {
+          gAmount = 1;
+          gPhase = "holding";
+          gPhaseStart = elapsed;
+        }
+      } else if (gPhase === "holding") {
+        gAmount = 1;
+        if (elapsed - gPhaseStart >= gHoldDur) {
+          gPhase = "returning";
+          gPhaseStart = elapsed;
+        }
+      } else if (gPhase === "returning") {
+        const t = (elapsed - gPhaseStart) / returnS;
+        gAmount = gStaccato ? 1 - smoothstep(t) : 1 - smootherstep(t);
+        if (t >= 1) {
+          gAmount = 0;
+          gPhase = "idle";
+          gActive = null;
+          gUseLeft = false;
+          gUseRight = false;
+        }
+      } else {
+        gAmount = 0;
+      }
 
       // Blink envelope (shared by upper + lower lids): a quick triangular close on a loose cadence.
       const blinkPhase = (elapsed % BLINK_PERIOD_S) / BLINK_DURATION_S;
@@ -566,6 +842,81 @@ export function UltronStage({
           s.bone.quaternion.copy(s.rest).multiply(faceQuat);
         });
       }
+
+      // --- Conversational gestures: compose POSTURE + RMS BASE (eased, heavy) + ACCENT (additive),
+      // then write each arm in canonical limb space with per-side mirroring. The rig is Y-up per
+      // bone: flex about X (shared sign L/R), twist about Y + abduct about Z (mirrored via side).
+      const sp = speakingPosture;
+      // Talk-posture canonical pose, blended in by `sp` (forearms rise in front when speaking).
+      const postElbow = NEUTRAL_ELBOW + (POSTURE_ELBOW - NEUTRAL_ELBOW) * sp;
+      const postUpperFlex = POSTURE_UPPER_ARM_FLEX * sp;
+      const postTwist = POSTURE_FOREARM_TWIST * sp;
+      const postFinger = FINGER_REST_CURL - POSTURE_FINGER * sp; // open the hand a touch when talking
+      // RMS recruitment — small "alive" response to loudness, driven by the SLOW envelope (no shiver).
+      const recWrist = levelSlow * BASE_WRIST * motion;
+      const recElbow = Math.max(0, levelSlow - BASE_ELBOW_FLOOR) * BASE_ELBOW * motion;
+      const recUpper = Math.max(0, levelSlow - BASE_UPPER_FLOOR) * BASE_UPPER * motion;
+      const baseE = 1 - Math.exp(-BASE_RATE * dt); // dt-normalized ease for the heavy base
+
+      (["left", "right"] as const).forEach((key) => {
+        const chain = arms[key];
+        if (!chain.upperArm && !chain.elbow) return; // this arm isn't in the rig
+        const base = armBase[key];
+        const e = baseE;
+        // Low-frequency idle life on the distal joints (per-side phase) so they aren't dead-still.
+        const phase = key === "left" ? 0 : 2.3;
+        const life = Math.sin(elapsed * 0.7 + phase) * 0.5 + Math.sin(elapsed * 0.41 + phase) * 0.5;
+        // Ease the slow/heavy base toward its target pose (weight, no jitter).
+        base.upperArmFlex += (postUpperFlex + recUpper - base.upperArmFlex) * e;
+        base.upperArmAbduct += (NEUTRAL_ABDUCT - base.upperArmAbduct) * e;
+        base.upperArmTwist += (0 - base.upperArmTwist) * e;
+        base.elbowFlex += (postElbow + recElbow - base.elbowFlex) * e;
+        base.forearmTwist += (postTwist + life * 0.03 * motion - base.forearmTwist) * e;
+        base.wristFlex += (recWrist + life * 0.05 * motion - base.wristFlex) * e;
+        base.wristTwist += (0 - base.wristTwist) * e;
+        base.fingerCurl += (postFinger - base.fingerCurl) * e;
+
+        // Additive accent stroke (only the participating side).
+        const participating = key === "left" ? gUseLeft : gUseRight;
+        const acc = gActive && participating ? gActive : null;
+        const amt = acc ? gAmount * GESTURE_INTENSITY * motion : 0;
+
+        const side = chain.side;
+        const upperFlex = base.upperArmFlex + (acc?.upperArmFlex ?? 0) * amt;
+        const upperTwist = base.upperArmTwist + (acc?.upperArmTwist ?? 0) * amt;
+        const upperAbduct = base.upperArmAbduct + (acc?.upperArmAbduct ?? 0) * amt;
+        const elbowFlex = base.elbowFlex + (acc?.elbowFlex ?? 0) * amt;
+        const forearmTwist = base.forearmTwist + (acc?.forearmTwist ?? 0) * amt;
+        const wristFlex = base.wristFlex + (acc?.wristFlex ?? 0) * amt;
+        const wristTwist = base.wristTwist + (acc?.wristTwist ?? 0) * amt;
+        const fingerCurl = base.fingerCurl + (acc?.fingerCurl ?? 0) * amt;
+
+        if (chain.upperArm) {
+          armEuler.set(upperFlex * FLEX_SIGN, upperTwist * TWIST_SIGN * side, upperAbduct * ABDUCT_SIGN * side, "XYZ");
+          chain.upperArm.bone.quaternion.copy(chain.upperArm.rest).multiply(armQuat.setFromEuler(armEuler));
+        }
+        if (chain.rollUpper) {
+          armEuler.set(0, forearmTwist * 0.35 * TWIST_SIGN * side, 0, "XYZ");
+          chain.rollUpper.bone.quaternion.copy(chain.rollUpper.rest).multiply(armQuat.setFromEuler(armEuler));
+        }
+        if (chain.elbow) {
+          armEuler.set(elbowFlex * FLEX_SIGN, 0, 0, "XYZ");
+          chain.elbow.bone.quaternion.copy(chain.elbow.rest).multiply(armQuat.setFromEuler(armEuler));
+        }
+        if (chain.rollLower) {
+          armEuler.set(0, forearmTwist * 0.65 * TWIST_SIGN * side, 0, "XYZ");
+          chain.rollLower.bone.quaternion.copy(chain.rollLower.rest).multiply(armQuat.setFromEuler(armEuler));
+        }
+        if (chain.wrist) {
+          armEuler.set(wristFlex * FLEX_SIGN, wristTwist * TWIST_SIGN * side, 0, "XYZ");
+          chain.wrist.bone.quaternion.copy(chain.wrist.rest).multiply(armQuat.setFromEuler(armEuler));
+        }
+        if (chain.fingers.length > 0) {
+          armEuler.set(fingerCurl * FINGER_SIGN, 0, 0, "XYZ");
+          armQuat.setFromEuler(armEuler);
+          for (const f of chain.fingers) f.bone.quaternion.copy(f.rest).multiply(armQuat);
+        }
+      });
 
       // Faint whole-body weight-shift sway, kept very subtle so it complements (not fights)
       // the head motion. Deliberately NO vertical motion — that's what made it "bounce".
