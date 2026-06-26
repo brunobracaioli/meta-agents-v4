@@ -93,3 +93,13 @@ export function isLiveReviewSignal(value: unknown): value is LiveReviewSignal {
 export function liveReviewKey(signal: LiveReviewSignal): string {
   return `${signal.landingPageId}|${signal.previewUrl}|${signal.at}`;
 }
+
+// --- ARC render intents (SPEC-019 / ADR 0031) ----------------------------
+// When Ultron emits UIIntents (show/dismiss/focus/popout) from a read-only render-tool, the
+// chat reply carries them back to the browser, fanned out the same way as the signals above:
+// a same-window CustomEvent (the ARC tab's <ArcBridge> listens) plus a cross-tab
+// BroadcastChannel (the optional popout window, Wave C). The payload is the raw UIIntent
+// ARRAY; the client revalidates it with parseUIIntents (render-intents.ts) before dispatching
+// into the Render Bus — a malformed intent must never break the voice flow (threat model §T).
+export const ARC_RENDER_CHANNEL = "ultron-arc-render";
+export const ARC_RENDER_EVENT = "ultron-arc-render";

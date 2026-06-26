@@ -11,6 +11,7 @@ import {
   type LandingEditSignal,
   type LiveReviewSignal,
 } from "@/lib/ultron/agent-trigger";
+import { uiIntentFromToolResult, type UIIntent } from "@/lib/ultron/render-intents";
 import { loadMemory, appendExchange, type ChatTurn } from "@/lib/ultron/memory";
 import { savePending, loadPending, deletePending } from "@/lib/ultron/pending";
 
@@ -34,6 +35,7 @@ export type ChatReply = {
   agentTriggers: AgentTrigger[];
   landingEdits: LandingEditSignal[];
   liveReviews: LiveReviewSignal[];
+  uiIntents: UIIntent[];
 };
 export type ChatNeedCapture = {
   kind: "need_capture";
@@ -42,6 +44,7 @@ export type ChatNeedCapture = {
   agentTriggers: AgentTrigger[];
   landingEdits: LandingEditSignal[];
   liveReviews: LiveReviewSignal[];
+  uiIntents: UIIntent[];
 };
 export type ChatResult = ChatReply | ChatNeedCapture;
 
@@ -141,6 +144,17 @@ function pushLiveReview(liveReviews: LiveReviewSignal[], signal: LiveReviewSigna
   liveReviews.push(signal);
 }
 
+// SPEC-019: a read-only render-tool carries its directive under `ui_intent` in its result.
+// Collected like the signals above and returned (non-blocking) so the ARC client can
+// materialize the panel. De-duped by op+target/id+element so a retried tool call within the
+// same turn can't stack duplicate directives.
+function pushUiIntent(uiIntents: UIIntent[], intent: UIIntent | null): void {
+  if (!intent) return;
+  const key = (i: UIIntent) => (i.op === "show" ? `show:${i.element}:${i.id}` : `${i.op}:${i.target}`);
+  if (uiIntents.some((existing) => key(existing) === key(intent))) return;
+  uiIntents.push(intent);
+}
+
 /**
  * The bounded Claude tool loop. Runs server-side tools inline. If Claude calls a
  * client-side tool (capture_screen), it CANNOT run here — we persist the in-flight
@@ -152,6 +166,7 @@ async function runLoop(
   agentTriggers: AgentTrigger[],
   landingEdits: LandingEditSignal[],
   liveReviews: LiveReviewSignal[],
+  uiIntents: UIIntent[],
   startIteration: number,
   ctx: LoopContext,
 ): Promise<ChatResult> {
@@ -165,7 +180,7 @@ async function runLoop(
     });
 
     if (res.stop_reason !== "tool_use") {
-      return { kind: "reply", reply: extractText(res.content) || FALLBACK, usedTools, agentTriggers, landingEdits, liveReviews };
+      return { kind: "reply", reply: extractText(res.content) || FALLBACK, usedTools, agentTriggers, landingEdits, liveReviews, uiIntents };
     }
 
     messages.push({ role: "assistant", content: res.content });
@@ -191,6 +206,7 @@ async function runLoop(
       pushAgentTrigger(agentTriggers, agentTriggerFromToolResult(block.name, result));
       pushLandingEdit(landingEdits, landingEditFromToolResult(block.name, result));
       pushLiveReview(liveReviews, liveReviewFromToolResult(block.name, result));
+      pushUiIntent(uiIntents, uiIntentFromToolResult(result));
       partialResults.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(result) });
     }
 
@@ -207,15 +223,16 @@ async function runLoop(
         agentTriggers,
         landingEdits,
         liveReviews,
+        uiIntents,
       });
-      return { kind: "need_capture", pendingId, usedTools, agentTriggers, landingEdits, liveReviews };
+      return { kind: "need_capture", pendingId, usedTools, agentTriggers, landingEdits, liveReviews, uiIntents };
     }
 
     messages.push({ role: "user", content: partialResults });
   }
 
   // Exhausted the tool-iteration budget without a final text answer.
-  return { kind: "reply", reply: FALLBACK, usedTools, agentTriggers, landingEdits, liveReviews };
+  return { kind: "reply", reply: FALLBACK, usedTools, agentTriggers, landingEdits, liveReviews, uiIntents };
 }
 
 /**
@@ -234,7 +251,7 @@ export async function runChat(
   messages.push({ role: "user", content: text });
 
   const dynamicTools = await loadDynamicSkillTools(operatorId);
-  const result = await runLoop(messages, [], [], [], [], 0, {
+  const result = await runLoop(messages, [], [], [], [], [], 0, {
     sessionId,
     priorMemory: memory,
     userText: text,
@@ -268,6 +285,7 @@ export async function resumeChat(
       agentTriggers: [],
       landingEdits: [],
       liveReviews: [],
+      uiIntents: [],
     };
   }
 
@@ -287,6 +305,7 @@ export async function resumeChat(
     pending.agentTriggers ?? [],
     pending.landingEdits ?? [],
     pending.liveReviews ?? [],
+    pending.uiIntents ?? [],
     pending.iteration,
     {
       sessionId,

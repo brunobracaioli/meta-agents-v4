@@ -214,6 +214,7 @@ app.post("/ultron/chat", async (c) => {
         agentTriggers: result.agentTriggers,
         landingEdits: result.landingEdits,
         liveReviews: result.liveReviews,
+        uiIntents: result.uiIntents,
       });
     }
     return c.json({
@@ -222,6 +223,7 @@ app.post("/ultron/chat", async (c) => {
       agentTriggers: result.agentTriggers,
       landingEdits: result.landingEdits,
       liveReviews: result.liveReviews,
+      uiIntents: result.uiIntents,
     });
   } catch (err) {
     console.error(JSON.stringify({ level: "error", event: "chat_failed", message: errMsg(err) }));
@@ -252,6 +254,7 @@ app.post("/ultron/capture", async (c) => {
         agentTriggers: result.agentTriggers,
         landingEdits: result.landingEdits,
         liveReviews: result.liveReviews,
+        uiIntents: result.uiIntents,
       });
     }
     return c.json({
@@ -260,6 +263,7 @@ app.post("/ultron/capture", async (c) => {
       agentTriggers: result.agentTriggers,
       landingEdits: result.landingEdits,
       liveReviews: result.liveReviews,
+      uiIntents: result.uiIntents,
     });
   } catch (err) {
     console.error(JSON.stringify({ level: "error", event: "capture_failed", message: errMsg(err) }));

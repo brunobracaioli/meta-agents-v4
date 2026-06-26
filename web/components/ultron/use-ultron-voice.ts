@@ -8,6 +8,8 @@ import {
   LANDING_EDIT_EVENT,
   LIVE_REVIEW_CHANNEL,
   LIVE_REVIEW_EVENT,
+  ARC_RENDER_CHANNEL,
+  ARC_RENDER_EVENT,
   isAgentTrigger,
   isLandingEditSignal,
   isLiveReviewSignal,
@@ -17,6 +19,7 @@ import {
   type LandingEditSignal,
   type LiveReviewSignal,
 } from "@/lib/ultron/agent-trigger";
+import { parseUIIntents, type UIIntent } from "@/lib/ultron/render-intents";
 import { getSessionId } from "@/lib/ultron/session";
 import { createWakeWord, isWakeWordSupported, type WakeController } from "@/lib/ultron/wake-word";
 import { createVadMic, isVadWorkletSupported, type VadEvent, type VadMicHandle } from "./vad-mic";
@@ -77,6 +80,7 @@ type UltronApiResponse = {
   agentTriggers?: unknown[];
   landingEdits?: unknown[];
   liveReviews?: unknown[];
+  uiIntents?: unknown[];
 };
 
 function silentOutputBands(): number[] {
@@ -233,6 +237,27 @@ export function useUltronVoice() {
       window.setTimeout(() => channel.close(), 0);
     } catch {
       // Same-window CustomEvent already delivered the signal; cross-tab delivery is best-effort.
+    }
+  }, []);
+
+  // ARC (SPEC-019): when a render-tool fires, the chat reply carries UIIntents back. We
+  // revalidate them at the client boundary (parseUIIntents drops malformed) and fan them out
+  // the same way — a same-window CustomEvent the ARC tab's <ArcBridge> listens for, plus a
+  // cross-tab BroadcastChannel for the optional popout window. No dedup needed: the Render Bus
+  // reducer is idempotent for show/dismiss, and chat replies are one-shot (not polled).
+  const publishUiIntents = useCallback((values: unknown[] | undefined) => {
+    const intents = parseUIIntents(values);
+    if (intents.length === 0) return;
+
+    window.dispatchEvent(new CustomEvent<UIIntent[]>(ARC_RENDER_EVENT, { detail: intents }));
+
+    if (!("BroadcastChannel" in window)) return;
+    try {
+      const channel = new BroadcastChannel(ARC_RENDER_CHANNEL);
+      channel.postMessage(intents);
+      window.setTimeout(() => channel.close(), 0);
+    } catch {
+      // Same-window CustomEvent already delivered the intents; cross-tab delivery is best-effort.
     }
   }, []);
 
@@ -522,6 +547,7 @@ export function useUltronVoice() {
       publishAgentTriggers(data.agentTriggers);
       publishLandingEdits(data.landingEdits);
       publishLiveReviews(data.liveReviews);
+      publishUiIntents(data.uiIntents);
 
       let hops = 0;
       while (data.status === "need_capture" && data.pendingId && hops++ < MAX_CAPTURE_HOPS) {
@@ -539,10 +565,11 @@ export function useUltronVoice() {
         publishAgentTriggers(data.agentTriggers);
         publishLandingEdits(data.landingEdits);
         publishLiveReviews(data.liveReviews);
+        publishUiIntents(data.uiIntents);
       }
       return data.reply ?? CLIENT_FALLBACK;
     },
-    [captureFrame, patch, publishAgentTriggers, publishLandingEdits, publishLiveReviews],
+    [captureFrame, patch, publishAgentTriggers, publishLandingEdits, publishLiveReviews, publishUiIntents],
   );
 
   const sendPipeline = useCallback(
