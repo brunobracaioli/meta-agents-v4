@@ -682,6 +682,22 @@ const tools: Record<string, ToolDef> = {
     },
   },
 
+  popout_element: {
+    spec: {
+      name: "popout_element",
+      description:
+        "Abre uma SEGUNDA TELA (janela espelho) do modo ARC: os painéis passam a aparecer também numa janela separada, útil pra jogar num segundo monitor. É read-only. Use quando o operador disser 'joga pra segunda tela', 'abre numa segunda janela', 'manda pro outro monitor'. target = o painel que motivou (ex.: 'funnel') ou 'all'. Se o navegador bloquear a janela, avise que ele pode clicar no botão '2ª tela' no topo do ARC.",
+      input_schema: {
+        type: "object",
+        properties: { target: { type: "string", description: "id do painel, ex.: 'funnel', ou 'all'" } },
+      },
+    },
+    handler: async (input) => {
+      const target = str(input, "target") ?? "all";
+      return { popped_out: target, ui_intent: { op: "popout", target } };
+    },
+  },
+
   request_campaign_creation: {
     spec: {
       name: "request_campaign_creation",

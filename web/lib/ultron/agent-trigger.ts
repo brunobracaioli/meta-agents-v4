@@ -103,3 +103,9 @@ export function liveReviewKey(signal: LiveReviewSignal): string {
 // into the Render Bus — a malformed intent must never break the voice flow (threat model §T).
 export const ARC_RENDER_CHANNEL = "ultron-arc-render";
 export const ARC_RENDER_EVENT = "ultron-arc-render";
+
+// SPEC-019 Wave C.2b — control channel between the main ARC surface and the mirror "second
+// screen" window. The popout posts { kind:"hello" } when it mounts; the main window answers with
+// { kind:"sync", intents } (its current panels as show-intents) so the popout catches up to what
+// is already on screen. After that, live updates flow over ARC_RENDER_CHANNEL as usual.
+export const ARC_POPOUT_CHANNEL = "ultron-arc-popout";
