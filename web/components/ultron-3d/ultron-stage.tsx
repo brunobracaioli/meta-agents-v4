@@ -111,7 +111,10 @@ type LoadStatus = "loading" | "ready" | "error";
 
 type BonePose = { bone: THREE.Object3D; rest: THREE.Quaternion };
 
-export function UltronStage() {
+export function UltronStage({
+  heightClassName = "h-[calc(100vh-9rem)] min-h-[480px]",
+  showBackdrop = true,
+}: { heightClassName?: string; showBackdrop?: boolean } = {}) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const { liveSignalRef } = useUltron();
   const [status, setStatus] = useState<LoadStatus>("loading");
@@ -606,12 +609,15 @@ export function UltronStage() {
   }, [liveSignalRef, gazeRef]);
 
   return (
-    <div className="relative h-[calc(100vh-9rem)] min-h-[480px] w-full overflow-hidden rounded-lg border border-cyan-300/15 bg-black">
+    <div className={`relative w-full overflow-hidden rounded-lg border border-cyan-300/15 bg-black ${heightClassName}`}>
       {/* Living backdrop: the exact arc reactor from /dashboard/live, driven by the same
-          agent state — it activates when the agents do. Behind the avatar, non-interactive. */}
-      <div className="pointer-events-none absolute inset-0 z-0">
-        <NeuralCoreScene state={coreState} heightClassName="h-full" />
-      </div>
+          agent state — it activates when the agents do. Behind the avatar, non-interactive.
+          Opt-out on the live cockpit, where the arc reactor is already its own sibling screen. */}
+      {showBackdrop ? (
+        <div className="pointer-events-none absolute inset-0 z-0">
+          <NeuralCoreScene state={coreState} heightClassName="h-full" />
+        </div>
+      ) : null}
 
       {/* Avatar canvas on top, transparent so the reactor shows through. Receives pointer
           events for OrbitControls. */}

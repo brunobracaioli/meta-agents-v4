@@ -15,6 +15,7 @@ import { HudCorners, HudPanel } from "./hud/hud-panel";
 import { RadarSweep } from "./hud/radar-sweep";
 import { SpectrumBars } from "./hud/spectrum-bars";
 import { bucketEventsPerMinute, eventsPerMinuteNow, eventTypeCounts } from "./live-metrics";
+import { UltronStage } from "@/components/ultron-3d/ultron-stage";
 import { NeuralCoreScene } from "./neural-core-scene";
 import { deriveNeuralCoreState, type LiveEvent, type LiveProcess } from "./neural-core-state";
 import {
@@ -264,22 +265,31 @@ export function LiveFeed() {
       <section className="relative grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-[300px_minmax(0,1fr)_300px] 2xl:grid-cols-[340px_minmax(0,1fr)_340px]">
         <span aria-hidden className="hud-tick-rail absolute -left-3 bottom-2 top-2 hidden xl:block" />
         <span aria-hidden className="hud-tick-rail absolute -right-3 bottom-2 top-2 hidden xl:block" />
-        {/* CENTER — DOM-first so it stacks on top below xl */}
+        {/* CENTER — DOM-first so it stacks on top below xl. Two screens: arc reactor +
+            Ultron avatar. md+ side by side; below md they stack (avatar under reactor). */}
         <div className="relative sm:col-span-2 xl:col-span-1 xl:col-start-2 xl:row-start-1">
           <HudConnectors />
-          <div className="hud-boot hud-scan-host relative overflow-hidden border border-cyan-200/20 bg-[#030712] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_24px_80px_rgba(0,0,0,0.34)]">
-            <NeuralCoreScene state={coreState} heightClassName="h-[420px] min-h-[340px] sm:h-[560px] xl:h-[640px]" />
-            <ArcReactorOverlay mode={coreState.mode} />
-            <div
-              aria-hidden
-              className="pointer-events-none absolute left-3 top-3 z-10 font-hud text-[10px] uppercase tracking-[0.24em] text-cyan-100/70"
-            >
-              <span className="mr-2 inline-block border border-cyan-300/30 bg-cyan-400/10 px-1.5 py-0.5 text-cyan-200/90">
-                01
-              </span>
-              Arc Reactor
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {/* Screen 01 — Arc Reactor */}
+            <div className="hud-boot hud-scan-host relative overflow-hidden border border-cyan-200/20 bg-[#030712] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_24px_80px_rgba(0,0,0,0.34)]">
+              <NeuralCoreScene state={coreState} heightClassName="h-[420px] min-h-[340px] sm:h-[560px] xl:h-[640px]" />
+              <ArcReactorOverlay mode={coreState.mode} />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute left-3 top-3 z-10 font-hud text-[10px] uppercase tracking-[0.24em] text-cyan-100/70"
+              >
+                <span className="mr-2 inline-block border border-cyan-300/30 bg-cyan-400/10 px-1.5 py-0.5 text-cyan-200/90">
+                  01
+                </span>
+                Arc Reactor
+              </div>
+              <HudCorners />
             </div>
-            <HudCorners />
+
+            {/* Screen 02 — Ultron avatar (same responsive height as the reactor) */}
+            <div className="hud-boot relative">
+              <UltronStage showBackdrop={false} heightClassName="h-[420px] min-h-[340px] sm:h-[560px] xl:h-[640px]" />
+            </div>
           </div>
         </div>
 

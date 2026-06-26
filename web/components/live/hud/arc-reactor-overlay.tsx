@@ -9,9 +9,16 @@ const TICK_COUNT = 72;
 const LABEL_RADIUS = 487;
 const CYAN = "#67e8f9";
 
+// Round to 2 decimals: Math.sin/cos differ in the last ULP between the SSR (Node) and client
+// (browser) engines, which made the raw coordinates mismatch on hydration. 0.01 units in a
+// 1000-unit viewBox is visually exact, and rounding washes out the sub-ULP divergence.
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 function polar(radius: number, deg: number): { x: number; y: number } {
   const rad = ((deg - 90) * Math.PI) / 180;
-  return { x: CENTER + radius * Math.cos(rad), y: CENTER + radius * Math.sin(rad) };
+  return { x: round2(CENTER + radius * Math.cos(rad)), y: round2(CENTER + radius * Math.sin(rad)) };
 }
 
 function arcPath(radius: number, startDeg: number, endDeg: number): string {
