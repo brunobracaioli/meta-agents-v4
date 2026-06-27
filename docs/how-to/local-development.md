@@ -84,19 +84,20 @@ UPSTASH_REDIS_REST_TOKEN=
 ### 4. Run the app
 
 ```bash
-cd web && npm run dev
+cd web && npm run dev:local
 ```
 
 Open `http://localhost:3000`. `/login` now shows **Email + Senha**. Log in with
 `dev@localhost` / `localdev123`.
 
-> **Gotcha — start from a clean shell.** Next.js lets variables already present in
-> `process.env` **override** `web/.env.local`. If your shell exports the *production*
-> Supabase vars (e.g. via a sourced secrets script), a dev server started from it will keep
-> pointing at prod even with `web/.env.local` in place — and `AUTH_MODE=supabase` against the
-> prod DB is exactly the dangerous combo to avoid. Run `npm run dev` from a shell where those
-> vars are **not** exported (new terminal, or `unset SUPABASE_URL NEXT_PUBLIC_SUPABASE_URL
-> SUPABASE_SECRET_KEY NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` first), so `.env.local` wins.
+> **Why `dev:local` and not `dev`.** Next.js lets variables already present in `process.env`
+> **override** `web/.env.local`. If your shell exports the *production* secrets (a sourced
+> secrets script), plain `npm run dev` keeps pointing dev at prod — `AUTH_MODE=supabase`
+> against the prod DB is the dangerous combo to avoid — and the prod **Cloudflare Turnstile**
+> keys leak in, so the login captcha renders on localhost and fails (`ERR_NAME_NOT_RESOLVED`
+> / Turnstile error `600010`), blocking login. `dev:local` runs `next dev` with those
+> prod-leaking vars stripped (`env -u ...`), so `web/.env.local` fully governs and Turnstile is
+> skipped (it is optional — the login endpoint skips the captcha when the secret is absent).
 
 ### 5. Verify parity
 
