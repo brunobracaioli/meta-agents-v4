@@ -198,6 +198,24 @@ async function runLoop(
       res = await anthropic().messages.create(params);
     }
 
+    // Prompt-cache + size telemetry: if cache_read is large and cache_write ~0 on
+    // later turns, the system+tools prefix is being reused (good). A large input with
+    // no cache_read means we're re-prefilling every turn — the TTFT culprit.
+    const u = res.usage;
+    if (u) {
+      console.info(
+        JSON.stringify({
+          level: "info",
+          event: "chat_usage",
+          iter: i,
+          input: u.input_tokens,
+          output: u.output_tokens,
+          cache_read: u.cache_read_input_tokens ?? 0,
+          cache_write: u.cache_creation_input_tokens ?? 0,
+        }),
+      );
+    }
+
     if (res.stop_reason !== "tool_use") {
       // In streaming mode the spoken accumulator already holds every text delta
       // (including any pre-tool preamble from earlier iterations).
@@ -268,11 +286,13 @@ export async function runChat(
   text: string,
   operatorId: string | null = null,
 ): Promise<ChatResult> {
-  const memory = await loadMemory(sessionId);
+  // Independent I/O — fetch in parallel to shave a round-trip off time-to-first-token.
+  const [memory, dynamicTools] = await Promise.all([
+    loadMemory(sessionId),
+    loadDynamicSkillTools(operatorId),
+  ]);
   const messages: Anthropic.MessageParam[] = memory.map((t) => ({ role: t.role, content: t.content }));
   messages.push({ role: "user", content: text });
-
-  const dynamicTools = await loadDynamicSkillTools(operatorId);
   const result = await runLoop(messages, [], [], [], [], [], 0, {
     sessionId,
     priorMemory: memory,
@@ -298,11 +318,13 @@ export async function runChatStream(
   operatorId: string | null,
   emit: (delta: string) => void,
 ): Promise<ChatResult> {
-  const memory = await loadMemory(sessionId);
+  // Independent I/O — fetch in parallel to shave a round-trip off time-to-first-token.
+  const [memory, dynamicTools] = await Promise.all([
+    loadMemory(sessionId),
+    loadDynamicSkillTools(operatorId),
+  ]);
   const messages: Anthropic.MessageParam[] = memory.map((t) => ({ role: t.role, content: t.content }));
   messages.push({ role: "user", content: text });
-
-  const dynamicTools = await loadDynamicSkillTools(operatorId);
   const result = await runLoop(messages, [], [], [], [], [], 0, {
     sessionId,
     priorMemory: memory,
