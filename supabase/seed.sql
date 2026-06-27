@@ -47,14 +47,17 @@ values (
 )
 on conflict do nothing;
 
--- 3) Operator row. public.operators.id === auth.users.id (1:1). 'active' + runner 'ready'
---    so the enqueue gate (operatorRunnerReady) passes locally.
+-- 3) Operator row. public.operators.id === auth.users.id (1:1). A trigger on auth.users may have
+--    already auto-created this row (display_name = email, runner_status = 'none') when the user
+--    above was inserted, so UPSERT to force 'active' + runner 'ready' (the enqueue gate
+--    operatorRunnerReady requires both — there is no real Fly runner locally).
 insert into public.operators (id, display_name, status, runner_status, connectors_status)
 values (
   '11111111-1111-4111-8111-111111111111',
   'Local Dev Operator', 'active', 'ready', '{}'::jsonb
 )
-on conflict (id) do nothing;
+on conflict (id) do update
+  set status = 'active', runner_status = 'ready', display_name = excluded.display_name;
 
 -- 4) A dev client owned by the operator. ad_account_id is a PLACEHOLDER on purpose: local dev
 --    must not drive the real Meta account. Point the runner/MCP at a sandbox if you run it E2E.

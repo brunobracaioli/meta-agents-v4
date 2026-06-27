@@ -64,8 +64,8 @@ AUTH_MODE=supabase
 # Local Supabase (copy values from the `npx supabase start` output)
 SUPABASE_URL=http://127.0.0.1:54321
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<anon key from `supabase start`>
-SUPABASE_SECRET_KEY=<service_role key from `supabase start`>
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<PUBLISHABLE_KEY (sb_publishable_...) from `supabase start`>
+SUPABASE_SECRET_KEY=<SECRET_KEY (sb_secret_...) from `supabase start`>
 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 
 # Required by env.ts even in supabase mode (read unconditionally). Local-only values:
