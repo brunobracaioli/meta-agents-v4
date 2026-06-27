@@ -1,0 +1,39 @@
+Criativo premium 1080x1080 para Meta Ads feed quadrado do produto Claude Code Architect — angulo AUTORIDADE: credibilidade do especialista comprovada por resultados reais em producao. Replicar o SISTEMA visual dos anuncios de referencia fornecidos: fundo navy near-black, acento laranja vivido, tipografia condensada bold, bichinhos pixel-art laranja trabalhando em equipe, marca CLAUDE CODE >_ ARCHITECT.
+
+SEIS IMAGENS DE REFERENCIA FORNECIDAS. CADA UMA TEM UM PAPEL ESPECIFICO.
+
+REFERENCIA #1 (LOGO) — COMPOSITAR LITERALMENTE: Logo hexagonal preto com a letra 'A' formada por um triangulo BRANCO grande na esquerda e um slash LARANJA VIVIDO na direita. Compositar no canto inferior esquerdo com aproximadamente 9% da largura do frame. Nao redesenhar o simbolo — usar fielmente o formato hexagonal + A bicolor.
+
+REFERENCIA #2 (PESSOA) — HERO, PRESERVAR ROSTO EXATAMENTE: Bruno Bracaioli. Homem branco, aproximadamente 35-40 anos, barba media densa castanho-escura, cabelo medio escuro preso atras, olhar direto calmo-confiante, usando moletom/hoodie preto. Fotorrealismo total. Posicionar no lado direito do frame, enquadramento peito-acima, angulo tres-quartos, iluminacao key suave da esquerda com rim-light laranja quente separando-o do fundo escuro. Halo de brilho laranja ao redor da silhueta. use a pessoa da imagem de referencia EXATAMENTE como protagonista; mantenha rosto, identidade, expressao.
+
+REFERENCIAS #3-#6 (GUIAS DE ESTILO) — REPLICAR O SISTEMA DA MARCA, NAO A COPIA LITERAL: Os anuncios aprovados existentes definem o vocabulario visual que cada novo criativo deve seguir. Sistema obrigatorio: (a) Fundo gradiente vertical deep navy #0A0F1A para #0E1422, textura hexagonal/circuito faint 5-10% de opacidade + linhas de codigo desfocadas nas margens laterais tintadas em laranja — ilegivel, apenas textura. (b) Paleta TRAVADA: laranja #FF6B1A como unico acento dominante; titulos brancos puros #FFFFFF com uma palavra em laranja; sem verde, vermelho, azul ou roxo como acento dominante — sem excecao. (c) Marca tipografica 'CLAUDE CODE >_' na linha superior com '>_' em laranja vivido, e 'ARCHITECT' abaixo em sans upright mais fino, tudo branco, posicionado no canto superior esquerdo a ~16-18% da largura do frame. (d) Tipografia: display sans-serif condensada heavy (estilo Druk Wide / Anton / Bebas Neue), tracking apertado, peso maximo no headline. (e) Bichinhos pixel-art laranja: criaturas 8-bit blocos, silhueta robo/alien, antenas pequenas, bracos curtos, rosto-tela escuro, brilho laranja quente — 3 a 6 deles, SEMPRE em atividade de equipe dentro de cards de pipeline com labels de funcao. (f) Pipeline de agentes: painel central ou faixa horizontal com cards arredondados, cada card contem 1 bichinho + label de funcao + status dot laranja, cards conectados por linhas pontilhadas laranja — 'equipe de agentes rodando'. (g) Faixa CTA laranja #FF6B1A full-width na borda inferior (~10% de altura do frame), texto branco bold uppercase, icone chevron ou foguete.
+
+COMPOSICAO FINAL 1080x1080 — feed quadrado, todos os elementos dentro da area segura central 90%:
+
+CANTO SUPERIOR ESQUERDO: Marca tipografica 'CLAUDE CODE >_' ('>_' em laranja) + 'ARCHITECT' abaixo, branco, ~16% largura.
+
+CANTO SUPERIOR DIREITO: Badge pill pequeno com fundo laranja semi-transparente, texto branco bold: 'PARTNER ANTHROPIC | META | GOOGLE'
+
+LADO ESQUERDO — BLOCO DE AUTORIDADE: Headline principal em 3 linhas, tipografia condensada heavy branca, a palavra 'PRODUTOS' em laranja vivido #FF6B1A:
+  Linha 1: '9 PRODUTOS'
+  Linha 2: 'EM PROD COM'
+  Linha 3: 'CLAUDE CODE'
+Abaixo do headline, subheadline menor em branco regular: 'Spec-Driven. Times de agentes. Resultados em producao.'
+
+CENTRO-DIREITO (~40-50% do frame): Bruno da Referencia #2, peito-acima, tres-quartos, rim-light laranja aquecido, fundo navy com halo de brilho laranja na silhueta. Seu olhar direto para o observador transmite autoridade.
+
+SECOES INTERMEDIARIA-INFERIOR: Painel pipeline de agentes com 3 cards arredondados em linha horizontal, fundo navy com borda laranja sutil, conectados por linhas pontilhadas laranja. Cada card: 1 bichinho pixel-art laranja 8-bit + label de funcao em texto branco pequeno + status dot laranja. Labels dos cards: 'Spec-Driven', 'Dev Agents', 'Ship'. Os bichinhos estao TRABALHANDO: teclando, executando, conectados entre si pelas linhas pontilhadas.
+
+CANTO INFERIOR ESQUERDO: Logo hexagonal da Referencia #1, ~9% largura do frame, cores originais intactas (hexagono preto, A branco + laranja).
+
+FAIXA INFERIOR BORDA (full-width, ~10% altura): Retangulo laranja #FF6B1A solido, texto centralizado bold uppercase branco: 'CRIAR MEU TIME DE AGENTES'
+
+WHITELIST ESTRITA DE TEXTO — apenas estas strings aparecem na imagem: '9 PRODUTOS', 'EM PROD COM', 'CLAUDE CODE', 'Spec-Driven. Times de agentes. Resultados em producao.', 'PARTNER ANTHROPIC | META | GOOGLE', 'CLAUDE CODE >_', 'ARCHITECT', 'Spec-Driven', 'Dev Agents', 'Ship', 'CRIAR MEU TIME DE AGENTES'. NENHUM outro texto, numero, palavra, UI label ou elemento legivel alem desta lista.
+
+ILUMINACAO E ATMOSFERA: Compositing cinematografico. Key suave da esquerda superior em Bruno, rim-light laranja quente definindo sua silhueta contra o fundo navy. Halo de brilho laranja difuso ao redor de Bruno. Os bichinhos emitem leve glow laranja proprio. Profundidade: fundo navy texturizado -> midground com painel pipeline -> foreground Bruno + headline.
+
+MOOD: Autoridade tech premium. Confianca calma. Resultados concretos. Energia de founder que ja fez, nao de quem promete.
+
+FINALIZACAO: Imagem hiper-realista fotografica compositing com mascotes pixel-art estilizados e cards de UI, acabamento premium de anuncio Meta Ads, 1080x1080, sem marca dagua, sem bordas, sem moldura.
+
+EVITAR ABSOLUTAMENTE: Qualquer tema de cor verde / vermelho / azul / roxo como acento dominante. Paleta diferente de navy-black + laranja + branco. Bruno ausente ou com identidade alterada. Sem bichinhos agentes presentes. Mascote solitario sem contexto de equipe. Screenshots falsos de plataformas de terceiros. Estrelas ou ratings. Qualquer texto fora da whitelist acima. Paragrafos ou corpo de texto. Marca dagua. Rosto distorcido. Maos deformadas.

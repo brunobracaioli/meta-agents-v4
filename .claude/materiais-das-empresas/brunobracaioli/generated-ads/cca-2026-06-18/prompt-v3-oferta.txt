@@ -1,0 +1,45 @@
+Premium 1080x1080 Meta Ads creative para Bruno Bracaioli "Claude Code Architect" — angulo OFERTA: pacote completo com preco, workbooks, aulas e bonus. Replique o sistema visual dos anuncios aprovados da marca: fundo navy quase-preto, paleta laranja vibrante, tipografia condensada pesada, bichinhos pixel-art laranja trabalhando em equipe, rosto do Bruno presente e fiel.
+
+SEIS IMAGENS DE REFERENCIA SAO FORNECIDAS. CADA UMA TEM UM PAPEL ESPECIFICO.
+
+REFERENCIA #1 (LOGO) — COMPOSITE LITERALMENTE: logo hexagonal com 'A' triangular branco + slash laranja vibrante no lado direito. Fundo hexagonal escuro. Posicionar no canto inferior-esquerdo, ~9% da largura do frame, acima da faixa CTA. NAO redesenhe o simbolo.
+
+REFERENCIA #2 (PESSOA) — HEROI, PRESERVE O ROSTO EXATAMENTE: Bruno Bracaioli, homem branco, cabelo escuro preso, barba cheia caracteristica, hoodie escuro. Rosto, geometria facial, cor dos olhos, tom de pele, barba e expressao calm-confident preservados com fidelidade fotografica absoluta. Composicao peito-acima, angulo tres-quartos, luz key suave vinda do canto superior-esquerdo, halo rim-light laranja quente separando Bruno do fundo escuro. Posicionar no lado direito-central do frame, ocupando ~40-45% da largura. Realismo fotografico, NAO ilustrado. use a pessoa da imagem de referencia EXATAMENTE como protagonista; mantenha rosto, identidade, expressao.
+
+REFERENCIAS #3 a #6 (GUIAS DE ESTILO) — REPLIQUE O SISTEMA DE MARCA, NAO O CONTEUDO LITERAL: esses sao anuncios aprovados da mesma marca. Eles definem o sistema visual que todo criativo novo deve seguir:
+- Fundo: gradiente vertical navy profundo #0A0F1A a #0E1422, com textura faint de circuito hex / grid de codigo em 5-8% de opacidade, linhas de codigo desfocadas laranja-tintadas nas margens laterais como textura
+- Tipografia: display sans condensada pesada (estilo Druk Wide / Anton / Bebas Neue), tracking tight, titulos em branco puro com palavra-destaque em laranja #FF6B1A
+- Marca tipografica: 'CLAUDE CODE >_' / 'ARCHITECT' no canto superior-esquerdo, ~17% da largura do frame; o glifo '>_' em laranja vibrante, restante em branco puro
+- Bichinhos: criaturas pixel-art 8-bit laranja #FF6B1A com antenas, carinhas-tela escuras, bracinho, ~5-7% frame width cada
+- Pipeline de agentes: painel central ou lateral com cards arredondados, cada card contendo um bichinho + label de papel + status dot laranja 'ativo', cards conectados por linhas pontilhadas laranja
+- Faixa CTA: tira horizontal laranja #FF6B1A full-width na borda inferior, ~10% frame height, texto branco negrito uppercase, icone >_ ou seta
+- Halo laranja quente ao redor do heroi/mascote para separacao do fundo
+
+COMPOSICAO FINAL 1080x1080 — formato quadrado para feed, foco visual forte no centro-esquerdo:
+
+CANTO SUPERIOR-ESQUERDO: marca tipografica 'CLAUDE CODE >_' linha 1, 'ARCHITECT' linha 2, fonte condensada, ~17% largura, branco + laranja no '>_'
+
+CANTO SUPERIOR-DIREITO: badge de oferta — rectangulo arredondado pequeno com texto '10 WORKBOOKS + 26 AULAS' em branco condensado sobre fundo escuro com borda laranja
+
+CENTRO-DIREITO (~40-45% frame): Bruno da Referencia #2, peito-acima, tres-quartos, rim-light laranja, expressao confiante-serena, fundo dissolvendo no dark bg
+
+LADO ESQUERDO — BLOCO HEADLINE, tres linhas empilhadas, tipografia condensada display pesada:
+  Linha 1: '10 WORKBOOKS' — branco puro, massivo
+  Linha 2: '+ 26 AULAS' — laranja #FF6B1A, massivo
+  Linha 3: 'por R$1.497' — branco menor, condensado
+
+SUB-COPY abaixo do headline, fonte menor regular: '2 bonus: Meta Ads MCP + Claude Forge' e 'Garantia de 7 dias'
+
+ZONA MEDIA-INFERIOR ESQUERDA: pipeline de 3 bichinhos pixel-art laranja em cards arredondados lado a lado, labels: 'Workbook', 'Aula', 'Bonus', cada card com status dot laranja, conectados por linha pontilhada laranja.
+
+CANTO INFERIOR-ESQUERDO: logo hexagonal da Referencia #1, ~9% frame width, acima da faixa CTA, branco + laranja intactos
+
+BORDA INFERIOR: faixa horizontal laranja #FF6B1A full-width, ~10% frame height, texto bold uppercase centrado: 'QUERO CRIAR MEU TIME DE AGENTES AGORA'
+
+WHITELIST DE TEXTO — APENAS estas strings aparecem na imagem, nenhuma outra: 'CLAUDE CODE >_', 'ARCHITECT', '10 WORKBOOKS', '+ 26 AULAS', 'por R$1.497', '2 bonus: Meta Ads MCP + Claude Forge', 'Garantia de 7 dias', 'Workbook', 'Aula', 'Bonus', 'QUERO CRIAR MEU TIME DE AGENTES AGORA'. NENHUM OUTRO TEXTO VISIVEL.
+
+Mood: urgencia comercial premium, lancamento de produto tech de alto valor, confianca de autoridade. Composicao densa mas legivel em mobile, hierarquia clara: headline de oferta e preco sao o primeiro olhar, Bruno e o segundo, pipeline de agentes e o terceiro, CTA e o encerramento.
+
+Output: composito fotografico hyperreal com mascotes pixel-art estilizados e cards de UI, qualidade ad-grade, 1080x1080, sem marcas d'agua, sem bordas, sem frames externos.
+
+EVITAR: marca dagua, logos de terceiros, texto distorcido/ilegivel, texto fora da whitelist, corpo de texto em paragrafo, maos/rostos deformados, identidade do Bruno alterada, tema verde/vermelho/azul/roxo dominante, cor dominante que nao seja navy-preto com laranja, mascote solitario sem equipe, stars/ratings falsos, screenshots de plataformas terceiras.

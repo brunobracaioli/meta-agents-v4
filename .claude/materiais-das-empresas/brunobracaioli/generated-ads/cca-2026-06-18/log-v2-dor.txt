@@ -1,0 +1,2 @@
+INFO: usando /v1/images/edits com 6 ref(s).
+OK: .claude/materiais-das-empresas/brunobracaioli/generated-ads/cca-2026-06-18/ad-v2-dor.png (1241675 bytes)

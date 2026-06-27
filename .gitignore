@@ -123,3 +123,7 @@ landing-pages/*/
 /claude-lendo.png
 /exemplo.hero.png
 /icone-logo.png
+
+# Supabase CLI local state
+supabase/.branches/
+supabase/.temp/

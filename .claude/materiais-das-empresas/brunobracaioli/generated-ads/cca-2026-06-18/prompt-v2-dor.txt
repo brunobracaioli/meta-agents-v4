@@ -1,0 +1,40 @@
+Criativo premium 1080x1080 para Meta Ads de alta conversao — Bruno Bracaioli "Claude Code Architect", angulo DOR: o dev que usa IA sem metodo perde ~600h/ano re-explicando contexto, vibe coding sem arquitetura, gargalo de agente unico. Replique o SISTEMA visual das referencias de estilo fornecidas: fundo navy near-black, palette laranja vibrante, tipografia condensada display sans, bichinhos pixel-art laranja em equipe, faixa CTA laranja full-width.
+
+SEIS IMAGENS DE REFERENCIA SAO FORNECIDAS. CADA UMA TEM UM PAPEL ESPECIFICO E OBRIGATORIO.
+
+REFERENCIA #1 (LOGO) — COMPOSITE LITERALMENTE: logo hexagonal escuro com triangulo branco em forma de "A" e slash diagonal laranja vibrante na direita. Posicionar no canto inferior-esquerdo do frame a ~9% da largura, logo acima da faixa CTA. Preservar as cores exatas: branco + laranja #FF6B1A. NAO redesenhar o simbolo.
+
+REFERENCIA #2 (PESSOA) — HEROI, PRESERVAR ROSTO EXATAMENTE: Bruno Bracaioli. Homem branco, ~35 anos, barba escura cheia e bem cuidada, cabelo escuro preso para tras, expressao seria e confiante. Vestindo hoodie preto. Luz cinematica suave de key-light superior-esquerdo com rim-light laranja quente separando-o do fundo escuro. Posicionar no terco direito do frame, enquadramento do peito para cima, tres-quartos de angulo, desfocando levemente o fundo para separacao de plano. Realismo fotografico, NAO ilustrado. use a pessoa da imagem de referencia EXATAMENTE como protagonista; mantenha rosto, identidade, expressao.
+
+REFERENCIAS #3-#6 (GUIAS DE ESTILO) — REPLICAR O SISTEMA DE MARCA, NAO O CONTEUDO LITERAL: estes sao anuncios aprovados da mesma marca. Eles definem o sistema visual que todo novo criativo deve seguir:
+- Fundo: gradiente vertical navy near-black #0A0F1A ate #0E1422, com textura hex/circuit/code-grid a 5-10% de opacidade e linhas de codigo desfocadas laranja nas margens (ilegivel, so textura)
+- Paleta TRAVADA: navy-black + laranja #FF6B1A como unico acento dominante + branco #FFFFFF nos titulos. PROIBIDO como acento dominante: verde, vermelho, azul, roxo
+- Tipografia: display sans condensado pesado estilo Druk Wide / Anton / Bebas Neue, tracking tight, peso extra-bold nos titulos
+- Marca tipografica: "CLAUDE CODE >_" com ">_" em laranja vibrante, "ARCHITECT" abaixo em sans mais fino, tudo branco, posicao superior-esquerda a ~16% da largura do frame
+- Bichinhos pixel-art laranja: 3 a 6 criaturas 8-bit laranja (silhueta blocky de robo/alien, antenas curtas, rosto tipo tela escura, bracos curtos), cada um com ~5-7% da largura do frame, brilho laranja quente, SEMPRE mostrados TRABALHANDO em equipe
+- Motivo pipeline de agentes: painel de cards arredondados, cada card com um bichinho + label de papel curto + ponto de status laranja, cards ligados por linhas pontilhadas laranja
+- Faixa CTA: strip laranja #FF6B1A full-width na borda inferior (~10% de altura do frame), texto bold branco uppercase centralizado com chevron ou icone >_
+
+COMPOSICAO FINAL 1080x1080 — ANGULO DOR:
+
+CANTO SUPERIOR-ESQUERDO: marca tipografica "CLAUDE CODE >_ / ARCHITECT" branca com ">_" laranja, ~16% largura
+
+LADO ESQUERDO (50-55% do frame, zona de headline): stack de headline em 3 linhas condensadas bold uppercase branca com UMA palavra-chave em laranja:
+Linha 1: "VOCE PERDE" (branco, tamanho maximo)
+Linha 2: "600H/ANO" (laranja #FF6B1A, ainda maior, peso ultra-black)
+Linha 3: "COM IA SEM METODO" (branco, levemente menor)
+Abaixo da headline, bloco de 3 micro-cards horizontais de status representando as DORES: cada micro-card com icone simbolico + texto curto de label. Labels EXATOS: "Re-explicando contexto", "Vibe coding sem arquitetura", "1 agente = 1 gargalo". Estes cards no estilo pipeline das referencias, fundo escuro com borda laranja tenue.
+
+LADO DIREITO (~45% do frame): Bruno da Referencia #2 como heroi fotografico, peito-acima, tres-quartos, rim-light laranja quente, expressao confiante-critica. Ao redor de Bruno: 3 bichinhos laranja pixel-art em cards individuais com label: "Agente 1", "Agente 2", "Agente 3" — visual de gargalo, agentes desconectados sem pipeline.
+
+CANTO INFERIOR-ESQUERDO: logo hexagonal da Referencia #1, ~9% largura do frame, branco+laranja preservados
+
+BORDA INFERIOR: faixa laranja #FF6B1A full-width com texto bold branco uppercase: "CRIAR MEU TIME DE AGENTES"
+
+WHITELIST EXATA DE TEXTOS VISIVEIS — apenas estas strings aparecem na imagem: "CLAUDE CODE >_", "ARCHITECT", "VOCE PERDE", "600H/ANO", "COM IA SEM METODO", "Re-explicando contexto", "Vibe coding sem arquitetura", "1 agente = 1 gargalo", "Agente 1", "Agente 2", "Agente 3", "CRIAR MEU TIME DE AGENTES". NENHUM outro texto.
+
+QUALIDADE E ACABAMENTO: composite fotografico hiper-realista com elementos pixel-art estilizados e cards UI, ad-grade Meta Ads, 1080x1080, sem marca dagua, sem bordas, sem moldura, legivel em tela mobile.
+
+MOOD: urgencia comercial + autoridade tecnica + dor reconhecivel. O dev ve a imagem e pensa "sou eu". Tonalidade premium dark-tech.
+
+EVITAR: marca dagua, logos de terceiros, texto distorcido/ilegivel, texto fora da whitelist, corpo de texto em paragrafo, maos/rostos deformados, identidade de Bruno alterada, tema verde/vermelho/azul/roxo dominante, paleta diferente de navy-black+laranja+branco, mascote solitario sem equipe, screenshots falsos, estrelas/ratings.

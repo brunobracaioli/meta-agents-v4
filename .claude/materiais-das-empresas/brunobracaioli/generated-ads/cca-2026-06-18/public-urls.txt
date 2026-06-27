@@ -1,0 +1,4 @@
+PUBLIC_PREFIX=brunobracaioli/cca-2026-06-18/74031b2b1200a3e76ba8
+URL_ad-v1-autoridade=https://zvcnzikpnryoduuvzyio.supabase.co/storage/v1/object/public/ad-ingest/brunobracaioli/cca-2026-06-18/74031b2b1200a3e76ba8/ad-v1-autoridade.png
+URL_ad-v2-dor=https://zvcnzikpnryoduuvzyio.supabase.co/storage/v1/object/public/ad-ingest/brunobracaioli/cca-2026-06-18/74031b2b1200a3e76ba8/ad-v2-dor.png
+URL_ad-v3-oferta=https://zvcnzikpnryoduuvzyio.supabase.co/storage/v1/object/public/ad-ingest/brunobracaioli/cca-2026-06-18/74031b2b1200a3e76ba8/ad-v3-oferta.png

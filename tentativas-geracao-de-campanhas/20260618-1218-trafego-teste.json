@@ -1,0 +1,42 @@
+{
+  "skill": "create-traffic-brunobracaioli-campaign (teste manual com MCP novo)",
+  "mcp_under_test": "MCP_META_ADS_B2_TECH",
+  "client": "brunobracaioli",
+  "date": "2026-06-18",
+  "mode": "interactive-session",
+  "verified": true,
+  "campaign": {
+    "meta_campaign_id": "120248514492430505",
+    "name": "[TEST][TRF][CCA][2026-06-18] Tráfego CBO — US",
+    "status": "PAUSED",
+    "objective": "OUTCOME_TRAFFIC",
+    "daily_budget_cents": 5000,
+    "bid_strategy": "LOWEST_COST_WITHOUT_CAP"
+  },
+  "ad_set": {
+    "meta_ad_set_id": "120248514499440505",
+    "optimization_goal": "LANDING_PAGE_VIEWS",
+    "billing_event": "IMPRESSIONS",
+    "destination_type": "WEBSITE",
+    "geo": ["US"],
+    "advantage_audience": 1,
+    "status": "PAUSED"
+  },
+  "ads": [
+    {"meta_ad_id": "120248514520180505", "meta_creative_id": "1824741488495967", "angle": "autoridade", "image_url": "https://zvcnzikpnryoduuvzyio.supabase.co/storage/v1/object/public/ad-ingest/brunobracaioli/cca-2026-06-18/74031b2b1200a3e76ba8/ad-v1-autoridade.png", "status": "PAUSED", "effective_status": "IN_PROCESS"},
+    {"meta_ad_id": "120248514521310505", "meta_creative_id": "4316332315284287", "angle": "dor", "image_url": "https://zvcnzikpnryoduuvzyio.supabase.co/storage/v1/object/public/ad-ingest/brunobracaioli/cca-2026-06-18/74031b2b1200a3e76ba8/ad-v2-dor.png", "status": "PAUSED", "effective_status": "IN_PROCESS"},
+    {"meta_ad_id": "120248514523720505", "meta_creative_id": "2440156926465892", "angle": "oferta", "image_url": "https://zvcnzikpnryoduuvzyio.supabase.co/storage/v1/object/public/ad-ingest/brunobracaioli/cca-2026-06-18/74031b2b1200a3e76ba8/ad-v3-oferta.png", "status": "PAUSED", "effective_status": "IN_PROCESS"}
+  ],
+  "creatives_source": "generated",
+  "creative_path": "create_creative com image_url público direto (sem image_hash)",
+  "public_urls_file": ".claude/materiais-das-empresas/brunobracaioli/generated-ads/cca-2026-06-18/public-urls.txt",
+  "errors": [],
+  "decisions": [
+    "MCP novo MCP_META_ADS_B2_TECH usado direto (skill aponta pro MCP antigo desativado)",
+    "create_creative aceitou image_url público — fluxo de 2 etapas creative->ad",
+    "special_ad_categories=[] aceito",
+    "geo=US (BR bloqueado historicamente)",
+    "Storage upload exigiu header apikey com SUPABASE_SECRET_KEY (sb_secret_, não-JWT)"
+  ],
+  "ads_manager_url": "https://business.facebook.com/adsmanager/manage/campaigns?act=225179730538661"
+}

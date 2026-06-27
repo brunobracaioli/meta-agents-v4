@@ -1,0 +1,18 @@
+{
+  "skill": "publish-landing-page-brunobracaioli",
+  "client": "brunobracaioli",
+  "date": "2026-06-25",
+  "verified": true,
+  "landing_page_id": "d34c9e9a-5306-40b5-8bb2-7480329f5c76",
+  "subdomain": "imersao-agencia",
+  "url": "https://imersao-agencia.b2tech.io",
+  "pages_dev_url": "https://b2tech-imersao-agencia.pages.dev",
+  "cloudflare_project": "b2tech-imersao-agencia",
+  "repo_path": "landing-pages/imersao-agencia",
+  "sections_published": 18,
+  "change": "Redesigned 'Quem conduz' (authority: role/quote/products, claude-code parity) + new CCA-F section below it",
+  "deploy": {"deployed": true, "ssl": "active", "deployment_id": "e2d1b11c"},
+  "noindex": false,
+  "source": "supabase-draft",
+  "errors": []
+}
