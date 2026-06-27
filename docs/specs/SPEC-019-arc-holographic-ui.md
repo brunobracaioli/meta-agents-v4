@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Status | Em produção — Waves 0/A/B/C entregues e mergeadas na `main` (PRs #11/#13/#14/#15/#16, + fixes #12/#17); D e E pendentes |
+| Status | Em produção — Waves 0/A/B/C entregues e mergeadas na `main` (PRs #11/#13/#14/#15/#16, + fixes #12/#17); Wave E em andamento (painéis arrastáveis/redimensionáveis entregues + validados ao vivo, PR #19); D pendente |
 | Data | 2026-06-26 |
 | Autor | brunobracaioli |
 | ADRs | [0031](../adr/0031-arc-holographic-render-bus.md) |
@@ -178,10 +178,13 @@ prioriza a dominante.
 **Aceite:** com webcam, punho→palma abre, swipe dispensa, apontar move foco — só no painel em foco.
 **Testes:** unit do classificador de gesto (landmarks fixtures → ação esperada); histerese determinística.
 
-### Wave E — Polish "surreal" ⏳ pendente (parcialmente adiantado: HoloPanel já tem largura única default/wide + prefers-reduced-motion + indicador de foco; refactor/arc-panel-polish)
+### Wave E — Polish "surreal" 🔧 em andamento
 **Objetivo:** acabamento Tony Stark.
-**Entrega:** transições refinadas, scanlines/glow/parallax sutil, SFX de materialização, boot sequence do
-ARC, tuning de UX e acessibilidade (reduce-motion respeitado). Sem novo contrato.
+**Entregue:**
+- Largura única no HoloPanel (default/wide) + `prefers-reduced-motion` + indicador de foco (PR #18, `refactor/arc-panel-polish`).
+- **Painéis flutuantes arrastáveis + redimensionáveis** (PR #19, `feat/arc-draggable-resizable-panels`) — **validado ao vivo 2026-06-26**: cada `HoloPanel` arrasta pelo header (framer `drag`+`dragControls`, só o header inicia), redimensiona pelo handle inferior-direito (w+h, min/máx, scroll interno), clique traz à frente (reusa `op:"focus"`), nasce em cascade preso à tela (`dragConstraints`), duplo-clique reseta. Geometria em motion values locais (fora do Render Bus, não thrasha o lip-sync — ADR 0031); math pura testável em `lib/ultron/arc-geometry.ts` (+9 testes). Não-objetivos: sem sync de geometria pro popout, sem persistência entre sessões.
+**Pendente:** transições refinadas, scanlines/glow/parallax sutil, SFX de materialização, boot sequence do
+ARC, tuning de UX. Sem novo contrato.
 **Aceite:** revisão visual do operador (live review). `npm run build` verde.
 
 ## 5. Verificação E2E
