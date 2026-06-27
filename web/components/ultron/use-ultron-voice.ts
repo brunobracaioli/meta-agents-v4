@@ -20,6 +20,8 @@ import {
   type LiveReviewSignal,
 } from "@/lib/ultron/agent-trigger";
 import { parseUIIntents, type UIIntent } from "@/lib/ultron/render-intents";
+import { SentenceAccumulator } from "@/lib/ultron/sentence-stream";
+import { createChatEventParser, type ChatStreamSignals } from "@/lib/ultron/chat-stream";
 import { getSessionId } from "@/lib/ultron/session";
 import { createWakeWord, isWakeWordSupported, type WakeController } from "@/lib/ultron/wake-word";
 import { createVadMic, isVadWorkletSupported, type VadEvent, type VadMicHandle } from "./vad-mic";
@@ -91,6 +93,65 @@ function silentOutputBands(): number[] {
   return Array.from({ length: OUTPUT_BAND_COUNT }, () => 0);
 }
 
+// Single-producer/single-consumer async queue of sentences awaiting TTS. The SSE
+// reader pushes complete sentences; the playback worker pulls and speaks them in
+// order, awaiting an empty queue without busy-looping.
+class AudioQueue {
+  private items: string[] = [];
+  private wake: (() => void) | null = null;
+  private closed = false;
+
+  push(item: string): void {
+    this.items.push(item);
+    this.wake?.();
+    this.wake = null;
+  }
+
+  close(): void {
+    this.closed = true;
+    this.wake?.();
+    this.wake = null;
+  }
+
+  async *[Symbol.asyncIterator](): AsyncGenerator<string> {
+    for (;;) {
+      if (this.items.length > 0) {
+        yield this.items.shift()!;
+        continue;
+      }
+      if (this.closed) return;
+      await new Promise<void>((resolve) => {
+        this.wake = resolve;
+      });
+    }
+  }
+}
+
+// Client-side latency telemetry marks (performance.now() timestamps).
+type TurnMarks = {
+  speechEnd: number;
+  sttDone: number;
+  firstToken: number;
+  firstSentence: number;
+  firstAudio: number;
+};
+
+// Logs the per-stage breakdown for one turn (end of speech → first audio). No PII —
+// only durations. Visible in the browser console to measure the real pipeline.
+function logTurnTimings(m: TurnMarks): void {
+  const round = (a: number, b: number) => (a > 0 && b > 0 ? Math.round(a - b) : null);
+  console.info(
+    JSON.stringify({
+      event: "ultron_client_timing",
+      stt_ms: round(m.sttDone, m.speechEnd),
+      to_first_token_ms: round(m.firstToken, m.sttDone),
+      to_first_sentence_ms: round(m.firstSentence, m.firstToken),
+      to_first_audio_ms: round(m.firstAudio, m.firstSentence),
+      end_to_first_audio_ms: round(m.firstAudio, m.speechEnd),
+    }),
+  );
+}
+
 export function useUltronVoice() {
   const [state, setState] = useState<UltronState>({
     status: "idle",
@@ -116,6 +177,10 @@ export function useUltronVoice() {
   const speechSeenRef = useRef<boolean>(false);
   const playerRef = useRef<HTMLAudioElement | null>(null);
   const speechDoneRef = useRef<(() => void) | null>(null);
+  // Flips true to tear down an in-flight streaming reply (barge-in / cleanup): the
+  // SSE reader, the sentence queue worker, and the per-clip MSE pump all check it.
+  const streamCancelledRef = useRef<boolean>(false);
+  const chatAbortRef = useRef<AbortController | null>(null);
   const outputCtxRef = useRef<AudioContext | null>(null);
   const outputSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const outputAnalyserRef = useRef<AnalyserNode | null>(null);
@@ -446,13 +511,16 @@ export function useUltronVoice() {
     rafRef.current = requestAnimationFrame(tick);
   }, [rms, stopVadLoop, finalizeRecording]);
 
-  const speak = useCallback(
-    async (text: string) => {
-      patch({ status: "speaking", outputLevel: 0, outputBands: silentOutputBands() });
+  // Plays ONE clip of speech (one sentence, or a full narration). Streams the MP3
+  // into the player via MSE so playback starts on the first chunk (the server pipes
+  // ElevenLabs first-byte-fast); falls back to a single blob where MSE can't decode
+  // audio/mpeg (e.g. Safari). Resolves when the clip ends/errors or `isCancelled()`
+  // flips. Does NOT touch status or restore the mode — the caller owns that, so the
+  // same primitive serves both single narrations and the streamed sentence queue.
+  const playClip = useCallback(
+    async (text: string, isCancelled: () => boolean): Promise<void> => {
+      if (isCancelled() || !text) return;
       let url: string | null = null;
-      // Set by the playback promise so the finally block (and stopSpeaking via
-      // speechDoneRef) can stop the chunk pump even mid-stream.
-      let cancelled = false;
       try {
         const res = await fetch("/api/ultron/tts", {
           method: "POST",
@@ -470,7 +538,6 @@ export function useUltronVoice() {
           const settle = () => {
             if (done) return;
             done = true;
-            cancelled = true; // stop the reader/pump if we're torn down mid-stream
             resolve();
           };
           speechDoneRef.current = settle;
@@ -487,9 +554,6 @@ export function useUltronVoice() {
               .catch(() => settle());
           };
 
-          // The server pipes ElevenLabs first-byte-fast; play the MP3 as chunks
-          // arrive (MSE) instead of waiting for the whole file. Falls back to a
-          // single blob where MSE can't decode audio/mpeg (e.g. Safari).
           const canStream =
             typeof MediaSource !== "undefined" && MediaSource.isTypeSupported("audio/mpeg");
 
@@ -519,7 +583,7 @@ export function useUltronVoice() {
                 return;
               }
               const reader = res.body!.getReader();
-              const queue: Uint8Array[] = [];
+              const chunks: Uint8Array[] = [];
               let reading = true;
               let started = false;
 
@@ -532,32 +596,33 @@ export function useUltronVoice() {
                 }
               };
               const pump = () => {
-                if (cancelled || sb.updating || queue.length === 0) return;
+                if (isCancelled() || sb.updating || chunks.length === 0) return;
                 try {
                   // A fetch reader yields Uint8Array<ArrayBufferLike>; it is a valid
                   // BufferSource at runtime, but TS's lib types narrow appendBuffer to
                   // ArrayBuffer-backed views, hence the cast.
-                  sb.appendBuffer(queue.shift()! as BufferSource);
+                  sb.appendBuffer(chunks.shift()! as BufferSource);
                 } catch {
                   settle();
                 }
               };
               sb.addEventListener("updateend", () => {
                 pump();
-                if (!reading && !sb.updating && queue.length === 0) endStream();
+                if (!reading && !sb.updating && chunks.length === 0) endStream();
               });
 
               void (async () => {
                 try {
                   for (;;) {
                     const { done: rdone, value } = await reader.read();
-                    if (cancelled) {
+                    if (isCancelled()) {
                       await reader.cancel().catch(() => {});
+                      settle();
                       return;
                     }
                     if (rdone) break;
                     if (value && value.length > 0) {
-                      queue.push(value);
+                      chunks.push(value);
                       pump();
                       if (!started) {
                         started = true;
@@ -571,9 +636,7 @@ export function useUltronVoice() {
                 } finally {
                   reading = false;
                 }
-                // Tail flush: if the buffer is idle, close the stream now; otherwise
-                // the updateend handler above closes it once the queue drains.
-                if (!sb.updating && queue.length === 0) endStream();
+                if (!sb.updating && chunks.length === 0) endStream();
               })();
             },
             { once: true },
@@ -582,19 +645,42 @@ export function useUltronVoice() {
       } catch {
         // Non-fatal: the reply is still shown as text.
       } finally {
-        cancelled = true;
         speechDoneRef.current = null;
-        stopOutputAnalysis();
+        // Keep the last bands lit between sentences (no reset) to avoid a visualizer
+        // blink; restoreAfterSpeech() does the final zeroing.
+        stopOutputAnalysis(false);
         if (url) URL.revokeObjectURL(url);
         playerRef.current = null;
-        if (wakeModeRef.current) reArm();
-        else if (handsFreeRef.current) startListening();
-        else patch({ status: "idle" });
       }
     },
+    [startOutputAnalysis, stopOutputAnalysis],
+  );
+
+  // Final teardown after a turn finishes speaking: zero the visualizer and restore
+  // the prior listening mode (re-arm wake word, resume hands-free, or go idle).
+  const restoreAfterSpeech = useCallback(() => {
+    speechDoneRef.current = null;
+    stopOutputAnalysis();
+    playerRef.current = null;
+    if (wakeModeRef.current) reArm();
+    else if (handsFreeRef.current) startListening();
+    else patch({ status: "idle" });
     // reArm/startListening defined below; ref-based recursion is intentional.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [patch],
+  }, [patch, stopOutputAnalysis]);
+
+  // Speaks one full text as a single clip (autonomous narrations, Live Review).
+  const speak = useCallback(
+    async (text: string) => {
+      streamCancelledRef.current = false;
+      patch({ status: "speaking", outputLevel: 0, outputBands: silentOutputBands() });
+      try {
+        await playClip(text, () => streamCancelledRef.current);
+      } finally {
+        restoreAfterSpeech();
+      }
+    },
+    [patch, playClip, restoreAfterSpeech],
   );
 
   // Autonomous-mode narration drain. Runs on a slow interval; speaks at most one pending
@@ -643,24 +729,25 @@ export function useUltronVoice() {
     }
   }, [patch, speak, publishUiIntents]);
 
-  // Sends the transcript to Ultron and resolves any capture_screen pauses: when the
-  // server replies need_capture, grab a frame from the shared screen and resume.
-  const resolveReply = useCallback(
-    async (text: string): Promise<string> => {
-      const chatRes = await fetch("/api/ultron/chat", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sessionId: getSessionId(), text }),
-      });
-      if (!chatRes.ok) throw new Error("chat");
-      let data = (await chatRes.json()) as UltronApiResponse;
-      publishAgentTriggers(data.agentTriggers);
-      publishLandingEdits(data.landingEdits);
-      publishLiveReviews(data.liveReviews);
-      publishUiIntents(data.uiIntents);
+  const publishAll = useCallback(
+    (s: ChatStreamSignals | UltronApiResponse) => {
+      publishAgentTriggers(s.agentTriggers);
+      publishLandingEdits(s.landingEdits);
+      publishLiveReviews(s.liveReviews);
+      publishUiIntents(s.uiIntents);
+    },
+    [publishAgentTriggers, publishLandingEdits, publishLiveReviews, publishUiIntents],
+  );
 
+  // capture_screen pause handler (one-shot, unchanged semantics): grab a frame from
+  // the shared screen and resume until the server returns a final reply. Used as a
+  // fallback when the streaming turn yields need_capture (vision turns are rarer and
+  // inherently slower, so they keep the simple request/response path).
+  const runCaptureHops = useCallback(
+    async (firstPendingId: string): Promise<string> => {
+      let pendingId: string | undefined = firstPendingId;
       let hops = 0;
-      while (data.status === "need_capture" && data.pendingId && hops++ < MAX_CAPTURE_HOPS) {
+      while (pendingId && hops++ < MAX_CAPTURE_HOPS) {
         patch({ status: "capturing" });
         const frame = await captureFrame();
         if (!frame) return NO_SCREEN_MSG;
@@ -668,28 +755,135 @@ export function useUltronVoice() {
         const capRes = await fetch("/api/ultron/capture", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ sessionId: getSessionId(), pendingId: data.pendingId, image: frame }),
+          body: JSON.stringify({ sessionId: getSessionId(), pendingId, image: frame }),
         });
         if (!capRes.ok) throw new Error("capture");
-        data = (await capRes.json()) as UltronApiResponse;
-        publishAgentTriggers(data.agentTriggers);
-        publishLandingEdits(data.landingEdits);
-        publishLiveReviews(data.liveReviews);
-        publishUiIntents(data.uiIntents);
+        const data = (await capRes.json()) as UltronApiResponse;
+        publishAll(data);
+        if (data.status === "need_capture" && data.pendingId) {
+          pendingId = data.pendingId;
+          continue;
+        }
+        return data.reply ?? CLIENT_FALLBACK;
       }
-      return data.reply ?? CLIENT_FALLBACK;
+      return CLIENT_FALLBACK;
     },
-    [captureFrame, patch, publishAgentTriggers, publishLandingEdits, publishLiveReviews, publishUiIntents],
+    [captureFrame, patch, publishAll],
+  );
+
+  // Streams the turn: POST the transcript, read SSE text deltas, segment them into
+  // sentences and speak each one the moment it completes (first audio starts on the
+  // first sentence, not after the whole reply). The terminal frame carries the
+  // structured signals; a need_capture frame falls back to runCaptureHops.
+  const streamReply = useCallback(
+    async (text: string, marks: TurnMarks): Promise<string> => {
+      streamCancelledRef.current = false;
+      const isCancelled = () => streamCancelledRef.current;
+      const acc = new SentenceAccumulator();
+      const parse = createChatEventParser();
+      const queue = new AudioQueue();
+      let replyText = "";
+      let firstAudioLogged = false;
+
+      // Playback worker: speak queued sentences in order.
+      const consumer = (async () => {
+        for await (const sentence of queue) {
+          if (isCancelled()) break;
+          if (!firstAudioLogged) {
+            firstAudioLogged = true;
+            marks.firstAudio = performance.now();
+            patch({ status: "speaking", outputLevel: 0, outputBands: silentOutputBands() });
+            logTurnTimings(marks);
+          }
+          await playClip(sentence, isCancelled);
+        }
+      })();
+
+      const abort = new AbortController();
+      chatAbortRef.current = abort;
+      let pendingCapture: ChatStreamSignals | null = null;
+      try {
+        const chatRes = await fetch("/api/ultron/chat", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sessionId: getSessionId(), text }),
+          signal: abort.signal,
+        });
+        if (!chatRes.ok || !chatRes.body) throw new Error("chat");
+
+        const reader = chatRes.body.getReader();
+        const decoder = new TextDecoder();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (isCancelled()) {
+            await reader.cancel().catch(() => {});
+            break;
+          }
+          for (const ev of parse(decoder.decode(value, { stream: true }))) {
+            if (ev.type === "text") {
+              if (!marks.firstToken) marks.firstToken = performance.now();
+              replyText += ev.delta;
+              for (const sentence of acc.push(ev.delta)) {
+                if (!marks.firstSentence) marks.firstSentence = performance.now();
+                queue.push(sentence);
+              }
+            } else if (ev.type === "need_capture") {
+              pendingCapture = ev;
+              publishAll(ev);
+            } else if (ev.type === "done") {
+              publishAll(ev);
+              if (typeof ev.reply === "string" && ev.reply) replyText = ev.reply;
+            } else if (ev.type === "error") {
+              throw new Error("chat");
+            }
+          }
+        }
+
+        // Flush the trailing (unterminated) sentence from the streamed deltas.
+        const tail = acc.flush();
+        if (tail) {
+          if (!marks.firstSentence) marks.firstSentence = performance.now();
+          queue.push(tail);
+        }
+
+        // Vision turn: resume via the one-shot capture path, then speak its reply
+        // through the same queue so playback stays gapless.
+        if (pendingCapture?.pendingId) {
+          const captureReply = await runCaptureHops(pendingCapture.pendingId);
+          replyText = captureReply;
+          const capAcc = new SentenceAccumulator();
+          for (const sentence of capAcc.push(captureReply)) queue.push(sentence);
+          const capTail = capAcc.flush();
+          if (capTail) queue.push(capTail);
+        }
+
+        return replyText || CLIENT_FALLBACK;
+      } finally {
+        chatAbortRef.current = null;
+        queue.close();
+        await consumer.catch(() => {});
+      }
+    },
+    [patch, playClip, publishAll, runCaptureHops],
   );
 
   const sendPipeline = useCallback(
-    async (blob: Blob) => {
+    async (blob: Blob, speechEndAt: number) => {
       if (blob.size < 1200) {
         // Too short to be speech — go back to idle/listening.
         if (handsFreeRef.current) startListening();
         else patch({ status: "idle" });
         return;
       }
+      const marks: TurnMarks = {
+        speechEnd: speechEndAt,
+        sttDone: 0,
+        firstToken: 0,
+        firstSentence: 0,
+        firstAudio: 0,
+      };
+      let spoke = false;
       try {
         patch({ status: "transcribing" });
         const fd = new FormData();
@@ -702,16 +896,24 @@ export function useUltronVoice() {
           else patch({ status: "idle" });
           return;
         }
+        marks.sttDone = performance.now();
         patch({ status: "thinking", transcript: text });
-        const reply = await resolveReply(text);
+        spoke = true;
+        const reply = await streamReply(text, marks);
         patch({ reply });
-        await speak(reply);
       } catch {
-        patch({ status: "error", error: "Tive um problema. Tenta de novo." });
+        // A barge-in (stopSpeaking) aborts the fetch on purpose — that's not an error.
+        if (!streamCancelledRef.current) patch({ status: "error", error: "Tive um problema. Tenta de novo." });
+      } finally {
+        // streamReply set status=speaking and played the clips; restore the mode once
+        // the whole turn finished (including after a mid-speech error). The early
+        // non-speaking exits above set listening/idle before `spoke` was flipped, so
+        // they correctly skip this.
+        if (spoke) restoreAfterSpeech();
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [patch, speak, resolveReply],
+    [patch, streamReply, restoreAfterSpeech],
   );
 
   // Starts the MediaRecorder. `withVad` enables auto-stop (worklet event in
@@ -733,8 +935,10 @@ export function useUltronVoice() {
       };
       recorder.onstop = () => {
         stopVadLoop();
+        // Mark end-of-speech here (recorder stopped) for latency telemetry.
+        const speechEndAt = performance.now();
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        void sendPipeline(blob);
+        void sendPipeline(blob, speechEndAt);
       };
       recorder.start();
       patch({ status: "recording", error: null });
@@ -881,6 +1085,10 @@ export function useUltronVoice() {
   }, [handleWake, patch, reArm, stopVadLoop]);
 
   const stopSpeaking = useCallback(() => {
+    // Tear down the whole streaming turn (queue worker + SSE reader + per-clip pump),
+    // not just the current clip — otherwise the next queued sentence would play on.
+    streamCancelledRef.current = true;
+    chatAbortRef.current?.abort();
     if (playerRef.current) {
       playerRef.current.pause();
       playerRef.current.currentTime = 0;

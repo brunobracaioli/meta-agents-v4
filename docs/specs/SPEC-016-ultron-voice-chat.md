@@ -33,7 +33,7 @@ falada na voz da marca (TTS ElevenLabs) com transcript visível na UI.
              │ fetch (JSON/multipart)
 ┌────────────▼───────────── Vercel (Hono em route handler) ────────────────┐
 │ POST /api/ultron/stt      → OpenAI gpt-4o-transcribe (language=pt)        │
-│ POST /api/ultron/chat     → Claude claude-sonnet-4-6 + tool loop          │
+│ POST /api/ultron/chat     → Claude sonnet-4-6 + tool loop (SSE streaming)  │
 │ POST /api/ultron/capture  → resume do tool loop com frame da tela         │
 │ POST /api/ultron/tts      → ElevenLabs eleven_turbo_v2_5 (stream MP3)     │
 │ GET  /api/ultron/narrations / PATCH /:id  → narrações do modo autônomo    │
@@ -222,13 +222,22 @@ RMS com os mesmos thresholds — funcional, mas congela em aba oculta.
 
 ## 8. Chat (cérebro) — `POST /api/ultron/chat`
 
-### 8.1 Contrato
+### 8.1 Contrato (streaming SSE)
 
 - Request: `{ sessionId: string(8–64), text: string(1–2000) }` (Zod).
-- Response (duas formas):
-  - `{ reply, usedTools, agentTriggers, landingEdits, liveReviews }`
-  - `{ status: "need_capture", pendingId, usedTools, agentTriggers, landingEdits, liveReviews }`
-- Rate limit 20/min por IP; erro → 502 `chat_failed`.
+- Response: **`text/event-stream`** (SSE). O Claude roda em `messages.stream()` e o
+  texto é emitido **token-a-token** para o client falar **frase a frase** (o
+  primeiro áudio começa na primeira frase, não no fim da resposta). Protocolo puro
+  em `lib/ultron/chat-stream.ts` (encoder + parser, testado). Frames:
+  - `{ type: "text", delta }` — pedaço de texto do Claude.
+  - `{ type: "done", reply, usedTools, agentTriggers, landingEdits, liveReviews, uiIntents }` — final.
+  - `{ type: "need_capture", pendingId, ...sinais }` — turno de visão (client cai no
+    fallback one-shot `/capture`, ver §8.4).
+  - `{ type: "error" }` — falha no servidor.
+- Rate limit 20/min por IP; erro → frame `error` (+ log `chat_failed`).
+- **Instrumentação** (sem PII): logs `chat_first_token`/`chat_timing` (servidor),
+  `stt_timing`, `tts_first_byte`, e `ultron_client_timing` no console do browser
+  (fim-de-fala → STT → 1º token → 1ª frase → 1º áudio).
 
 ### 8.2 Sessão e memória
 
@@ -253,6 +262,10 @@ RMS com os mesmos thresholds — funcional, mas congela em aba oculta.
   executa cada tool server-side (`runTool`), devolve todos os `tool_result`
   em **um único** turno user, repete. Orçamento esgotado → fallback falado
   ("Desculpa, não consegui completar isso agora. Pode repetir?").
+- **Streaming** (`runChatStream`): quando há `emit`, cada iteração usa
+  `messages.stream()` e encaminha os deltas de texto; o reply final é o texto
+  acumulado (inclui preâmbulo antes de um tool call). A captura (`resumeChat`)
+  segue **não-streaming** (`messages.create`) — caminho de visão é mais raro/lento.
 - **Tools client-side** (`CLIENT_TOOLS`, hoje só `capture_screen`) não podem
   rodar no server: o loop **pausa** — persiste o estado in-flight no Redis
   (`ultron:pending:<sessionId>:<uuid>`, **TTL 120s**, com mensagens,
@@ -293,16 +306,23 @@ RMS com os mesmos thresholds — funcional, mas congela em aba oculta.
 
 ### 9.2 Client (playback)
 
-- `speak(text)`: estado `speaking` → fetch streaming. O MP3 é tocado **conforme
-  os chunks chegam** via **MediaSource Extensions** (`SourceBuffer('audio/mpeg')`,
-  `appendBuffer` com backpressure por `updateend`; `endOfStream()` ao drenar) —
-  o playback começa no primeiro chunk em vez de esperar o arquivo inteiro,
-  aproveitando o pipe first-byte-fast do server. **Fallback** para `blob:` URL
-  único onde MSE não decodifica `audio/mpeg` (ex.: Safari). Resolve em
-  `ended`/`error`/interrupção; no `finally`, **restaura o modo anterior** (rearma
-  wake word, ou volta ao `listening` de mãos-livres, ou `idle`) e cancela o
-  reader/pump. Falha de TTS é não-fatal — a resposta continua visível como texto.
-- **Interrupção**: botão "■" pausa o áudio e resolve a promise (barge-in manual).
+- **Primitivo `playClip(text, isCancelled)`**: toca UM clipe (uma frase, ou uma
+  narração inteira). O MP3 é tocado **conforme os chunks chegam** via **MediaSource
+  Extensions** (`SourceBuffer('audio/mpeg')`, `appendBuffer` com backpressure por
+  `updateend`; `endOfStream()` ao drenar) — playback começa no primeiro chunk,
+  aproveitando o pipe first-byte-fast do server. **Fallback** para `blob:` único
+  onde MSE não decodifica `audio/mpeg` (ex.: Safari). Não mexe em status/modo.
+- **Turno streaming (`streamReply`)**: lê o SSE do chat, segmenta os deltas em
+  frases (`SentenceAccumulator`) e enfileira cada frase completa numa `AudioQueue`;
+  um worker fala as frases **em ordem** via `playClip`. Primeiro áudio dispara
+  `status: "speaking"` + log de timings. `need_capture` → drena a fila e cai no
+  `runCaptureHops` (one-shot), cuja resposta entra na mesma fila (playback gapless).
+- **`speak(text)`**: narrações autônomas + Live Review — um clipe único via
+  `playClip`. Ao fim de qualquer turno, `restoreAfterSpeech()` zera o visualizador e
+  **restaura o modo** (rearma wake word, volta ao `listening`, ou `idle`).
+- **Interrupção/barge-in** (`stopSpeaking`): cancela o turno inteiro —
+  `streamCancelledRef` + aborta o fetch do chat + pausa o clipe atual; a fila para.
+  Falha de TTS é não-fatal — a resposta continua visível como texto.
 
 ### 9.3 Análise de saída (anima o visualizador)
 
@@ -358,15 +378,16 @@ desmontado ao fim da fala (nós desconectados, context fechado, estado zerado).
 | Etapa | Alvo |
 |---|---|
 | fim de fala → texto (STT) | < 1.5s |
-| texto → resposta (chat sem tool, cache quente) | < 2s |
-| resposta → primeiro áudio (TTS stream + playback MSE) | < 0.5s |
-| **ponta-a-ponta sem tool** | **~2–2.5s** |
+| fim de fala → 1º token do chat (cache quente) | < 1.5s |
+| 1º token → 1ª frase falável | < 0.4s |
+| 1ª frase → primeiro áudio (TTS + MSE) | < 0.5s |
+| **fim de fala → primeiro áudio (sem tool)** | **~2–2.5s** |
 
-> **Otimizações de latência (perf/ultron-voice-latency).** (1) Playback de TTS via
-> MSE — começa no primeiro chunk em vez de aguardar o blob inteiro (§9.2). (2)
-> `SILENCE_MS` 1800→1200 (§6.1). **Pendente (próximo PR):** streaming do Claude com
-> TTS por sentença (hoje `messages.create()` aguarda a resposta inteira antes do TTS
-> em `lib/ultron/chat.ts`) e STT em streaming — para sobrepor geração e síntese.
+> **Otimizações de latência.** (1) Playback de TTS via MSE — começa no primeiro
+> chunk (§9.2). (2) `SILENCE_MS` 1800→1200 (§6.1). (3) **Chat em streaming SSE +
+> TTS por frase** (§8.1/§9.2): o áudio começa na 1ª frase, sobrepondo geração do
+> Claude e síntese. (4) Instrumentação de tempo por etapa. **Pendente:** STT em
+> streaming (hoje one-shot) — para começar a transcrever antes do fim da fala.
 
 ## 14. Erros e resiliência (comportamentos exigidos)
 

@@ -16,7 +16,8 @@ import { honoCookieAdapter, operatorIdFromRequest } from "@/lib/auth/hono-cookie
 import { operatorRequiredButMissing } from "@/lib/auth/current-operator";
 import { rateLimiters, enforceLimit, clientIp } from "@/lib/ratelimit";
 import { transcribe } from "@/lib/ultron/stt";
-import { runChat, resumeChat } from "@/lib/ultron/chat";
+import { runChat, runChatStream, resumeChat } from "@/lib/ultron/chat";
+import { encodeChatEvent, type ChatStreamEvent } from "@/lib/ultron/chat-stream";
 import { synthesizeStream } from "@/lib/ultron/tts";
 import { analyzeReviewFrame } from "@/lib/ultron/review-frame";
 import { getEvents, getProcesses } from "@/lib/services/events";
@@ -186,7 +187,18 @@ app.post("/ultron/stt", async (c) => {
   if (audio.size > MAX_AUDIO_BYTES) return c.json({ error: "audio_too_large" }, 413);
 
   try {
+    const t0 = performance.now();
     const text = await transcribe(audio);
+    // Latency telemetry (no PII: duration + sizes only, never the transcript).
+    console.info(
+      JSON.stringify({
+        level: "info",
+        event: "stt_timing",
+        ms: Math.round(performance.now() - t0),
+        audio_bytes: audio.size,
+        chars: text.length,
+      }),
+    );
     return c.json({ text });
   } catch (err) {
     console.error(JSON.stringify({ level: "error", event: "stt_failed", message: errMsg(err) }));
@@ -201,35 +213,70 @@ app.post("/ultron/chat", async (c) => {
   const parsed = chatSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid_request" }, 400);
 
-  try {
-    // Identity resolved once by the middleware (ADR 0026); stamps enqueued jobs so the runner can
-    // scope them. Reject loudly if supabase mode resolved no operator — never enqueue an orphan.
-    const operatorId = operatorIdFromRequest(c);
-    if (operatorRequiredButMissing(operatorId)) return c.json({ error: "session_expired" }, 401);
-    const result = await runChat(parsed.data.sessionId, parsed.data.text, operatorId);
-    if (result.kind === "need_capture") {
-      return c.json({
-        status: "need_capture",
-        pendingId: result.pendingId,
-        usedTools: result.usedTools,
-        agentTriggers: result.agentTriggers,
-        landingEdits: result.landingEdits,
-        liveReviews: result.liveReviews,
-        uiIntents: result.uiIntents,
-      });
-    }
-    return c.json({
-      reply: result.reply,
-      usedTools: result.usedTools,
-      agentTriggers: result.agentTriggers,
-      landingEdits: result.landingEdits,
-      liveReviews: result.liveReviews,
-      uiIntents: result.uiIntents,
-    });
-  } catch (err) {
-    console.error(JSON.stringify({ level: "error", event: "chat_failed", message: errMsg(err) }));
-    return c.json({ error: "chat_failed" }, 502);
-  }
+  // Identity resolved once by the middleware (ADR 0026); stamps enqueued jobs so the runner can
+  // scope them. Reject loudly if supabase mode resolved no operator — never enqueue an orphan.
+  const operatorId = operatorIdFromRequest(c);
+  if (operatorRequiredButMissing(operatorId)) return c.json({ error: "session_expired" }, 401);
+
+  // Stream Claude's text deltas as SSE so the client speaks sentence-by-sentence
+  // (first audio starts on the first sentence, not after the whole reply). The
+  // terminal `done`/`need_capture` frame carries the structured signals the
+  // non-streaming endpoint used to return in one JSON blob.
+  const { sessionId, text } = parsed.data;
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const send = (event: ChatStreamEvent) => controller.enqueue(encoder.encode(encodeChatEvent(event)));
+      void (async () => {
+        const t0 = performance.now();
+        let firstTokenMs = 0;
+        try {
+          const result = await runChatStream(sessionId, text, operatorId, (delta) => {
+            if (!firstTokenMs) {
+              firstTokenMs = Math.round(performance.now() - t0);
+              console.info(JSON.stringify({ level: "info", event: "chat_first_token", ms: firstTokenMs }));
+            }
+            send({ type: "text", delta });
+          });
+          const signals = {
+            usedTools: result.usedTools,
+            agentTriggers: result.agentTriggers,
+            landingEdits: result.landingEdits,
+            liveReviews: result.liveReviews,
+            uiIntents: result.uiIntents,
+          };
+          if (result.kind === "need_capture") {
+            send({ type: "need_capture", pendingId: result.pendingId, ...signals });
+          } else {
+            send({ type: "done", reply: result.reply, ...signals });
+          }
+          console.info(
+            JSON.stringify({
+              level: "info",
+              event: "chat_timing",
+              first_token_ms: firstTokenMs,
+              total_ms: Math.round(performance.now() - t0),
+              kind: result.kind,
+            }),
+          );
+        } catch (err) {
+          console.error(JSON.stringify({ level: "error", event: "chat_failed", message: errMsg(err) }));
+          send({ type: "error" });
+        } finally {
+          controller.close();
+        }
+      })();
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-store, no-transform",
+      connection: "keep-alive",
+    },
+  });
 });
 
 // Resumes a chat turn that paused on capture_screen with the browser's screenshot.
@@ -303,11 +350,21 @@ app.post("/ultron/tts", async (c) => {
   if (!parsed.success) return c.json({ error: "invalid_request" }, 400);
 
   try {
+    const t0 = performance.now();
     const upstream = await synthesizeStream(parsed.data.text);
     if (!upstream.ok || !upstream.body) {
       console.error(JSON.stringify({ level: "error", event: "tts_failed", status: upstream.status }));
       return c.json({ error: "tts_failed" }, 502);
     }
+    // Time-to-first-byte from ElevenLabs (no PII: chars + ms only).
+    console.info(
+      JSON.stringify({
+        level: "info",
+        event: "tts_first_byte",
+        ms: Math.round(performance.now() - t0),
+        chars: parsed.data.text.length,
+      }),
+    );
     return new Response(upstream.body, {
       status: 200,
       headers: { "content-type": "audio/mpeg", "cache-control": "no-store" },

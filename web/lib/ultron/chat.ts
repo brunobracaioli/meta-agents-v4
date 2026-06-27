@@ -59,6 +59,11 @@ type LoopContext = {
   userText: string;
   operatorId: string | null;
   dynamicTools: DynamicSkillTool[];
+  // When set, the loop streams Claude's text deltas live (sentence-by-sentence TTS
+  // on the client) and the reply becomes the full streamed text. Absent = the
+  // original one-shot behavior (used by the capture/resume path).
+  emit?: (delta: string) => void;
+  spoken?: { text: string };
 };
 
 function extractText(content: Anthropic.ContentBlock[]): string {
@@ -171,16 +176,33 @@ async function runLoop(
   ctx: LoopContext,
 ): Promise<ChatResult> {
   for (let i = startIteration; i < MAX_TOOL_ITERATIONS; i++) {
-    const res = await anthropic().messages.create({
+    const params: Anthropic.MessageCreateParamsNonStreaming = {
       model: MODEL,
       max_tokens: MAX_TOKENS,
       system: [{ type: "text", text: ULTRON_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
       tools: [...toolSpecs, ...ctx.dynamicTools.map((t) => t.spec)],
       messages,
-    });
+    };
+
+    let res: Anthropic.Message;
+    if (ctx.emit) {
+      // Stream text deltas as they arrive (forwarded to the client for sentence-level
+      // TTS), then resolve the final message and run the SAME tool-handling logic.
+      const stream = anthropic().messages.stream(params);
+      stream.on("text", (delta) => {
+        if (ctx.spoken) ctx.spoken.text += delta;
+        ctx.emit!(delta);
+      });
+      res = await stream.finalMessage();
+    } else {
+      res = await anthropic().messages.create(params);
+    }
 
     if (res.stop_reason !== "tool_use") {
-      return { kind: "reply", reply: extractText(res.content) || FALLBACK, usedTools, agentTriggers, landingEdits, liveReviews, uiIntents };
+      // In streaming mode the spoken accumulator already holds every text delta
+      // (including any pre-tool preamble from earlier iterations).
+      const reply = (ctx.emit ? ctx.spoken?.text.trim() : extractText(res.content)) || FALLBACK;
+      return { kind: "reply", reply, usedTools, agentTriggers, landingEdits, liveReviews, uiIntents };
     }
 
     messages.push({ role: "assistant", content: res.content });
@@ -257,6 +279,38 @@ export async function runChat(
     userText: text,
     operatorId,
     dynamicTools,
+  });
+  if (result.kind === "reply") {
+    await appendExchange(sessionId, text, result.reply, memory);
+  }
+  return result;
+}
+
+/**
+ * Streaming variant of {@link runChat}: identical loop + memory semantics, but Claude's
+ * text is streamed to `emit` token-by-token so the client can speak sentence-by-sentence
+ * instead of waiting for the whole reply. May still return `need_capture` (the client
+ * then falls back to the one-shot capture round-trip for that turn).
+ */
+export async function runChatStream(
+  sessionId: string,
+  text: string,
+  operatorId: string | null,
+  emit: (delta: string) => void,
+): Promise<ChatResult> {
+  const memory = await loadMemory(sessionId);
+  const messages: Anthropic.MessageParam[] = memory.map((t) => ({ role: t.role, content: t.content }));
+  messages.push({ role: "user", content: text });
+
+  const dynamicTools = await loadDynamicSkillTools(operatorId);
+  const result = await runLoop(messages, [], [], [], [], [], 0, {
+    sessionId,
+    priorMemory: memory,
+    userText: text,
+    operatorId,
+    dynamicTools,
+    emit,
+    spoken: { text: "" },
   });
   if (result.kind === "reply") {
     await appendExchange(sessionId, text, result.reply, memory);

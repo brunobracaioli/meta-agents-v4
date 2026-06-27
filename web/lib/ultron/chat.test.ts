@@ -2,8 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // --- hoisted mocks (referenced inside vi.mock factories) ---
 
-const { createMock, recordedCalls } = vi.hoisted(() => ({
+const { createMock, streamMock, recordedCalls } = vi.hoisted(() => ({
   createMock: vi.fn(),
+  streamMock: vi.fn(),
   recordedCalls: [] as Array<{ messages: unknown[] }>,
 }));
 
@@ -33,6 +34,10 @@ vi.mock("@anthropic-ai/sdk", () => ({
         recordedCalls.push(args);
         return createMock(args);
       },
+      stream: (args: { messages: unknown[] }) => {
+        recordedCalls.push(args);
+        return streamMock(args);
+      },
     };
   },
 }));
@@ -46,10 +51,27 @@ vi.mock("@/lib/ultron/tools", () => ({
 vi.mock("@/lib/ultron/memory", () => ({ loadMemory, appendExchange }));
 vi.mock("@/lib/ultron/pending", () => ({ savePending, loadPending, deletePending }));
 
-import { runChat, resumeChat } from "@/lib/ultron/chat";
+import { runChat, runChatStream, resumeChat } from "@/lib/ultron/chat";
 
 const SESSION = "session-test-1";
 const FAKE_IMAGE = { media_type: "image/jpeg" as const, data: "QUJD" };
+
+// A fake MessageStream: registers the text callback, and on finalMessage() replays
+// the deltas (simulating streaming) before resolving the final message — matching how
+// runChatStream wires `.on("text")` then awaits `.finalMessage()`.
+function makeStream(deltas: string[], finalMsg: unknown) {
+  let textCb: ((d: string) => void) | null = null;
+  return {
+    on(event: string, cb: (d: string) => void) {
+      if (event === "text") textCb = cb;
+      return this;
+    },
+    async finalMessage() {
+      for (const d of deltas) textCb?.(d);
+      return finalMsg;
+    },
+  };
+}
 
 function capturePauseTurn() {
   return {
@@ -68,6 +90,49 @@ beforeEach(() => {
   vi.clearAllMocks();
   pendingStore.clear();
   recordedCalls.length = 0;
+});
+
+describe("runChatStream — streams deltas and accumulates the reply", () => {
+  it("emits each text delta and returns the full spoken text", async () => {
+    streamMock.mockReturnValueOnce(makeStream(["Oi", ", tudo", " certo."], textTurn("ignored")));
+
+    const deltas: string[] = [];
+    const result = await runChatStream(SESSION, "e aí", null, (d) => deltas.push(d));
+
+    expect(deltas).toEqual(["Oi", ", tudo", " certo."]);
+    expect(result.kind).toBe("reply");
+    if (result.kind !== "reply") throw new Error("unreachable");
+    // Reply is the accumulated streamed text, not extractText of the final message.
+    expect(result.reply).toBe("Oi, tudo certo.");
+    expect(appendExchange).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs a tool turn then streams the final answer", async () => {
+    runTool.mockResolvedValueOnce({ ok: true });
+    streamMock
+      .mockReturnValueOnce(
+        makeStream([], toolTurn("tu_ov", "get_client_overview", { client_slug: "brunobracaioli" })),
+      )
+      .mockReturnValueOnce(makeStream(["Pronto."], textTurn("ignored")));
+
+    const deltas: string[] = [];
+    const result = await runChatStream(SESSION, "resumo do bruno", null, (d) => deltas.push(d));
+
+    expect(runTool).toHaveBeenCalledTimes(1);
+    expect(deltas).toEqual(["Pronto."]);
+    expect(result.kind).toBe("reply");
+    if (result.kind !== "reply") throw new Error("unreachable");
+    expect(result.reply).toBe("Pronto.");
+  });
+
+  it("returns need_capture without requiring any text", async () => {
+    streamMock.mockReturnValueOnce(makeStream([], capturePauseTurn()));
+
+    const result = await runChatStream(SESSION, "o que tem na tela?", null, () => {});
+
+    expect(result.kind).toBe("need_capture");
+    expect(appendExchange).not.toHaveBeenCalled();
+  });
 });
 
 describe("runChat — pause on capture_screen", () => {
