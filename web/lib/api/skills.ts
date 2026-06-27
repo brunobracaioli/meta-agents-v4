@@ -6,8 +6,8 @@ import type { Database, Json } from "@/lib/db/types";
 
 type SkillUpdate = Database["public"]["Tables"]["client_skills"]["Update"];
 type ScheduleUpdate = Database["public"]["Tables"]["skill_schedules"]["Update"];
-import { honoCookieAdapter } from "@/lib/auth/hono-cookies";
-import { getCurrentOperatorId, assertOperatorOwnsClient, operatorRunnerReady } from "@/lib/auth/current-operator";
+import { operatorIdFromRequest } from "@/lib/auth/hono-cookies";
+import { operatorOwnsClient, operatorRunnerReady, operatorRequiredButMissing } from "@/lib/auth/current-operator";
 import { skillCreateSchema, skillPatchSchema, scheduleInputSchema, recurrenceToCron } from "@/lib/skills/validate";
 import { expandAllowedTools } from "@/lib/skills/catalog";
 import { buildSkillDraft } from "@/lib/skills/draft";
@@ -37,7 +37,7 @@ async function loadProductClient(productId: string, c: Context): Promise<string 
   const res = await db().from("products").select("client_id").eq("id", productId).maybeSingle();
   if (res.error) throw res.error;
   if (!res.data) return null;
-  if (!(await assertOperatorOwnsClient(res.data.client_id, honoCookieAdapter(c)))) return null;
+  if (!(await operatorOwnsClient(operatorIdFromRequest(c), res.data.client_id))) return null;
   return res.data.client_id;
 }
 
@@ -51,7 +51,7 @@ async function loadSkill(id: string, c: Context) {
     .maybeSingle();
   if (res.error) throw res.error;
   if (!res.data) return null;
-  if (!(await assertOperatorOwnsClient(res.data.client_id, honoCookieAdapter(c)))) return null;
+  if (!(await operatorOwnsClient(operatorIdFromRequest(c), res.data.client_id))) return null;
   return res.data;
 }
 
@@ -62,7 +62,7 @@ skills.post("/draft", async (c) => {
   const parsed = draftSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid_request", detail: parsed.error.issues[0]?.message }, 400);
 
-  const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+  const operatorId = operatorIdFromRequest(c);
   if (!operatorId) return c.json({ error: "unauthorized" }, 401);
 
   // Load the product (+ its client + brief) and verify ownership transitively via the client.
@@ -73,7 +73,7 @@ skills.post("/draft", async (c) => {
     .maybeSingle();
   if (product.error) throw product.error;
   if (!product.data) return c.json({ error: "not_found" }, 404);
-  if (!(await assertOperatorOwnsClient(product.data.client_id, honoCookieAdapter(c)))) {
+  if (!(await operatorOwnsClient(operatorIdFromRequest(c), product.data.client_id))) {
     return c.json({ error: "not_found" }, 404);
   }
 
@@ -119,7 +119,7 @@ skills.post("/", async (c) => {
   if (!parsed.success) return c.json({ error: "invalid_request", detail: parsed.error.issues[0]?.message }, 400);
   const d = parsed.data;
 
-  const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+  const operatorId = operatorIdFromRequest(c);
   if (!operatorId) return c.json({ error: "unauthorized" }, 401);
   // client_id is derived from the product, never trusted from the body.
   const clientId = await loadProductClient(d.productId, c);
@@ -210,7 +210,9 @@ skills.post("/:id/run", async (c) => {
   if (!skill) return c.json({ error: "not_found" }, 404);
   if (skill.status === "disabled") return c.json({ error: "skill_disabled" }, 409);
 
-  const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+  const operatorId = operatorIdFromRequest(c);
+  // Fail loud rather than enqueue an orphan the per-operator claim can never pick up (ADR 0026).
+  if (operatorRequiredButMissing(operatorId)) return c.json({ error: "session_expired" }, 401);
   // Enqueue gate (ADR 0027): the operator's runner must be ready, else the job sits unclaimed.
   if (!(await operatorRunnerReady(operatorId))) return c.json({ error: "runner_not_ready" }, 422);
 
@@ -253,7 +255,7 @@ skills.post("/:id/schedule", async (c) => {
   const id = c.req.param("id");
   const skill = await loadSkill(id, c);
   if (!skill) return c.json({ error: "not_found" }, 404);
-  const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+  const operatorId = operatorIdFromRequest(c);
   if (!operatorId) return c.json({ error: "unauthorized" }, 401);
 
   const parsed = scheduleInputSchema.safeParse(await c.req.json().catch(() => null));

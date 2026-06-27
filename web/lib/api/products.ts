@@ -3,12 +3,12 @@ import type { Context } from "hono";
 import { db } from "@/lib/db/client";
 import { getReadClient } from "@/lib/db/read-client";
 import type { Database } from "@/lib/db/types";
-import { honoCookieAdapter } from "@/lib/auth/hono-cookies";
-import { assertOperatorOwnsClient } from "@/lib/auth/current-operator";
+import { operatorIdFromRequest } from "@/lib/auth/hono-cookies";
+import { operatorOwnsClient } from "@/lib/auth/current-operator";
 import { productInputSchema, productPatchSchema } from "@/lib/products/validate";
 
 // SPEC-018.1 §Backend — product management. Products have no operator_id; ownership is transitive
-// through the client (assertOperatorOwnsClient on the product's client_id). Reads via the
+// through the client (operatorOwnsClient on the product's client_id). Reads via the
 // authenticated client (RLS products_select_own); writes via service_role + ownership guard.
 
 type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
@@ -25,7 +25,7 @@ async function loadProduct(id: string, c: Context) {
   const res = await db().from("products").select("id, client_id").eq("id", id).maybeSingle();
   if (res.error) throw res.error;
   if (!res.data) return null;
-  if (!(await assertOperatorOwnsClient(res.data.client_id, honoCookieAdapter(c)))) return null;
+  if (!(await operatorOwnsClient(operatorIdFromRequest(c), res.data.client_id))) return null;
   return res.data;
 }
 
@@ -48,7 +48,7 @@ products.post("/", async (c) => {
   if (!parsed.success) return c.json({ error: "invalid_request", detail: parsed.error.issues[0]?.message }, 400);
   const d = parsed.data;
 
-  if (!(await assertOperatorOwnsClient(d.clientId, honoCookieAdapter(c)))) return c.json({ error: "not_found" }, 404);
+  if (!(await operatorOwnsClient(operatorIdFromRequest(c), d.clientId))) return c.json({ error: "not_found" }, 404);
 
   const ins = await db()
     .from("products")

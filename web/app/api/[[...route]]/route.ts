@@ -12,8 +12,8 @@ import {
   sessionCookieOptions,
 } from "@/lib/auth/session";
 import { createSupabaseServerClient } from "@/lib/auth/supabase";
-import { honoCookieAdapter } from "@/lib/auth/hono-cookies";
-import { getCurrentOperatorId } from "@/lib/auth/current-operator";
+import { honoCookieAdapter, operatorIdFromRequest } from "@/lib/auth/hono-cookies";
+import { operatorRequiredButMissing } from "@/lib/auth/current-operator";
 import { rateLimiters, enforceLimit, clientIp } from "@/lib/ratelimit";
 import { transcribe } from "@/lib/ultron/stt";
 import { runChat, resumeChat } from "@/lib/ultron/chat";
@@ -202,9 +202,10 @@ app.post("/ultron/chat", async (c) => {
   if (!parsed.success) return c.json({ error: "invalid_request" }, 400);
 
   try {
-    // In AUTH_MODE=supabase, stamp enqueued jobs with the operator so the runner can scope
-    // them (Phase 4); null in password mode (single-tenant, legacy claim). ADR 0026.
-    const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+    // Identity resolved once by the middleware (ADR 0026); stamps enqueued jobs so the runner can
+    // scope them. Reject loudly if supabase mode resolved no operator — never enqueue an orphan.
+    const operatorId = operatorIdFromRequest(c);
+    if (operatorRequiredButMissing(operatorId)) return c.json({ error: "session_expired" }, 401);
     const result = await runChat(parsed.data.sessionId, parsed.data.text, operatorId);
     if (result.kind === "need_capture") {
       return c.json({
@@ -244,7 +245,8 @@ app.post("/ultron/capture", async (c) => {
   if (!/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return c.json({ error: "invalid_request" }, 400);
 
   try {
-    const operatorId = await getCurrentOperatorId(honoCookieAdapter(c));
+    const operatorId = operatorIdFromRequest(c);
+    if (operatorRequiredButMissing(operatorId)) return c.json({ error: "session_expired" }, 401);
     const result = await resumeChat(parsed.data.sessionId, parsed.data.pendingId, parsed.data.image, operatorId);
     if (result.kind === "need_capture") {
       return c.json({
