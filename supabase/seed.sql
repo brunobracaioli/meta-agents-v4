@@ -4,8 +4,12 @@
 -- against an ISOLATED local database — so enqueued agent_jobs carry a real operator_id,
 -- instead of the single-password fallback (operator_id = null) that the runner can't claim.
 --
--- Dev login (email mode):  dev@localhost  /  localdev123
--- These credentials are LOCAL ONLY and intentionally weak. Never reuse them anywhere hosted.
+-- Dev login (email mode):  bruno@b2tech.io  /  localdev123
+-- The email mirrors the production operator's address ONLY for login ergonomics; this is a
+-- SEPARATE, local-only account in an isolated DB (its own UUID + a weak local password). It is
+-- NOT the production credential and shares nothing with prod. Never reuse this password anywhere.
+-- NOTE: the address needs a real domain/TLD — the login endpoint validates with zod's
+-- z.string().email(), which rejects dotless hosts like "dev@localhost" with a 400.
 --
 -- Idempotent: safe to run on every `db reset`. UUIDs are fixed for reproducibility.
 
@@ -23,7 +27,7 @@ values (
   '00000000-0000-0000-0000-000000000000',
   '11111111-1111-4111-8111-111111111111',
   'authenticated', 'authenticated',
-  'dev@localhost',
+  'bruno@b2tech.io',
   extensions.crypt('localdev123', extensions.gen_salt('bf')),
   now(), now(), now(),
   '{"provider":"email","providers":["email"]}'::jsonb,
@@ -41,7 +45,7 @@ values (
   gen_random_uuid(),
   '11111111-1111-4111-8111-111111111111',
   '11111111-1111-4111-8111-111111111111',
-  '{"sub":"11111111-1111-4111-8111-111111111111","email":"dev@localhost","email_verified":true}'::jsonb,
+  '{"sub":"11111111-1111-4111-8111-111111111111","email":"bruno@b2tech.io","email_verified":true}'::jsonb,
   'email',
   now(), now(), now()
 )

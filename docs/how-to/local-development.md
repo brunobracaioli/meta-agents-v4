@@ -50,7 +50,10 @@ npx supabase db reset
 Runs all migrations in `supabase/migrations/` (same schema + RLS as prod) and then `supabase/seed.sql`,
 which creates a **dev operator** and a **dev client**:
 
-- Login: **`dev@localhost` / `localdev123`** (local-only credentials).
+- Login: **`bruno@b2tech.io` / `localdev123`** (local-only credentials — same email as the
+  prod operator for ergonomics, but a SEPARATE local account with a weak local password; shares
+  nothing with prod). The address needs a real domain/TLD: the login endpoint validates with
+  `z.string().email()`, which rejects dotless hosts like `dev@localhost` with a `400`.
 
 ### 3. Point the web app at the local stack
 
@@ -68,6 +71,11 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<PUBLISHABLE_KEY (sb_publishable_...) from 
 SUPABASE_SECRET_KEY=<SECRET_KEY (sb_secret_...) from `supabase start`>
 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 
+# Disable Cloudflare Turnstile locally. The prod widget can't resolve on localhost
+# (ERR_NAME_NOT_RESOLVED / error 600010) and blocks login. Empty here = captcha skipped.
+CLOUDFLARE_TURNSTILE_SITE_KEY=
+CLOUDFLARE_TURNSTILE_SECRET_KEY=
+
 # Required by env.ts even in supabase mode (read unconditionally). Local-only values:
 AUTH_SECRET=local-dev-only-change-me-0123456789abcdef0123456789abcdef
 DASHBOARD_PASSWORD=unused-in-supabase-mode
@@ -81,23 +89,29 @@ UPSTASH_REDIS_REST_URL=
 UPSTASH_REDIS_REST_TOKEN=
 ```
 
+`web/next.config.ts` loads this file **last, with `override: true`**, so these local values win over
+the repo-root `.env.local` (the canonical prod-secrets home) and over any prod vars exported in your
+shell. That is what makes `npm run dev` safe — see the note in step 4.
+
 ### 4. Run the app
 
 ```bash
-cd web && npm run dev:local
+cd web && npm run dev
 ```
 
 Open `http://localhost:3000`. `/login` now shows **Email + Senha**. Log in with
-`dev@localhost` / `localdev123`.
+`bruno@b2tech.io` / `localdev123`.
 
-> **Why `dev:local` and not `dev`.** Next.js lets variables already present in `process.env`
-> **override** `web/.env.local`. If your shell exports the *production* secrets (a sourced
-> secrets script), plain `npm run dev` keeps pointing dev at prod — `AUTH_MODE=supabase`
-> against the prod DB is the dangerous combo to avoid — and the prod **Cloudflare Turnstile**
-> keys leak in, so the login captcha renders on localhost and fails (`ERR_NAME_NOT_RESOLVED`
-> / Turnstile error `600010`), blocking login. `dev:local` runs `next dev` with those
-> prod-leaking vars stripped (`env -u ...`), so `web/.env.local` fully governs and Turnstile is
-> skipped (it is optional — the login endpoint skips the captcha when the secret is absent).
+> **Why plain `npm run dev` is safe here.** Next.js lets variables already present in
+> `process.env` **override** `web/.env.local`, and `next.config.ts` also loads the repo-root
+> `.env.local` (the canonical prod-secrets home). Either could silently point dev at prod —
+> `AUTH_MODE=supabase` against the prod DB is the dangerous combo — and leak the prod
+> **Cloudflare Turnstile** keys, so the login captcha renders on localhost and fails
+> (`ERR_NAME_NOT_RESOLVED` / error `600010`), blocking login. To make the local file authoritative,
+> `next.config.ts` loads `web/.env.local` **last with `override: true`** (it is gitignored and never
+> deployed, so Vercel is unaffected). That single override — not a shell hack — is what keeps dev
+> isolated; the empty Turnstile keys above then disable the captcha (the endpoint skips it when the
+> secret is absent).
 
 ### 5. Verify parity
 
@@ -123,7 +137,7 @@ real Meta account.
 - **`/login` shows only "Senha"** → `AUTH_MODE` is missing or not `supabase` in `web/.env.local`.
   Restart `npm run dev` after fixing it (env is read at server start, not via HMR for some paths).
 - **Email login fails** → the seeded auth user didn't take (gotrue version differences). Recreate it
-  in Studio (`http://127.0.0.1:54323` → Authentication → Add user, email `dev@localhost`), then keep
+  in Studio (`http://127.0.0.1:54323` → Authentication → Add user, email `bruno@b2tech.io`), then keep
   the same id in `supabase/seed.sql` for the operator/client rows.
 - **Jobs stay `pending`** → either `operator_id` is null (see above) or no local poller is running
   (jobs only execute if something claims them).
