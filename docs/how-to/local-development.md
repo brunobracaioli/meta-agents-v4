@@ -90,6 +90,14 @@ cd web && npm run dev
 Open `http://localhost:3000`. `/login` now shows **Email + Senha**. Log in with
 `dev@localhost` / `localdev123`.
 
+> **Gotcha — start from a clean shell.** Next.js lets variables already present in
+> `process.env` **override** `web/.env.local`. If your shell exports the *production*
+> Supabase vars (e.g. via a sourced secrets script), a dev server started from it will keep
+> pointing at prod even with `web/.env.local` in place — and `AUTH_MODE=supabase` against the
+> prod DB is exactly the dangerous combo to avoid. Run `npm run dev` from a shell where those
+> vars are **not** exported (new terminal, or `unset SUPABASE_URL NEXT_PUBLIC_SUPABASE_URL
+> SUPABASE_SECRET_KEY NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` first), so `.env.local` wins.
+
 ### 5. Verify parity
 
 Enqueue something via Ultron, then check the **local** DB (Studio at `http://127.0.0.1:54323` →
