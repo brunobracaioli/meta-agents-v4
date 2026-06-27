@@ -1,7 +1,7 @@
 # NOTES — SPEC-019 / ARC: interface holográfica do Ultron ("Tony Stark Mode")
 
 > Status: **Waves 0/A/B/C entregues e MERGEADAS na `main`** (PRs #11/#13/#14/#15/#16 + fixes #12/#17);
-> polish parcial em `refactor/arc-panel-polish`. **Próxima = Wave D (gestos webcam)**. Deploys automáticos na Vercel.
+> **Wave E em andamento** — painéis arrastáveis/redimensionáveis entregues + **validados ao vivo 2026-06-26** (PR #19 aberto, `feat/arc-draggable-resizable-panels`), além do polish do PR #18. **Próxima = Wave D (gestos webcam)**. Deploys automáticos na Vercel.
 > Última atualização: 2026-06-26 · Documento de trabalho (status + achados + receita executável).
 > **LER ISTO PRIMEIRO** ao retomar a feature. NÃO confundir com `NOTES.md` (raiz) que é da feature multi-tenant.
 
@@ -101,10 +101,30 @@ clicável) + `client-card.tsx`; state machine PURA `lib/ultron/arc-folders.ts` (
   embedar a rota MESMA-ORIGEM `/lp-preview/<id>` (o que o editor + live-review já usam); URL pública vira só
   link ↗. Também: prompt mapeia palavra falada→id (focus/dismiss) e prefere show_* a get_* no ARC.
 
-### ✅/⏳ Wave E (parcial — adiantado em refactor/arc-panel-polish) — Polish
-HoloPanel virou **fonte única de largura** (`size` default/wide; landing/creative/analyses = wide), os painéis
-deixaram de fixar largura própria; +`prefers-reduced-motion` (fade simples); indicador de foco mais claro
-(header tint + dot). Layer ganhou `overflow-y-auto`. Resto da Wave E (SFX, boot, parallax) segue pendente.
+### 🔧 Wave E (em andamento) — Polish
+**PR #18 (`refactor/arc-panel-polish`, mergeado):** HoloPanel virou **fonte única de largura** (`size`
+default/wide; landing/creative/analyses = wide), os painéis deixaram de fixar largura própria;
++`prefers-reduced-motion` (fade simples); indicador de foco mais claro (header tint + dot); layer com
+`overflow-y-auto`.
+
+**PR #19 (`feat/arc-draggable-resizable-panels`, aberto) — painéis flutuantes, VALIDADO AO VIVO 2026-06-26:**
+cada `HoloPanel` virou janela: **arrasta pelo header** (framer `drag`+`dragControls`+`dragListener=false` → só
+o cabeçalho inicia, corpo continua clicável/rolável), **redimensiona** pelo handle inferior-direito (w+h, min/máx,
+scroll interno quando menor que o conteúdo), **clique traz à frente** (reusa `op:"focus"` do reducer; layer
+mapeia índice→zIndex), nasce em **cascade** preso à tela (`dragConstraints` = a layer, agora `absolute inset-0`
+no lugar do flex-wrap), **duplo-clique no header reseta**. Geometria (x/y/w/h) é estado LOCAL em **motion values**
+(fora do Render Bus — drag/resize são alta-freq e não podem thrashar o lip-sync, ADR 0031; motion values dirigem
+o DOM, então re-render não sobrescreve o layout do usuário). Height fica `auto` até redimensionar. Math pura
+testável `lib/ultron/arc-geometry.ts` (clamp/cascade, +9 testes) usando `PanelSize` de `holo-panel.types.ts` (pra
+não puxar framer pro teste node). Verde: tsc, 204/204, build. Não-objetivos: sem sync de geometria pro popout
+(espelho de conteúdo só) nem persistência entre sessões.
+
+**Pendente da Wave E:** SFX de materialização, boot sequence, parallax, transições refinadas.
+
+> **Gotcha de worktree compartilhado:** `/mnt/c` é UM worktree usado por sessões concorrentes. Outra sessão
+> deu `git checkout` e TROCOU O HEAD debaixo desta — um `git commit` caiu na branch errada. Sempre conferir
+> `git branch --show-current` antes de commitar, stage só os arquivos do escopo (nunca `git add -A`), e fazer
+> push por **refspec** (sem checkout). Para commitar docs sem mexer na árvore alheia, usar `git worktree add`.
 
 ### ⬜ Wave D — Gestos por webcam (MediaPipe HandLandmarker) — PRÓXIMA
 
