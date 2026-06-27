@@ -54,7 +54,11 @@ const WAKE_WORD = "ultron";
 // public/ultron/vad-processor.js) so it survives tab backgrounding; these are the
 // authoritative thresholds passed to the worklet. The rAF path below reuses them
 // as a fallback for browsers without AudioWorklet.
-const SILENCE_MS = 1800; // stop after this much trailing silence; 900ms cut natural mid-sentence pauses
+// Stop after this much trailing silence. 900ms cut natural mid-sentence pauses;
+// 1800ms was safe but added ~0.9s of dead air to every turn. 1200ms is the middle
+// ground (−600ms/turn). The worklet reads this via VAD_CONFIG.silenceMs, so this is
+// the single source of truth for both the worklet and the rAF fallback below.
+const SILENCE_MS = 1200;
 const SPEECH_RMS = 0.025; // onset threshold
 const SILENCE_RMS = 0.015; // below this counts as silence
 const MAX_CLIP_MS = 45_000; // hard cap per utterance; spoken campaign instructions easily exceed 12s
@@ -446,37 +450,139 @@ export function useUltronVoice() {
     async (text: string) => {
       patch({ status: "speaking", outputLevel: 0, outputBands: silentOutputBands() });
       let url: string | null = null;
+      // Set by the playback promise so the finally block (and stopSpeaking via
+      // speechDoneRef) can stop the chunk pump even mid-stream.
+      let cancelled = false;
       try {
         const res = await fetch("/api/ultron/tts", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ text }),
         });
-        if (!res.ok) throw new Error("tts");
-        const blob = await res.blob();
-        url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
+        if (!res.ok || !res.body) throw new Error("tts");
+
+        const audio = new Audio();
         audio.preload = "auto";
         playerRef.current = audio;
+
         await new Promise<void>((resolve) => {
           let done = false;
           const settle = () => {
             if (done) return;
             done = true;
+            cancelled = true; // stop the reader/pump if we're torn down mid-stream
             resolve();
           };
           speechDoneRef.current = settle;
           audio.addEventListener("ended", settle, { once: true });
           audio.addEventListener("error", settle, { once: true });
-          const ctx = startOutputAnalysis(audio);
-          void ctx
-            .resume()
-            .then(() => audio.play())
-            .catch(() => settle());
+
+          // Frequency analysis + actual playback. createMediaElementSource may be
+          // called only once per element, so this fires exactly once (first chunk).
+          const startPlayback = () => {
+            const ctx = startOutputAnalysis(audio);
+            void ctx
+              .resume()
+              .then(() => audio.play())
+              .catch(() => settle());
+          };
+
+          // The server pipes ElevenLabs first-byte-fast; play the MP3 as chunks
+          // arrive (MSE) instead of waiting for the whole file. Falls back to a
+          // single blob where MSE can't decode audio/mpeg (e.g. Safari).
+          const canStream =
+            typeof MediaSource !== "undefined" && MediaSource.isTypeSupported("audio/mpeg");
+
+          if (!canStream) {
+            void res
+              .blob()
+              .then((blob) => {
+                url = URL.createObjectURL(blob);
+                audio.src = url;
+                startPlayback();
+              })
+              .catch(() => settle());
+            return;
+          }
+
+          const mediaSource = new MediaSource();
+          url = URL.createObjectURL(mediaSource);
+          audio.src = url;
+          mediaSource.addEventListener(
+            "sourceopen",
+            () => {
+              let sb: SourceBuffer;
+              try {
+                sb = mediaSource.addSourceBuffer("audio/mpeg");
+              } catch {
+                settle();
+                return;
+              }
+              const reader = res.body!.getReader();
+              const queue: Uint8Array[] = [];
+              let reading = true;
+              let started = false;
+
+              const endStream = () => {
+                if (mediaSource.readyState !== "open") return;
+                try {
+                  mediaSource.endOfStream();
+                } catch {
+                  // Already closed/ended — playback will settle on its own.
+                }
+              };
+              const pump = () => {
+                if (cancelled || sb.updating || queue.length === 0) return;
+                try {
+                  // A fetch reader yields Uint8Array<ArrayBufferLike>; it is a valid
+                  // BufferSource at runtime, but TS's lib types narrow appendBuffer to
+                  // ArrayBuffer-backed views, hence the cast.
+                  sb.appendBuffer(queue.shift()! as BufferSource);
+                } catch {
+                  settle();
+                }
+              };
+              sb.addEventListener("updateend", () => {
+                pump();
+                if (!reading && !sb.updating && queue.length === 0) endStream();
+              });
+
+              void (async () => {
+                try {
+                  for (;;) {
+                    const { done: rdone, value } = await reader.read();
+                    if (cancelled) {
+                      await reader.cancel().catch(() => {});
+                      return;
+                    }
+                    if (rdone) break;
+                    if (value && value.length > 0) {
+                      queue.push(value);
+                      pump();
+                      if (!started) {
+                        started = true;
+                        startPlayback();
+                      }
+                    }
+                  }
+                } catch {
+                  settle();
+                  return;
+                } finally {
+                  reading = false;
+                }
+                // Tail flush: if the buffer is idle, close the stream now; otherwise
+                // the updateend handler above closes it once the queue drains.
+                if (!sb.updating && queue.length === 0) endStream();
+              })();
+            },
+            { once: true },
+          );
         });
       } catch {
         // Non-fatal: the reply is still shown as text.
       } finally {
+        cancelled = true;
         speechDoneRef.current = null;
         stopOutputAnalysis();
         if (url) URL.revokeObjectURL(url);

@@ -170,7 +170,7 @@ e `beginRecording` encerra imediatamente após o `start()`.
 |---|---|---|
 | `SPEECH_RMS` | 0.025 | limiar RMS de onset de fala |
 | `SILENCE_RMS` | 0.015 | abaixo disso conta como silêncio |
-| `SILENCE_MS` | **1800** | silêncio final para encerrar (900 cortava pausas naturais) |
+| `SILENCE_MS` | **1200** | silêncio final para encerrar (900 cortava pausas naturais; 1800 somava ~0.9s de dead air por turno — 1200 é o meio-termo) |
 | `MAX_CLIP_MS` | **45 000** | teto por utterance (instruções faladas passam de 12s) |
 | `onsetDebounceMs` | 50 | fala sustentada exigida antes do onset (mata transientes) |
 | `WINDOW_SAMPLES` | 1024 | janela RMS (~21ms @ 48kHz) no worklet |
@@ -293,10 +293,15 @@ RMS com os mesmos thresholds — funcional, mas congela em aba oculta.
 
 ### 9.2 Client (playback)
 
-- `speak(text)`: estado `speaking` → fetch → `blob:` URL → `new Audio()` →
-  play. Resolve em `ended`/`error`/interrupção; no `finally`, **restaura o modo
-  anterior** (rearma wake word, ou volta ao `listening` de mãos-livres, ou
-  `idle`). Falha de TTS é não-fatal — a resposta continua visível como texto.
+- `speak(text)`: estado `speaking` → fetch streaming. O MP3 é tocado **conforme
+  os chunks chegam** via **MediaSource Extensions** (`SourceBuffer('audio/mpeg')`,
+  `appendBuffer` com backpressure por `updateend`; `endOfStream()` ao drenar) —
+  o playback começa no primeiro chunk em vez de esperar o arquivo inteiro,
+  aproveitando o pipe first-byte-fast do server. **Fallback** para `blob:` URL
+  único onde MSE não decodifica `audio/mpeg` (ex.: Safari). Resolve em
+  `ended`/`error`/interrupção; no `finally`, **restaura o modo anterior** (rearma
+  wake word, ou volta ao `listening` de mãos-livres, ou `idle`) e cancela o
+  reader/pump. Falha de TTS é não-fatal — a resposta continua visível como texto.
 - **Interrupção**: botão "■" pausa o áudio e resolve a promise (barge-in manual).
 
 ### 9.3 Análise de saída (anima o visualizador)
@@ -354,8 +359,14 @@ desmontado ao fim da fala (nós desconectados, context fechado, estado zerado).
 |---|---|
 | fim de fala → texto (STT) | < 1.5s |
 | texto → resposta (chat sem tool, cache quente) | < 2s |
-| resposta → primeiro áudio (TTS stream) | < 1s |
-| **ponta-a-ponta sem tool** | **~3–4s** |
+| resposta → primeiro áudio (TTS stream + playback MSE) | < 0.5s |
+| **ponta-a-ponta sem tool** | **~2–2.5s** |
+
+> **Otimizações de latência (perf/ultron-voice-latency).** (1) Playback de TTS via
+> MSE — começa no primeiro chunk em vez de aguardar o blob inteiro (§9.2). (2)
+> `SILENCE_MS` 1800→1200 (§6.1). **Pendente (próximo PR):** streaming do Claude com
+> TTS por sentença (hoje `messages.create()` aguarda a resposta inteira antes do TTS
+> em `lib/ultron/chat.ts`) e STT em streaming — para sobrepor geração e síntese.
 
 ## 14. Erros e resiliência (comportamentos exigidos)
 
