@@ -7,6 +7,7 @@
 // (array index) drives z-index, and clicking a panel raises it via the existing `focus` op.
 import { AnimatePresence } from "framer-motion";
 import { useRef } from "react";
+import { SLOT_COUNT } from "@/lib/ultron/arc-geometry";
 import { useRenderBus } from "./use-render-bus";
 import { HoloPanel } from "./holo-panel";
 import { FunnelPanel } from "./panels/funnel-panel";
@@ -40,6 +41,25 @@ export function PanelLayer() {
   const { panels, focusId, dispatch } = useRenderBus();
   const constraintsRef = useRef<HTMLDivElement | null>(null);
 
+  // Stable per-id slot assignment: each panel keeps its perimeter corner, and a dismissed
+  // panel frees its slot for the next one the Ultron summons. The Render Bus array index is
+  // NOT stable (show/focus/dismiss reorder the array), so the slot can't be derived from it.
+  // Idempotent (safe under StrictMode double-render): prune absent ids, then give each new id
+  // the lowest slot not used by a panel still on screen (MAX_ACTIVE_PANELS === SLOT_COUNT).
+  const slotsRef = useRef<Map<string, number>>(new Map());
+  const slots = slotsRef.current;
+  const present = new Set(panels.map((p) => p.id));
+  for (const id of [...slots.keys()]) {
+    if (!present.has(id)) slots.delete(id);
+  }
+  for (const panel of panels) {
+    if (slots.has(panel.id)) continue;
+    const used = new Set(slots.values());
+    let next = 0;
+    while (next < SLOT_COUNT && used.has(next)) next += 1;
+    slots.set(panel.id, next % SLOT_COUNT);
+  }
+
   return (
     <div ref={constraintsRef} className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
       <AnimatePresence>
@@ -50,7 +70,7 @@ export function PanelLayer() {
             anchor={panel.anchor}
             size={ELEMENT_SIZE[panel.element] ?? "default"}
             focused={panel.id === focusId}
-            index={index}
+            slot={slots.get(panel.id) ?? 0}
             zIndex={index + 1}
             constraintsRef={constraintsRef}
             onFocus={() => dispatch({ op: "focus", target: panel.id })}
