@@ -170,7 +170,7 @@ e `beginRecording` encerra imediatamente após o `start()`.
 |---|---|---|
 | `SPEECH_RMS` | 0.025 | limiar RMS de onset de fala |
 | `SILENCE_RMS` | 0.015 | abaixo disso conta como silêncio |
-| `SILENCE_MS` | **1200** | silêncio final para encerrar (900 cortava pausas naturais; 1800 somava ~0.9s de dead air por turno — 1200 é o meio-termo) |
+| `SILENCE_MS` | **1000** | silêncio final para encerrar (900 cortava pausas naturais; 1800 somava ~0.9s de dead air; 1200 foi o meio-termo; 1000 após o STT cair p/ ~0.8s com `gpt-4o-mini-transcribe` — virou o maior pedaço fixo da latência percebida; validar cutoff ao vivo) |
 | `MAX_CLIP_MS` | **45 000** | teto por utterance (instruções faladas passam de 12s) |
 | `onsetDebounceMs` | 50 | fala sustentada exigida antes do onset (mata transientes) |
 | `WINDOW_SAMPLES` | 1024 | janela RMS (~21ms @ 48kHz) no worklet |
@@ -384,10 +384,13 @@ desmontado ao fim da fala (nós desconectados, context fechado, estado zerado).
 | **fim de fala → primeiro áudio (sem tool)** | **~2–2.5s** |
 
 > **Otimizações de latência.** (1) Playback de TTS via MSE — começa no primeiro
-> chunk (§9.2). (2) `SILENCE_MS` 1800→1200 (§6.1). (3) **Chat em streaming SSE +
+> chunk (§9.2). (2) `SILENCE_MS` 1800→1200→1000 (§6.1). (3) **Chat em streaming SSE +
 > TTS por frase** (§8.1/§9.2): o áudio começa na 1ª frase, sobrepondo geração do
-> Claude e síntese. (4) Instrumentação de tempo por etapa. **Pendente:** STT em
-> streaming (hoje one-shot) — para começar a transcrever antes do fim da fala.
+> Claude e síntese. (4) Instrumentação de tempo por etapa. (5) STT via
+> `gpt-4o-mini-transcribe` (env `STT_MODEL`) — ~0.8s em prod (era 1.6–1.9s no dev),
+> deixou de ser o gargalo. **Pendente:** STT em streaming (hoje one-shot) — para
+> começar a transcrever antes do fim da fala; só se justifica se VAD+STT seguirem
+> dominando após o trim do `SILENCE_MS`.
 
 ## 14. Erros e resiliência (comportamentos exigidos)
 

@@ -56,11 +56,14 @@ const WAKE_WORD = "ultron";
 // public/ultron/vad-processor.js) so it survives tab backgrounding; these are the
 // authoritative thresholds passed to the worklet. The rAF path below reuses them
 // as a fallback for browsers without AudioWorklet.
-// Stop after this much trailing silence. 900ms cut natural mid-sentence pauses;
-// 1800ms was safe but added ~0.9s of dead air to every turn. 1200ms is the middle
-// ground (−600ms/turn). The worklet reads this via VAD_CONFIG.silenceMs, so this is
-// the single source of truth for both the worklet and the rAF fallback below.
-const SILENCE_MS = 1200;
+// Stop after this much trailing silence. History: 900ms cut natural mid-sentence
+// pauses; 1800ms was safe but added ~0.9s of dead air per turn; 1200ms was the middle
+// ground. Now 1000ms: once STT moved to gpt-4o-mini-transcribe (~0.8s in prod), this
+// trailing-silence floor became the single largest FIXED chunk of perceived latency,
+// so we trim another 200ms (validate live — going below risks the mid-sentence cutoff
+// regression). The worklet reads this via VAD_CONFIG.silenceMs, so this is the single
+// source of truth for both the worklet and the rAF fallback below.
+const SILENCE_MS = 1000;
 const SPEECH_RMS = 0.025; // onset threshold
 const SILENCE_RMS = 0.015; // below this counts as silence
 const MAX_CLIP_MS = 45_000; // hard cap per utterance; spoken campaign instructions easily exceed 12s
