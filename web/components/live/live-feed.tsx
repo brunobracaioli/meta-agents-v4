@@ -25,7 +25,7 @@ import {
   type OptimisticLiveProcess,
 } from "./optimistic-processes";
 
-const POLL_MS = 2000;
+const POLL_MS = 4000; // 2s was an aggressive poll storm (cost + connection noise during voice turns); 4s is plenty for a live agent feed (voice-triggered actions get instant optimistic updates via BroadcastChannel)
 const MAX_KEEP = 200;
 const MAX_FEED = 34;
 

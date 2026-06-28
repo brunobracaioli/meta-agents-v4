@@ -10,7 +10,7 @@ import {
   type OptimisticLiveProcess,
 } from "./optimistic-processes";
 
-const POLL_MS = 2000;
+const POLL_MS = 4000;
 const MAX_KEEP = 200;
 
 // Headless mirror of LiveFeed's polling + state derivation (minus the whole HUD/metrics),

@@ -203,8 +203,10 @@ RMS com os mesmos thresholds — funcional, mas congela em aba oculta.
 ### 6.4 Gravação
 
 - `MediaRecorder` no **mesmo** `MediaStream` do VAD, `mimeType: "audio/webm"`
-  (opus). Chunks acumulados em memória; no `onstop`, vira `Blob` e entra no
-  pipeline.
+  (opus), `audioBitsPerSecond: 32000`. Chunks acumulados em memória; no `onstop`,
+  vira `Blob` e entra no pipeline. O bitrate baixo (32kbps, transparente p/ voz)
+  encolhe o blob ~3.5x vs. o default (~117kbps) — corta o tempo de UPLOAD pós-fala,
+  que não aparece no `stt_timing` do servidor mas pesava ~1s no round-trip do client.
 - Blobs `< 1200 bytes` são descartados (ruído/clique) — volta a
   `listening`/`idle` sem chamar STT.
 - O mic é pedido **uma vez** (`ensureMic()` idempotente) e a stream vive pela
@@ -213,9 +215,10 @@ RMS com os mesmos thresholds — funcional, mas congela em aba oculta.
 ## 7. STT — `POST /api/ultron/stt`
 
 - **Client**: `FormData` com `audio` (`audio.webm`); estado `transcribing`.
-- **Server** (`stt.ts`): OpenAI **`gpt-4o-transcribe`** (override por env
-  `STT_MODEL`), `language: "pt"`. Retorna `{ text }` (string vazia para ruído →
-  client volta ao idle/listening sem chamar o chat).
+- **Server** (`stt.ts`): OpenAI via env `STT_MODEL` (`language: "pt"`). Default de
+  código `gpt-4o-transcribe`; **prod usa `gpt-4o-mini-transcribe`** (~0.8s vs 1.6–1.9s,
+  acerto pt-BR mantido). Retorna `{ text }` (string vazia para ruído → client volta ao
+  idle/listening sem chamar o chat).
 - Limites: payload máx. **2.5MB** (413 `audio_too_large`), rate limit
   **20/min por IP** (429 + `Retry-After: 60`), erro upstream → 502 `stt_failed`
   (log estruturado JSON, sem conteúdo do áudio).

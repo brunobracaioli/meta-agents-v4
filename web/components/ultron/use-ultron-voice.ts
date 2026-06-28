@@ -67,6 +67,12 @@ const SILENCE_MS = 1000;
 const SPEECH_RMS = 0.025; // onset threshold
 const SILENCE_RMS = 0.015; // below this counts as silence
 const MAX_CLIP_MS = 45_000; // hard cap per utterance; spoken campaign instructions easily exceed 12s
+// Opus bitrate for the recorded clip. Default MediaRecorder opus runs ~117kbps (a ~7s
+// command → ~103KB), and uploading that whole blob AFTER speech-end was ~1s+ of the STT
+// round-trip (the server's stt_timing never sees it). 32kbps opus is transparent for
+// speech (WhatsApp voice notes sit ~24kbps; gpt-4o-mini-transcribe handles it cleanly),
+// shrinking the blob ~3.5x → far less upload latency before transcription can start.
+const AUDIO_BITS_PER_SECOND = 32_000;
 const OUTPUT_BAND_COUNT = 18;
 const OUTPUT_FRAME_MS = 48;
 const MAX_CAPTURE_HOPS = 4; // bound client-side capture round-trips per turn
@@ -931,7 +937,10 @@ export function useUltronVoice() {
       speechSeenRef.current = false;
       silenceStartRef.current = null;
       clipStartRef.current = performance.now();
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      const recorder = new MediaRecorder(stream, {
+        mimeType: "audio/webm",
+        audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
+      });
       recorderRef.current = recorder;
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
