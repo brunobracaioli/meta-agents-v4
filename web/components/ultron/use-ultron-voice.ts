@@ -22,6 +22,11 @@ import {
 import { parseUIIntents, type UIIntent } from "@/lib/ultron/render-intents";
 import { SentenceAccumulator } from "@/lib/ultron/sentence-stream";
 import { createChatEventParser, type ChatStreamSignals } from "@/lib/ultron/chat-stream";
+import {
+  createRealtimeTranscriber,
+  sttStreamingEnabled,
+  type RealtimeTranscriber,
+} from "@/lib/ultron/realtime-stt-client";
 import { getSessionId } from "@/lib/ultron/session";
 import { createWakeWord, isWakeWordSupported, type WakeController } from "@/lib/ultron/wake-word";
 import { createVadMic, isVadWorkletSupported, type VadEvent, type VadMicHandle } from "./vad-mic";
@@ -190,6 +195,9 @@ export function useUltronVoice() {
   // SSE reader, the sentence queue worker, and the per-clip MSE pump all check it.
   const streamCancelledRef = useRef<boolean>(false);
   const chatAbortRef = useRef<AbortController | null>(null);
+  // Realtime STT (ADR 0032): when enabled, captures mic PCM in parallel with the recorder
+  // so the transcript is ~ready at speech-end. Null = use the one-shot path (always the fallback).
+  const transcriberRef = useRef<RealtimeTranscriber | null>(null);
   const outputCtxRef = useRef<AudioContext | null>(null);
   const outputSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const outputAnalyserRef = useRef<AnalyserNode | null>(null);
@@ -881,6 +889,8 @@ export function useUltronVoice() {
     async (blob: Blob, speechEndAt: number) => {
       if (blob.size < 1200) {
         // Too short to be speech — go back to idle/listening.
+        transcriberRef.current?.abort();
+        transcriberRef.current = null;
         if (handsFreeRef.current) startListening();
         else patch({ status: "idle" });
         return;
@@ -895,11 +905,25 @@ export function useUltronVoice() {
       let spoke = false;
       try {
         patch({ status: "transcribing" });
-        const fd = new FormData();
-        fd.append("audio", blob, "audio.webm");
-        const sttRes = await fetch("/api/ultron/stt", { method: "POST", body: fd });
-        if (!sttRes.ok) throw new Error("stt");
-        const { text } = (await sttRes.json()) as { text: string };
+        // Prefer the realtime transcript (already streaming during speech); fall back to the
+        // one-shot upload if streaming was off, failed, or returned nothing.
+        let text = "";
+        const rt = transcriberRef.current;
+        transcriberRef.current = null;
+        if (rt) {
+          try {
+            text = await rt.finish(1500);
+          } catch {
+            text = "";
+          }
+        }
+        if (!text) {
+          const fd = new FormData();
+          fd.append("audio", blob, "audio.webm");
+          const sttRes = await fetch("/api/ultron/stt", { method: "POST", body: fd });
+          if (!sttRes.ok) throw new Error("stt");
+          text = ((await sttRes.json()) as { text: string }).text;
+        }
         if (!text) {
           if (handsFreeRef.current) startListening();
           else patch({ status: "idle" });
@@ -942,6 +966,17 @@ export function useUltronVoice() {
         audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
       });
       recorderRef.current = recorder;
+      // Start realtime STT in parallel (flag-gated). Fire-and-forget: any failure nulls the
+      // ref so sendPipeline falls back to the one-shot upload of the recorded blob.
+      transcriberRef.current = null;
+      if (sttStreamingEnabled()) {
+        const t = createRealtimeTranscriber();
+        transcriberRef.current = t;
+        t.start(stream).catch(() => {
+          if (transcriberRef.current === t) transcriberRef.current = null;
+          t.abort();
+        });
+      }
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
@@ -1101,6 +1136,8 @@ export function useUltronVoice() {
     // not just the current clip — otherwise the next queued sentence would play on.
     streamCancelledRef.current = true;
     chatAbortRef.current?.abort();
+    transcriberRef.current?.abort();
+    transcriberRef.current = null;
     if (playerRef.current) {
       playerRef.current.pause();
       playerRef.current.currentTime = 0;
