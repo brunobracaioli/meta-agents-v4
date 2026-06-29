@@ -21,12 +21,6 @@ export async function transcribe(blob: Blob): Promise<string> {
   return (res.text ?? "").trim();
 }
 
-// Domain vocabulary hint biases the realtime transcription toward our jargon and client
-// slug (no PII — generic terms). Helps the model get "brunobracaioli", action verbs and
-// confirmation words right, which matters because activation = real spend.
-const TRANSCRIPTION_PROMPT =
-  "Ultron, campanha, tráfego, landing page, CTR, CPL, CPM, ROAS, funil, brunobracaioli, Meta Ads, ativar, confirmar";
-
 export type TranscriptionToken = { value: string; expiresAt: number };
 
 /**
@@ -49,7 +43,10 @@ export async function createTranscriptionToken(): Promise<TranscriptionToken> {
         audio: {
           input: {
             format: { type: "audio/pcm", rate: 24000 },
-            transcription: { model: MODEL, language: "pt", prompt: TRANSCRIPTION_PROMPT },
+            // No `prompt`: a long vocabulary-list prompt makes the Whisper-family models echo it
+            // back verbatim as the transcript on short/low-confidence audio ("prompt echo"). The
+            // one-shot path never used a prompt and transcribed pt-BR cleanly, so we drop it here.
+            transcription: { model: MODEL, language: "pt" },
             // server_vad endpointing tuned to MATCH our client VAD (1000ms silence) instead of
             // the 200ms default, which finalized a PARTIAL transcript on every natural mid-sentence
             // pause and truncated the utterance. 800ms keeps it slightly under the client VAD so the
