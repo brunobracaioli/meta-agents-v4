@@ -1,5 +1,6 @@
 import "server-only";
 import { env } from "@/lib/env";
+import { stripSpeechMarkup } from "./speech-markup";
 
 // Turbo v2.5: low latency (~250-300ms) while keeping expressiveness — the "fast but
 // expressive" sweet spot for a live voice assistant. Flash v2.5 is faster but flatter;
@@ -13,6 +14,10 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? "eleven_turbo_v2_5";
  */
 export async function synthesizeStream(text: string): Promise<Response> {
   const voiceId = env.elevenLabsVoiceId();
+  // Deterministic guard: strip any markdown the model left in so it is spoken,
+  // not read literally as "asterisco". Fall back to the raw text if stripping
+  // emptied it (e.g. input was nothing but markup).
+  const speakable = stripSpeechMarkup(text) || text;
   const res = await fetch(
     `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`,
     {
@@ -23,7 +28,7 @@ export async function synthesizeStream(text: string): Promise<Response> {
         accept: "audio/mpeg",
       },
       body: JSON.stringify({
-        text,
+        text: speakable,
         model_id: MODEL_ID,
         // Lower stability + a touch of style = more expressive/emotive delivery;
         // speaker_boost keeps it close to the brand voice. Tuned for "fast but lively".
