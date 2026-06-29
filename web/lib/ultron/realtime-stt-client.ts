@@ -17,7 +17,7 @@ const SAMPLE_RATE = 24000;
 const SEND_INTERVAL_MS = 120; // batch mic PCM into ~120ms appends (decouples worklet rate from WS sends)
 const SESSION_READY_TIMEOUT_MS = 4000;
 
-type Phase = "idle" | "connecting" | "streaming" | "finishing" | "closed";
+type Phase = "idle" | "connecting" | "ready" | "streaming" | "finishing" | "closed";
 
 function logEvent(event: string, extra?: Record<string, unknown>): void {
   // No PII: types/counts/durations only.
@@ -43,7 +43,11 @@ export function sttStreamingEnabled(): boolean {
 }
 
 export type RealtimeTranscriber = {
-  /** Connects (token + WS + session.created) and starts capturing mic PCM from `stream`. */
+  /** Slow setup only (token + WS + session.created + audio graph), captured PCM gated off. */
+  connect: (stream: MediaStream) => Promise<void>;
+  /** Opens the PCM gate so audio starts streaming. Instant; call at speech onset. */
+  beginCapture: () => void;
+  /** connect() + beginCapture() in one (paths that don't prewarm). */
   start: (stream: MediaStream) => Promise<void>;
   /** Stops capture and resolves the final transcript (best-effort within `timeoutMs`). */
   finish: (timeoutMs?: number) => Promise<string>;
@@ -61,10 +65,22 @@ export function createRealtimeTranscriber(): RealtimeTranscriber {
   let sendTimer: ReturnType<typeof setInterval> | null = null;
 
   const pending: Int16Array[] = []; // captured PCM awaiting the next batched send
-  let deltaText = "";
-  let finalText: string | null = null;
+  // server_vad may split ONE utterance into several segments (it finalizes on each pause).
+  // We collect every finalized segment and join them, instead of returning only the first —
+  // returning the first truncated the user's speech whenever they paused mid-sentence.
+  const segments: string[] = [];
+  let deltaText = ""; // current (not-yet-finalized) segment buffer
   let completedResolve: (() => void) | null = null;
   let eventCount = 0;
+  // Set when beginCapture() is called before connect() finished, so connect flips straight
+  // to streaming on completion (handles speech onset racing the WS handshake during prewarm).
+  let captureRequested = false;
+
+  // Joins all finalized segments + any in-flight delta into one clean transcript.
+  const assemble = (): string => {
+    const parts = deltaText.trim() ? [...segments, deltaText.trim()] : [...segments];
+    return parts.join(" ").replace(/\s+/g, " ").trim();
+  };
 
   const teardown = (): void => {
     if (phase === "closed") return;
@@ -129,13 +145,21 @@ export function createRealtimeTranscriber(): RealtimeTranscriber {
     if (t.endsWith("input_audio_transcription.delta") && typeof msg.delta === "string") {
       deltaText += msg.delta;
     } else if (t.endsWith("input_audio_transcription.completed")) {
-      finalText = (msg.transcript ?? deltaText ?? "").trim();
-      completedResolve?.();
+      // Append this segment (don't overwrite/teardown) — a paused utterance produces several.
+      const seg = (msg.transcript ?? deltaText).trim();
+      if (seg) segments.push(seg);
+      deltaText = "";
+      completedResolve?.(); // wake finish() if it's waiting for the trailing segment
       completedResolve = null;
     }
   };
 
-  const start = async (stream: MediaStream): Promise<void> => {
+  // Slow setup ONLY (token + WS + session.created + audio graph). Leaves the transcriber in
+  // "ready" — the worklet runs but its PCM is DROPPED until beginCapture() flips to streaming.
+  // Prewarmed during the listening window so speech-onset has nothing to wait for (no head-clip),
+  // while idle listening streams NOTHING to OpenAI (no spurious transcripts).
+  const connect = async (stream: MediaStream): Promise<void> => {
+    if (phase !== "idle") return;
     phase = "connecting";
     const res = await fetch("/api/ultron/stt-token", { method: "POST" });
     if (!res.ok) throw new Error(`stt-token ${res.status}`);
@@ -184,30 +208,53 @@ export function createRealtimeTranscriber(): RealtimeTranscriber {
     captureNode.connect(sinkNode);
     sinkNode.connect(audioCtx.destination);
 
-    phase = "streaming";
-    sendTimer = setInterval(flush, SEND_INTERVAL_MS);
-    logEvent("rt_stt_started");
+    // If onset already requested capture (raced the handshake), go straight to streaming.
+    phase = captureRequested ? "streaming" : "ready";
+    sendTimer = setInterval(flush, SEND_INTERVAL_MS); // flushes empty while "ready"
+    logEvent(captureRequested ? "rt_stt_started" : "rt_stt_connected");
   };
 
-  const finish = async (timeoutMs = 1500): Promise<string> => {
+  // Opens the PCM gate: from here the worklet's audio is buffered and sent. Instant — the
+  // expensive connect() already ran during prewarm. Safe to call before connect() finishes
+  // (sets a flag connect() honors) or after (flips ready→streaming).
+  const beginCapture = (): void => {
+    if (phase === "ready") {
+      phase = "streaming";
+      logEvent("rt_stt_started");
+    } else if (phase === "connecting" || phase === "idle") {
+      captureRequested = true;
+    }
+  };
+
+  // Backward-compatible one-shot connect+capture (wake-word / push-to-talk paths that don't
+  // prewarm). Hands-free prewarms via connect() then opens the gate with beginCapture().
+  const start = async (stream: MediaStream): Promise<void> => {
+    captureRequested = true;
+    await connect(stream);
+  };
+
+  const finish = async (timeoutMs = 1200): Promise<string> => {
     if (phase !== "streaming") {
-      const t = (finalText ?? "").trim();
+      const t = assemble();
       teardown();
       return t;
     }
     phase = "finishing";
-    flush(); // ship whatever PCM is buffered
-    if (finalText == null) {
+    flush(); // ship whatever PCM is buffered so the trailing segment can finalize
+    // Only block if a segment is still forming (deltas in flight) or nothing finalized yet —
+    // otherwise the last segment is already captured and we return with no added latency.
+    // server_vad (800ms) finalizes the tail ~just before our 1000ms client VAD fires finish().
+    if (deltaText.trim() !== "" || segments.length === 0) {
       await new Promise<void>((resolve) => {
         completedResolve = resolve;
         setTimeout(resolve, timeoutMs);
       });
     }
-    const text = (finalText ?? "").trim();
-    logEvent("rt_stt_finish", { got_final: finalText != null, events: eventCount, chars: text.length });
+    const text = assemble();
+    logEvent("rt_stt_finish", { segments: segments.length, events: eventCount, chars: text.length });
     teardown();
     return text;
   };
 
-  return { start, finish, abort: teardown };
+  return { connect, beginCapture, start, finish, abort: teardown };
 }

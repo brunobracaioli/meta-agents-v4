@@ -966,16 +966,24 @@ export function useUltronVoice() {
         audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
       });
       recorderRef.current = recorder;
-      // Start realtime STT in parallel (flag-gated). Fire-and-forget: any failure nulls the
-      // ref so sendPipeline falls back to the one-shot upload of the recorded blob.
-      transcriberRef.current = null;
+      // Realtime STT (flag-gated). If startListening prewarmed a transcriber (WS + audio graph
+      // already live), just OPEN the PCM gate — no head-clip while the handshake runs. Otherwise
+      // (wake/PTT paths) connect+capture now. Fire-and-forget; any failure nulls the ref so
+      // sendPipeline falls back to the one-shot upload of the recorded blob.
       if (sttStreamingEnabled()) {
-        const t = createRealtimeTranscriber();
-        transcriberRef.current = t;
-        t.start(stream).catch(() => {
-          if (transcriberRef.current === t) transcriberRef.current = null;
-          t.abort();
-        });
+        const prewarmed = transcriberRef.current;
+        if (prewarmed) {
+          prewarmed.beginCapture();
+        } else {
+          const t = createRealtimeTranscriber();
+          transcriberRef.current = t;
+          t.start(stream).catch(() => {
+            if (transcriberRef.current === t) transcriberRef.current = null;
+            t.abort();
+          });
+        }
+      } else {
+        transcriberRef.current = null;
       }
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
@@ -1014,8 +1022,19 @@ export function useUltronVoice() {
   const startListening = useCallback(() => {
     handsFreeRef.current = true;
     patch({ status: "listening", handsFree: true });
-    void ensureMic().then(() => {
+    void ensureMic().then((stream) => {
       if (!handsFreeRef.current) return;
+      // Prewarm realtime STT during the listening window so the WS + audio graph are live
+      // BEFORE speech — beginRecording then opens the PCM gate instantly (no head-clip). Gated:
+      // nothing is sent to OpenAI until beginCapture(), so idle listening stays silent/clean.
+      if (sttStreamingEnabled() && !transcriberRef.current) {
+        const t = createRealtimeTranscriber();
+        transcriberRef.current = t;
+        t.connect(stream).catch(() => {
+          if (transcriberRef.current === t) transcriberRef.current = null;
+          t.abort();
+        });
+      }
       if (vadModeRef.current === "worklet") {
         listeningRef.current = true;
         vadMicRef.current?.arm();
@@ -1087,6 +1106,9 @@ export function useUltronVoice() {
       listeningRef.current = false;
       stopVadLoop();
       vadMicRef.current?.disarm();
+      // Drop any prewarmed (idle) realtime STT connection so the WS doesn't leak.
+      transcriberRef.current?.abort();
+      transcriberRef.current = null;
       finalizeRecording();
       patch({ status: "idle", handsFree: false });
     } else {
@@ -1126,6 +1148,9 @@ export function useUltronVoice() {
     listeningRef.current = false;
     stopVadLoop();
     vadMicRef.current?.disarm();
+    // Leaving hands-free: drop any prewarmed realtime STT connection (wake mode doesn't prewarm).
+    transcriberRef.current?.abort();
+    transcriberRef.current = null;
     wakeModeRef.current = true;
     patch({ wakeActive: true, handsFree: false, error: null });
     reArm();
@@ -1250,6 +1275,8 @@ export function useUltronVoice() {
     return () => {
       stopVadLoop();
       wakeRef.current?.stop();
+      transcriberRef.current?.abort();
+      transcriberRef.current = null;
       recorderRef.current?.state !== "inactive" && recorderRef.current?.stop();
       streamRef.current?.getTracks().forEach((t) => t.stop());
       void vadMicRef.current?.close();

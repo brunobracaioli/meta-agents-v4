@@ -50,7 +50,12 @@ export async function createTranscriptionToken(): Promise<TranscriptionToken> {
           input: {
             format: { type: "audio/pcm", rate: 24000 },
             transcription: { model: MODEL, language: "pt", prompt: TRANSCRIPTION_PROMPT },
-            turn_detection: { type: "server_vad" },
+            // server_vad endpointing tuned to MATCH our client VAD (1000ms silence) instead of
+            // the 200ms default, which finalized a PARTIAL transcript on every natural mid-sentence
+            // pause and truncated the utterance. 800ms keeps it slightly under the client VAD so the
+            // trailing segment finalizes just before we call finish(). prefix_padding 400ms includes
+            // pre-speech audio in the commit so the first word isn't clipped while the WS warms up.
+            turn_detection: { type: "server_vad", silence_duration_ms: 800, prefix_padding_ms: 400 },
           },
         },
       },
