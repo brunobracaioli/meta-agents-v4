@@ -15,7 +15,7 @@ import { createSupabaseServerClient } from "@/lib/auth/supabase";
 import { honoCookieAdapter, operatorIdFromRequest } from "@/lib/auth/hono-cookies";
 import { operatorRequiredButMissing } from "@/lib/auth/current-operator";
 import { rateLimiters, enforceLimit, clientIp } from "@/lib/ratelimit";
-import { transcribe } from "@/lib/ultron/stt";
+import { transcribe, createTranscriptionToken } from "@/lib/ultron/stt";
 import { runChat, runChatStream, resumeChat } from "@/lib/ultron/chat";
 import { encodeChatEvent, type ChatStreamEvent } from "@/lib/ultron/chat-stream";
 import { synthesizeStream } from "@/lib/ultron/tts";
@@ -203,6 +203,24 @@ app.post("/ultron/stt", async (c) => {
   } catch (err) {
     console.error(JSON.stringify({ level: "error", event: "stt_failed", message: errMsg(err) }));
     return c.json({ error: "stt_failed" }, 502);
+  }
+});
+
+// Mints a short-lived ephemeral token for the browser's realtime STT WebSocket (ADR 0032).
+// Operator-scoped (like /ultron/chat); the real OPENAI_API_KEY never leaves the server.
+app.post("/ultron/stt-token", async (c) => {
+  const { allowed } = await enforceLimit(rateLimiters.ultronSttToken(), clientIp(c.req.raw), "ultron-stt-token");
+  if (!allowed) return c.json({ error: "rate_limited" }, 429, { "Retry-After": "60" });
+
+  const operatorId = operatorIdFromRequest(c);
+  if (operatorRequiredButMissing(operatorId)) return c.json({ error: "session_expired" }, 401);
+
+  try {
+    const token = await createTranscriptionToken();
+    return c.json(token);
+  } catch (err) {
+    console.error(JSON.stringify({ level: "error", event: "stt_token_failed", message: errMsg(err) }));
+    return c.json({ error: "stt_token_failed" }, 502);
   }
 });
 

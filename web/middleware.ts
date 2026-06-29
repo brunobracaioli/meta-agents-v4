@@ -31,7 +31,9 @@ function buildCsp(nonce: string, isProd: boolean, allowSameOriginFrame: boolean)
     // .glb (the 3D Ultron avatar) into in-memory blob: URLs and fetches them via
     // ImageBitmapLoader, which is governed by connect-src. Blob URLs are same-origin and
     // page-created, so this does not widen the exfiltration surface.
-    `connect-src 'self' blob: https://*.supabase.co wss://*.supabase.co ${CF_TURNSTILE}`,
+    // wss://api.openai.com: the browser streams mic audio to OpenAI Realtime for live STT
+    // (ADR 0032), authenticating with a short-lived ephemeral token minted by /api/ultron/stt-token.
+    `connect-src 'self' blob: https://*.supabase.co wss://*.supabase.co wss://api.openai.com ${CF_TURNSTILE}`,
     scriptSrc,
     "style-src 'self' 'unsafe-inline'",
     // 'self' is required for the dashboard editor's same-origin /lp-preview iframe;

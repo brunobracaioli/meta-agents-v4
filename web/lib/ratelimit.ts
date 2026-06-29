@@ -22,6 +22,7 @@ function limiter(name: string, tokens: number, window: Parameters<typeof Ratelim
 export const rateLimiters = {
   login: () => limiter("login", 5, "1 m"),
   ultronStt: () => limiter("ultron-stt", 20, "1 m"),
+  ultronSttToken: () => limiter("ultron-stt-token", 30, "1 m"),
   ultronChat: () => limiter("ultron-chat", 20, "1 m"),
   ultronTts: () => limiter("ultron-tts", 30, "1 m"),
   ultronCapture: () => limiter("ultron-capture", 15, "1 m"),

@@ -94,3 +94,35 @@ complexidade se paga.
 
 **Implementação:** wave dedicada (não é flip de env como o mini foi). Testar E2E em dev
 antes de ir pra prod; manter o one-shot como caminho de fallback permanente.
+
+## Confirmação empírica da API (2026-06-29)
+
+Testado contra a API real (HTTP 200) — o schema GA, não o beta `transcription_sessions`:
+
+- **Token efêmero:** `POST https://api.openai.com/v1/realtime/client_secrets`
+  ```json
+  { "session": { "type": "transcription", "audio": { "input": {
+      "format": { "type": "audio/pcm", "rate": 24000 },
+      "transcription": { "model": "gpt-4o-mini-transcribe", "language": "pt", "prompt": "<vocab>" },
+      "turn_detection": { "type": "server_vad" } } } } }
+  ```
+  Retorna `{ value, expires_at, session }`. O `value` é o secret efêmero do browser.
+- **Modelo:** `gpt-4o-mini-transcribe` (= `STT_MODEL` de prod) → acerto pt-BR já validado.
+- **Conexão browser:** `wss://api.openai.com/v1/realtime?model=...`, auth via subprotocol
+  `["realtime", "openai-insecure-api-key.<EPHEMERAL>", "openai-beta.realtime-v1"]`.
+- **Eventos:** enviar `input_audio_buffer.append { audio: <base64 pcm16> }`; receber
+  `conversation.item.input_audio_transcription.delta` (campo `delta`) e `.completed`
+  (campo `transcript`). Server VAD faz o endpointing.
+
+## Plano de waves + rollout
+
+- **Wave A (FEITA):** `lib/ultron/stt.ts#createTranscriptionToken` + rota operator-scoped
+  `POST /api/ultron/stt-token` + CSP `connect-src += wss://api.openai.com` + rate limit.
+- **Wave B:** cliente — extrair PCM16 do AudioWorklet existente, abrir o WS com o token,
+  coletar deltas/`completed`, e no fim-de-fala entregar o transcript final ao
+  `/api/ultron/chat` (SSE atual). **Atrás de feature-flag** (default OFF) → merge seguro
+  pra prod com o one-shot como default; liga/desliga sem redeploy de código. Fallback pro
+  one-shot em qualquer falha de WS/token.
+- **Wave C:** preâmbulo antes de tool (prompt) — fecha o buraco da ativação no ARC.
+- **Validação:** ligar a flag, medir `end_to_first_audio_ms` + acerto (slug/números/
+  "confirma") vs. o one-shot; desligar instantâneo se regredir.
