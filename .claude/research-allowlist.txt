@@ -24,6 +24,7 @@ docs.claude.com
 
 # --- OpenAI ---
 platform.openai.com
+developers.openai.com
 
 # --- Vercel / Next.js / React ---
 vercel.com
