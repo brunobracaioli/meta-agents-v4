@@ -7,7 +7,7 @@ import { env } from "@/lib/env";
 // (brand voice) that the orchestrator feeds to TTS. Unlike the chat loop this is stateless:
 // no tools, no memory, no resume — just describe-and-opine on the frame in front of it.
 
-const MODEL = process.env.ULTRON_REVIEW_MODEL ?? "claude-sonnet-4-6";
+const MODEL = process.env.ULTRON_REVIEW_MODEL ?? "claude-sonnet-5";
 const MAX_TOKENS = 220;
 
 let client: Anthropic | null = null;

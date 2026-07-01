@@ -33,7 +33,7 @@ falada na voz da marca (TTS ElevenLabs) com transcript visível na UI.
              │ fetch (JSON/multipart)
 ┌────────────▼───────────── Vercel (Hono em route handler) ────────────────┐
 │ POST /api/ultron/stt      → OpenAI gpt-4o-transcribe (language=pt)        │
-│ POST /api/ultron/chat     → Claude sonnet-4-6 + tool loop (SSE streaming)  │
+│ POST /api/ultron/chat     → Claude sonnet-5 + tool loop (SSE streaming)    │
 │ POST /api/ultron/capture  → resume do tool loop com frame da tela         │
 │ POST /api/ultron/tts      → ElevenLabs eleven_turbo_v2_5 (stream MP3)     │
 │ GET  /api/ultron/narrations / PATCH /:id  → narrações do modo autônomo    │
@@ -256,7 +256,7 @@ RMS com os mesmos thresholds — funcional, mas congela em aba oculta.
 
 ### 8.3 Tool loop (Claude)
 
-- Modelo: **`claude-sonnet-4-6`** (override por env `ULTRON_MODEL`). Decisão:
+- Modelo: **`claude-sonnet-5`** (override por env `ULTRON_MODEL`). Decisão:
   rápido e forte em tool use; Opus 4.8 tem extended thinking por default —
   latência indesejada num loop de voz.
 - `max_tokens: 1024`; system prompt único (`ULTRON_SYSTEM_PROMPT`, pt-BR,

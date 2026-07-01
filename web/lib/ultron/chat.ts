@@ -15,9 +15,9 @@ import { uiIntentFromToolResult, type UIIntent } from "@/lib/ultron/render-inten
 import { loadMemory, appendExchange, type ChatTurn } from "@/lib/ultron/memory";
 import { savePending, loadPending, deletePending } from "@/lib/ultron/pending";
 
-// Sonnet 4.6: fast, strong tool use — better fit than Opus for a low-latency voice
+// Sonnet 5: fast, strong tool use — better fit than Opus for a low-latency voice
 // loop (Opus 4.8 defaults to extended thinking, which adds latency we don't want here).
-const MODEL = process.env.ULTRON_MODEL ?? "claude-sonnet-4-6";
+const MODEL = process.env.ULTRON_MODEL ?? "claude-sonnet-5";
 const MAX_TOOL_ITERATIONS = 5;
 const MAX_TOKENS = 1024;
 const FALLBACK = "Desculpa, não consegui completar isso agora. Pode repetir?";

@@ -9,7 +9,7 @@ import { TOOL_GROUPS, isValidGroupId, selectionHasWrite } from "@/lib/skills/cat
 // wizard, then POST /api/skills creates it. We force a tool call so the output is structured and
 // validated, never free-form prose we have to parse.
 
-const MODEL = process.env.SKILL_DRAFT_MODEL ?? "claude-sonnet-4-6";
+const MODEL = process.env.SKILL_DRAFT_MODEL ?? "claude-sonnet-5";
 const MAX_TOKENS = 2048;
 
 let client: Anthropic | null = null;
