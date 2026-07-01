@@ -12,6 +12,7 @@ import {
   type LiveReviewSignal,
 } from "@/lib/ultron/agent-trigger";
 import { uiIntentFromToolResult, type UIIntent } from "@/lib/ultron/render-intents";
+import { classifyUtterance, assertsCompletedAction, stripCompletedClaims } from "@/lib/ultron/intent-gate";
 import { loadMemory, appendExchange, type ChatTurn } from "@/lib/ultron/memory";
 import { savePending, loadPending, deletePending } from "@/lib/ultron/pending";
 
@@ -64,6 +65,11 @@ type LoopContext = {
   // original one-shot behavior (used by the capture/resume path).
   emit?: (delta: string) => void;
   spoken?: { text: string };
+  // When the operator's utterance is a COMMAND (classifyUtterance), force a tool call on
+  // the first iteration so the model cannot narrate an action without executing it. See
+  // intent-gate.ts for the full rationale. Never set on the resume path (the tool that
+  // motivated the turn was already in flight).
+  forceToolFirst?: boolean;
 };
 
 function extractText(content: Anthropic.ContentBlock[]): string {
@@ -176,11 +182,19 @@ async function runLoop(
   ctx: LoopContext,
 ): Promise<ChatResult> {
   for (let i = startIteration; i < MAX_TOOL_ITERATIONS; i++) {
+    const tools = [...toolSpecs, ...ctx.dynamicTools.map((t) => t.spec)];
+    // On the first iteration of a COMMAND turn, force a tool call: the model must emit a
+    // tool_use (and thus NO spoken text) before anything is voiced, so it can't narrate an
+    // action it never performed. Only the first iteration — afterwards the model needs
+    // `auto` to speak the grounded summary. Guard on tools.length so `any` never goes out
+    // with an empty tool list (an API error).
+    const forceTool = ctx.forceToolFirst === true && i === startIteration && tools.length > 0;
     const params: Anthropic.MessageCreateParamsNonStreaming = {
       model: MODEL,
       max_tokens: MAX_TOKENS,
       system: [{ type: "text", text: ULTRON_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-      tools: [...toolSpecs, ...ctx.dynamicTools.map((t) => t.spec)],
+      tools,
+      ...(forceTool ? { tool_choice: { type: "any" } } : {}),
       messages,
     };
 
@@ -219,7 +233,27 @@ async function runLoop(
     if (res.stop_reason !== "tool_use") {
       // In streaming mode the spoken accumulator already holds every text delta
       // (including any pre-tool preamble from earlier iterations).
-      const reply = (ctx.emit ? ctx.spoken?.text.trim() : extractText(res.content)) || FALLBACK;
+      let reply = (ctx.emit ? ctx.spoken?.text.trim() : extractText(res.content)) || FALLBACK;
+
+      // Phantom-claim guard: the reply asserts an action was done but no tool ran this turn.
+      // The forced-tool gate above prevents this for classified commands; this is the
+      // defense-in-depth net for whatever slips through (unrecognized phrasing).
+      if (usedTools.length === 0 && assertsCompletedAction(reply)) {
+        if (!ctx.emit) {
+          // Non-streaming (capture/resume): nothing was voiced yet — scrub the false claim.
+          reply = stripCompletedClaims(reply) ?? FALLBACK;
+        }
+        // Streaming path can't un-speak; log so we can measure leakage and expand patterns.
+        console.warn(
+          JSON.stringify({
+            level: "warn",
+            event: "phantom_claim",
+            streamed: Boolean(ctx.emit),
+            sample: reply.slice(0, 160),
+          }),
+        );
+      }
+
       return { kind: "reply", reply, usedTools, agentTriggers, landingEdits, liveReviews, uiIntents };
     }
 
@@ -299,6 +333,7 @@ export async function runChat(
     userText: text,
     operatorId,
     dynamicTools,
+    forceToolFirst: classifyUtterance(text) === "command",
   });
   if (result.kind === "reply") {
     await appendExchange(sessionId, text, result.reply, memory);
@@ -333,6 +368,7 @@ export async function runChatStream(
     dynamicTools,
     emit,
     spoken: { text: "" },
+    forceToolFirst: classifyUtterance(text) === "command",
   });
   if (result.kind === "reply") {
     await appendExchange(sessionId, text, result.reply, memory);
