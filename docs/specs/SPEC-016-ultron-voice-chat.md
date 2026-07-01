@@ -269,6 +269,15 @@ RMS com os mesmos thresholds — funcional, mas congela em aba oculta.
   `messages.stream()` e encaminha os deltas de texto; o reply final é o texto
   acumulado (inclui preâmbulo antes de um tool call). A captura (`resumeChat`)
   segue **não-streaming** (`messages.create`) — caminho de visão é mais raro/lento.
+- **Gate anti-"alegação-fantasma" (`tool_choice`, ADR 0033):** o cliente fala cada
+  frase assim que ela sai no streaming, então não dá para "desfalar" uma narração
+  falsa ("abri a segunda tela" sem chamar a tool). Fix preventivo: `classifyUtterance`
+  (`lib/ultron/intent-gate.ts`, determinístico) marca `forceToolFirst` quando a fala é
+  **comando**; nesse caso a **1ª iteração** manda `tool_choice: { type: "any" }` (guardado
+  por `tools.length > 0`) → o modelo emite só o `tool_use` (sem texto), a tool roda, e a
+  iteração seguinte volta a `auto` para falar o resumo já fundamentado. `resumeChat` nunca
+  força. Defesa em profundidade: no caminho não-streaming, alegação-de-conclusão sem tool é
+  higienizada (`stripCompletedClaims`); telemetria `phantom_claim` mede o residual.
 - **Tools client-side** (`CLIENT_TOOLS`, hoje só `capture_screen`) não podem
   rodar no server: o loop **pausa** — persiste o estado in-flight no Redis
   (`ultron:pending:<sessionId>:<uuid>`, **TTL 120s**, com mensagens,
