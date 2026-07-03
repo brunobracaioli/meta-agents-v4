@@ -57,9 +57,9 @@ interativos desta skill:
    PHRASE, BR, copy de `references/copy-ccaf-prep.md`).
 2. **Anti-dup vira término gracioso.** Se o pré-flight achar campanha com `CCAF Prep` ou
    `CCA-F Prep` no nome com status ENABLED **ou** PAUSED criada há menos de 7 dias, NÃO
-   crie nada: grave o `operation_logs` de `action='skip'` (passo 4 — OBRIGATÓRIO, não
-   pule) com `summary` explicando qual campanha já existe, e **encerre com exit 0**
-   (isso é sucesso, não falha).
+   crie nada: grave o `operation_logs` de skip (passo 4 — OBRIGATÓRIO, não pule) com
+   `summary` explicando qual campanha já existe, e **encerre com exit 0** (isso é
+   sucesso, não falha).
 3. **NUNCA ative nada.** Pule o passo de ativação por completo (as tools `update_*_status`
    nem estão no `allowed-tools`). A campanha fica PAUSED; ativação é manual do Bruno.
 4. **Persista em `operation_logs` via REST** — no headless o MCP do Supabase é OAuth-gated
@@ -76,14 +76,18 @@ interativos desta skill:
           "actor":"claude-code","summary":"Campanha Google Ads Search CCAF Prep R$20/dia criada PAUSED, 10 keywords, 6 sitelinks, 6 callouts, 12 negativas, geo BR"}'
    ```
 
-   No skip: `action='skip'`, `meta_entity_id` = resource_name da campanha já existente.
-   `client_id` do brunobracaioli é o acima. **NÃO** grave nas tabelas `campaigns/ad_sets/
-   ads` — o schema delas é específico da Meta. Este passo NÃO é opcional: o run só está
-   completo depois do POST retornar 2xx (confira com `-w '%{http_code}'` se em dúvida).
+   ⚠️ A constraint `operation_logs_action_check` só aceita `action` em
+   `create|update|delete|activate|pause` — **não existe `skip`**. No skip use
+   `action='update'` (no-op) com o `summary` começando com `SKIP (anti-dup headless,
+   nenhuma alteracao feita): job <id> ...` e `meta_entity_id` = resource_name da campanha
+   já existente. `client_id` do brunobracaioli é o acima. **NÃO** grave nas tabelas
+   `campaigns/ad_sets/ads` — o schema delas é específico da Meta. Este passo NÃO é
+   opcional: o run só está completo depois do POST retornar 2xx (confira com
+   `-w '%{http_code}'` se em dúvida).
 5. **Erro no meio do funil**: siga o workaround do Caminho B reaproveitando os
    `resource_names` já criados. Se ainda assim não der para concluir sem violar um limite,
-   grave `operation_logs` com `action='error'` + o `request_id` no summary, e saia com
-   exit ≠ 0 — nunca deixe recurso órfão sem registro.
+   grave `operation_logs` com `action='update'` e summary começando com `ERROR:` + o
+   `request_id`, e saia com exit ≠ 0 — nunca deixe recurso órfão sem registro.
 
 ## ⚠️ Conformidade de marca (específico deste produto)
 
