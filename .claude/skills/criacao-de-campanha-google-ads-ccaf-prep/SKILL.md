@@ -36,8 +36,20 @@ Se o Bruno pedir campanha para **outro produto**, esta skill não se aplica — 
 
 ## Modo headless (fila agent_jobs — kind `create_google_ads`)
 
-Quando disparada pelo runner (`claude -p`, job enfileirado pelo Ultron), **não há humano
-para responder**. Regras que SUBSTITUEM os pontos interativos desta skill:
+**Passo 0 — detecte o modo ANTES de qualquer outra coisa** (antes até do pré-flight).
+Rode via Bash:
+
+```bash
+[ -n "${AGENT_JOB_ID:-}" ] && echo "MODO=headless job=${AGENT_JOB_ID}" || echo "MODO=interativo"
+```
+
+O poller da fila `agent_jobs` sempre exporta `AGENT_JOB_ID` (poll-agent-jobs.sh linha 140);
+numa sessão interativa com o Bruno essa env não existe. **Não adivinhe o modo pelo tom do
+prompt** — um run da fila que "pergunta e sai com exit 0" é um bug silencioso: o job conta
+como sucesso sem ter feito nem registrado nada.
+
+Se `MODO=headless`: **não há humano para responder**. Regras que SUBSTITUEM os pontos
+interativos desta skill:
 
 1. **NUNCA chame `AskUserQuestion`** nem pare esperando confirmação — deadlock. Todas as
    frases "confirme com o Bruno / espere o ok" valem só no modo interativo. No headless,
