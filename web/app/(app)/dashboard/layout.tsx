@@ -44,6 +44,12 @@ export default function DashboardLayout({
                 Landing pages
               </Link>
               <Link
+                href="/dashboard/flows"
+                className="rounded-md border border-transparent px-3 py-2 transition hover:border-cyan-200/20 hover:bg-white/[0.03] hover:text-white"
+              >
+                Flows
+              </Link>
+              <Link
                 href="/dashboard/analyses"
                 className="rounded-md border border-transparent px-3 py-2 transition hover:border-cyan-200/20 hover:bg-white/[0.03] hover:text-white"
               >

@@ -48,6 +48,9 @@ export const rateLimiters = {
   // AI skill drafting (SPEC-018) is a paid Anthropic call; keyed by operator. Generous enough
   // for an interactive author iterating on a goal, bounded to keep token cost in check.
   skillDraft: () => limiter("skill-draft", 15, "1 m"),
+  // Flow Builder editor (SPEC-020): autosave PATCHes + reference uploads are cheap Supabase
+  // writes, debounced client-side; same cap/rationale as landingEdit, keyed by flow id.
+  flowEdit: () => limiter("flow-edit", 120, "1 m"),
 };
 
 /**

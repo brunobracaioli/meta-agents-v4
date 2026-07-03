@@ -27,6 +27,7 @@ import { landingPages } from "@/lib/api/landing-pages";
 import { clients } from "@/lib/api/clients";
 import { products } from "@/lib/api/products";
 import { skills } from "@/lib/api/skills";
+import { flows } from "@/lib/api/flows";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -462,6 +463,9 @@ app.route("/products", products);
 
 // ---------- Operator-authored skills (SPEC-018) ----------
 app.route("/skills", skills);
+
+// ---------- Flow Builder (SPEC-020 Wave 1) ----------
+app.route("/flows", flows);
 
 app.get("/health", (c) => c.json({ ok: true }));
 
