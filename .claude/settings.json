@@ -127,7 +127,11 @@
       "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__create_callouts",
       "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__create_structured_snippet",
       "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__add_geo_targeting",
-      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__add_age_targeting"
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__add_age_targeting",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__get_search_terms",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__get_recommendations",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__list_conversion_actions",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__get_conversion_tags"
     ],
 
     "deny": []
