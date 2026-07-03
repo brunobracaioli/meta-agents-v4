@@ -62,6 +62,10 @@ const CREATE_SKILL_BY_SLUG: Record<string, string> = {
 const CREATE_SALES_SKILL_BY_SLUG: Record<string, string> = {
   brunobracaioli: "create-sales-brunobracaioli-campaign",
 };
+// Campanha de PESQUISA no GOOGLE ADS (Search, produto CCA-F Prep / claudeprep.io).
+const GOOGLE_ADS_SKILL_BY_SLUG: Record<string, string> = {
+  brunobracaioli: "criacao-de-campanha-google-ads-ccaf-prep",
+};
 const ACTIVATE_SKILL_BY_SLUG: Record<string, string> = {
   brunobracaioli: "activate-campaign-brunobracaioli",
 };
@@ -846,6 +850,78 @@ const tools: Record<string, ToolDef> = {
         client_slug: slug,
         queued_at: new Date().toISOString(),
         message: "Pedido de criação de campanha de vendas enfileirado. Os agents começam em até um minuto; a campanha vai nascer pausada, reusando os top criativos.",
+      };
+    },
+  },
+
+  request_google_ads_campaign_creation: {
+    spec: {
+      name: "request_google_ads_campaign_creation",
+      description:
+        "Enfileira a CRIAÇÃO de uma campanha de PESQUISA no GOOGLE ADS (Search) para o produto CCA-F Prep (claudeprep.io) — copy validada, R$ 20 por dia, keywords de certificação Claude, Brasil. A campanha nasce PAUSED (sem gasto); a ativação no Google é manual, feita pelo operador. Use quando o operador pedir para 'criar/subir campanha no Google / no Google Ads / de pesquisa / search para o CCA-F Prep ou claudeprep'. FLUXO OBRIGATÓRIO: chame primeiro com confirm=false para obter os detalhes, leia-os ao operador e peça confirmação; só chame com confirm=true após um 'sim' explícito.",
+      input_schema: {
+        type: "object",
+        properties: {
+          client_slug: { type: "string", description: "slug do cliente, ex.: brunobracaioli" },
+          confirm: {
+            type: "boolean",
+            description: "false = apenas devolve os detalhes para confirmar; true = enfileira de fato (use só após o operador confirmar)",
+          },
+        },
+        required: ["client_slug", "confirm"],
+      },
+    },
+    handler: async (input, ctx) => {
+      const slug = str(input, "client_slug");
+      const confirm = input.confirm === true;
+      if (!slug) return { error: "client_slug é obrigatório" };
+      const client = await resolveClientId(slug);
+      if (!client) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorRunnerReady(ctx.operatorId))) return { error: RUNNER_NOT_READY };
+      const skill = GOOGLE_ADS_SKILL_BY_SLUG[slug];
+      if (!skill) return { error: `cliente '${slug}' não está habilitado para criação automática de campanha no Google Ads` };
+
+      if (!confirm) {
+        return {
+          confirmation_required: true,
+          action: "criar campanha de pesquisa no Google Ads (CCA-F Prep)",
+          client: client.name,
+          client_slug: slug,
+          daily_budget: "R$ 20,00/dia (fixo da skill; teto de orçamento Meta não se aplica)",
+          note: "Campanha Search do CCA-F Prep (claudeprep.io) com a copy validada da skill. Nasce PAUSED (gasto zero); a ativação no Google Ads é um passo manual do operador. Confirme com o operador antes de chamar com confirm=true.",
+        };
+      }
+
+      const { allowed } = await enforceLimit(rateLimiters.campaignCreation(), slug, "google-ads-campaign-creation");
+      if (!allowed) return { error: "muitos pedidos de criação para este cliente agora; tente de novo daqui a pouco" };
+
+      const { data, error } = await db()
+        .from("agent_jobs")
+        .insert({
+          client_id: client.id,
+          operator_id: ctx.operatorId,
+          skill,
+          kind: "create_google_ads",
+          args: {},
+          requested_by: "ultron",
+        })
+        .select("id")
+        .single();
+      if (error) {
+        if (isUniqueViolation(error)) {
+          return { enqueued: false, reason: "já existe um pedido de criação de campanha no Google Ads em andamento para este cliente" };
+        }
+        throw error;
+      }
+      return {
+        enqueued: true,
+        job_id: data.id,
+        skill,
+        kind: "create_google_ads",
+        client_slug: slug,
+        queued_at: new Date().toISOString(),
+        message: "Pedido de criação de campanha no Google Ads enfileirado. Os agents começam em até um minuto; a campanha vai nascer pausada — a ativação no Google é manual.",
       };
     },
   },

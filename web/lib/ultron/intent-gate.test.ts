@@ -31,6 +31,8 @@ describe("classifyUtterance — command vs chat", () => {
     "roda uma análise agora",
     "mostra a última análise do bruno",
     "inicia o modo autônomo e monitora",
+    "cria uma campanha de pesquisa no google pro cca-f prep",
+    "sobe os anúncios do claudeprep no google ads",
   ])("classifies %j as command", (text) => {
     expect(classifyUtterance(text)).toBe("command");
   });
