@@ -51,13 +51,14 @@ const COMMAND_NOUN = new RegExp(
     [
       "funil", "funnel", "campanh", "criativ", "landing", "pagin", "analise", "diagnostic",
       "resumo", "client", "card", "past", "metric", "desempenh", "performance", "cplpv",
-      "cpl", "cpa", "ctr", "cpc", "cpm", "roas", "gast", "verba", "orcament",
+      "cpl", "cpa", "ctr", "cpc", "cpm", "roas", "gast", "verba", "orcament", "google",
+      "pesquis",
     ].join("|") +
     ")\\w*",
 );
 
 // Multi-word triggers the stems above don't capture cleanly.
-const COMMAND_PHRASE = /(segunda tela|segunda janela|outro monitor|modo autonomo|top criativ)/;
+const COMMAND_PHRASE = /(segunda tela|segunda janela|outro monitor|modo autonomo|top criativ|google ads|ccaf prep|cca-f|claudeprep)/;
 
 export function classifyUtterance(text: string): Intent {
   if (!text) return "chat";

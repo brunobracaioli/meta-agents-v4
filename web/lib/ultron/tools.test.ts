@@ -152,6 +152,53 @@ describe("request_campaign_creation", () => {
   });
 });
 
+describe("request_google_ads_campaign_creation", () => {
+  it("with confirm=false asks for confirmation and does NOT enqueue", async () => {
+    state.clients = { data: KNOWN_CLIENT, error: null };
+    const out = (await runTool("request_google_ads_campaign_creation", { client_slug: "brunobracaioli", confirm: false })) as Record<string, unknown>;
+    expect(out.confirmation_required).toBe(true);
+    expect(state.inserts).toHaveLength(0);
+  });
+
+  it("rejects an unknown client and does NOT enqueue", async () => {
+    state.clients = { data: null, error: null };
+    const out = (await runTool("request_google_ads_campaign_creation", { client_slug: "ghost", confirm: true })) as Record<string, unknown>;
+    expect(out.error).toBeDefined();
+    expect(state.inserts).toHaveLength(0);
+  });
+
+  it("rejects a client missing from the google ads allowlist", async () => {
+    // Resolvable client row, but slug not in GOOGLE_ADS_SKILL_BY_SLUG.
+    state.clients = { data: { ...KNOWN_CLIENT }, error: null };
+    const out = (await runTool("request_google_ads_campaign_creation", { client_slug: "outro", confirm: true })) as Record<string, unknown>;
+    expect(out.error).toBeDefined();
+    expect(state.inserts).toHaveLength(0);
+  });
+
+  it("with confirm=true enqueues a create_google_ads job with the ccaf skill", async () => {
+    state.clients = { data: KNOWN_CLIENT, error: null };
+    const out = (await runTool("request_google_ads_campaign_creation", { client_slug: "brunobracaioli", confirm: true })) as Record<string, unknown>;
+    expect(out.enqueued).toBe(true);
+    expect(out.job_id).toBe("job-1");
+    expect(out.kind).toBe("create_google_ads");
+    expect(out.skill).toBe("criacao-de-campanha-google-ads-ccaf-prep");
+    expect(state.inserts).toHaveLength(1);
+    const row = state.inserts[0]!.row as Record<string, unknown>;
+    expect(row.kind).toBe("create_google_ads");
+    expect(row.skill).toBe("criacao-de-campanha-google-ads-ccaf-prep");
+    // Budget is fixed inside the skill (R$20/day) — the Meta budget cap must NOT leak into args.
+    expect(row.args).toEqual({});
+  });
+
+  it("surfaces an in-flight duplicate (unique violation) instead of throwing", async () => {
+    state.clients = { data: KNOWN_CLIENT, error: null };
+    state.jobInsert = { data: null, error: { code: "23505" } };
+    const out = (await runTool("request_google_ads_campaign_creation", { client_slug: "brunobracaioli", confirm: true })) as Record<string, unknown>;
+    expect(out.enqueued).toBe(false);
+    expect(out.reason).toContain("andamento");
+  });
+});
+
 describe("request_campaign_activation", () => {
   it("with confirm=false on a PAUSED in-budget campaign asks for confirmation with a real-spend warning", async () => {
     state.clients = { data: KNOWN_CLIENT, error: null };
