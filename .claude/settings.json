@@ -106,7 +106,28 @@
       "mcp__claude_ai_MCP_META_ADS_B2_TECH__update_ad",
       "mcp__claude_ai_MCP_META_ADS_B2_TECH__pause_campaign",
       "mcp__claude_ai_MCP_META_ADS_B2_TECH__pause_adset",
-      "mcp__claude_ai_MCP_META_ADS_B2_TECH__pause_ad"
+      "mcp__claude_ai_MCP_META_ADS_B2_TECH__pause_ad",
+
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__google_token_status",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__list_accessible_customers",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__list_campaigns",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__list_ad_groups",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__list_ads",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__get_insights",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__run_insights_report",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__generate_keyword_ideas",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__create_search_campaign",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__create_campaign_budget",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__create_campaign",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__create_ad_group",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__create_responsive_search_ad",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__add_keywords",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__add_negative_keywords",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__create_sitelinks",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__create_callouts",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__create_structured_snippet",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__add_geo_targeting",
+      "mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__add_age_targeting"
     ],
 
     "deny": []
@@ -134,7 +155,7 @@
         ]
       },
       {
-        "matcher": "Task|Agent|Skill|WebFetch|WebSearch|mcp__.+__ads_.+|mcp__.+__(create|update|pause|copy)_(campaign|adset|ad|creative)|mcp__.+__get_insights|mcp__.+__run_insights_report|mcp__.+__list_(campaigns|adsets|ads|creatives)|mcp__.+__execute_sql|mcp__.+__apply_migration",
+        "matcher": "Task|Agent|Skill|WebFetch|WebSearch|mcp__.+__ads_.+|mcp__.+__(create|update|pause|copy)_(campaign|adset|ad|creative)|mcp__.+__get_insights|mcp__.+__run_insights_report|mcp__.+__list_(campaigns|adsets|ads|creatives)|mcp__.+__execute_sql|mcp__.+__apply_migration|mcp__claude_ai_MCP_GOOGLE_ADS_B2_TECH__.+",
         "hooks": [
           {
             "type": "command",
