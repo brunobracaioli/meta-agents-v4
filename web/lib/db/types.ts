@@ -295,6 +295,7 @@ export type Database = {
       analyses: {
         Row: {
           active_entities: number
+          channel: string
           client_id: string
           compare_window_start: string | null
           compare_window_stop: string | null
@@ -313,6 +314,7 @@ export type Database = {
         }
         Insert: {
           active_entities?: number
+          channel?: string
           client_id: string
           compare_window_start?: string | null
           compare_window_stop?: string | null
@@ -331,6 +333,7 @@ export type Database = {
         }
         Update: {
           active_entities?: number
+          channel?: string
           client_id?: string
           compare_window_start?: string | null
           compare_window_stop?: string | null

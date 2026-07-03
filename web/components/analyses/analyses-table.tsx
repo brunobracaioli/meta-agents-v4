@@ -27,6 +27,12 @@ function formatDateOnly(date: string | null): string {
   );
 }
 
+// analyses.channel: 'meta' (default histórico) | 'google_ads'.
+const CHANNEL_BADGES: Record<string, { label: string; classes: string }> = {
+  meta: { label: "Meta", classes: "border-sky-200/20 bg-sky-400/10 text-sky-200/80" },
+  google_ads: { label: "Google Ads", classes: "border-amber-200/20 bg-amber-400/10 text-amber-200/80" },
+};
+
 const SELECT_CLASSES =
   "rounded-md border border-white/10 bg-[#0a0f1f] px-3 py-2 text-sm text-white/80 outline-none transition focus:border-cyan-200/40";
 
@@ -64,7 +70,8 @@ export function AnalysesTable({ rounds }: { rounds: AnalysisRound[] }) {
         >
           {rounds.map((r) => (
             <option key={r.analysis.id} value={r.analysis.id}>
-              {r.clientName} · {formatDateTime(r.analysis.created_at)}
+              {r.clientName} · {CHANNEL_BADGES[r.analysis.channel]?.label ?? r.analysis.channel} ·{" "}
+              {formatDateTime(r.analysis.created_at)}
             </option>
           ))}
         </select>
@@ -99,6 +106,13 @@ export function AnalysesTable({ rounds }: { rounds: AnalysisRound[] }) {
             }`}
           >
             {analysis.overall_verdict}
+          </span>
+          <span
+            className={`rounded border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] ${
+              CHANNEL_BADGES[analysis.channel]?.classes ?? "border-white/10 bg-white/10 text-white/60"
+            }`}
+          >
+            {CHANNEL_BADGES[analysis.channel]?.label ?? analysis.channel}
           </span>
           <span className="text-xs text-white/40">
             {round.clientName} · janela {formatDateOnly(analysis.window_start)} –{" "}

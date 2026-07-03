@@ -40,7 +40,7 @@ function query(table: string) {
 
 vi.mock("@/lib/db/client", () => ({ db: () => ({ from: (t: string) => query(t) }) }));
 vi.mock("@/lib/ratelimit", () => ({
-  rateLimiters: { campaignCreation: () => ({}), campaignActivation: () => ({}), landingCreation: () => ({}) },
+  rateLimiters: { campaignCreation: () => ({}), campaignActivation: () => ({}), landingCreation: () => ({}), analysisRequest: () => ({}) },
   enforceLimit: vi.fn(async () => ({ allowed: true })),
 }));
 
@@ -194,6 +194,45 @@ describe("request_google_ads_campaign_creation", () => {
     state.clients = { data: KNOWN_CLIENT, error: null };
     state.jobInsert = { data: null, error: { code: "23505" } };
     const out = (await runTool("request_google_ads_campaign_creation", { client_slug: "brunobracaioli", confirm: true })) as Record<string, unknown>;
+    expect(out.enqueued).toBe(false);
+    expect(out.reason).toContain("andamento");
+  });
+});
+
+describe("request_google_ads_analysis", () => {
+  it("rejects an unknown client and does NOT enqueue", async () => {
+    state.clients = { data: null, error: null };
+    const out = (await runTool("request_google_ads_analysis", { client_slug: "ghost" })) as Record<string, unknown>;
+    expect(out.error).toBeDefined();
+    expect(state.inserts).toHaveLength(0);
+  });
+
+  it("rejects a client missing from the google ads analyze allowlist", async () => {
+    // Resolvable client row, but slug not in GOOGLE_ADS_ANALYZE_SKILL_BY_SLUG.
+    state.clients = { data: { ...KNOWN_CLIENT }, error: null };
+    const out = (await runTool("request_google_ads_analysis", { client_slug: "outro" })) as Record<string, unknown>;
+    expect(out.error).toBeDefined();
+    expect(state.inserts).toHaveLength(0);
+  });
+
+  it("enqueues an analyze_google job without any confirmation step (read-only)", async () => {
+    state.clients = { data: KNOWN_CLIENT, error: null };
+    const out = (await runTool("request_google_ads_analysis", { client_slug: "brunobracaioli" })) as Record<string, unknown>;
+    expect(out.enqueued).toBe(true);
+    expect(out.job_id).toBe("job-1");
+    expect(out.kind).toBe("analyze_google");
+    expect(out.skill).toBe("google-ads-analytics-brunobracaioli");
+    expect(state.inserts).toHaveLength(1);
+    const row = state.inserts[0]!.row as Record<string, unknown>;
+    expect(row.kind).toBe("analyze_google");
+    expect(row.skill).toBe("google-ads-analytics-brunobracaioli");
+    expect(row.args).toEqual({});
+  });
+
+  it("surfaces an in-flight duplicate (unique violation) instead of throwing", async () => {
+    state.clients = { data: KNOWN_CLIENT, error: null };
+    state.jobInsert = { data: null, error: { code: "23505" } };
+    const out = (await runTool("request_google_ads_analysis", { client_slug: "brunobracaioli" })) as Record<string, unknown>;
     expect(out.enqueued).toBe(false);
     expect(out.reason).toContain("andamento");
   });
