@@ -43,6 +43,7 @@ export type AnalysisRound = {
     | "overall_verdict"
     | "summary"
     | "objective"
+    | "channel"
     | "window_start"
     | "window_stop"
     | "triggered_by"
@@ -71,7 +72,7 @@ export async function getAnalysisRounds(
   const analysesRes = await supabase
     .from("analyses")
     .select(
-      "id, client_id, created_at, overall_verdict, summary, objective, window_start, window_stop, triggered_by",
+      "id, client_id, created_at, overall_verdict, summary, objective, channel, window_start, window_stop, triggered_by",
     )
     .order("created_at", { ascending: false })
     .limit(limit);

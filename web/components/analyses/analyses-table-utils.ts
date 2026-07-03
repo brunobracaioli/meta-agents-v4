@@ -72,6 +72,8 @@ export const RECOMMENDATION_LABELS: Record<string, string> = {
   fix_landing_page: "Corrigir LP",
   reallocate_budget: "Realocar verba",
   adjust_audience: "Ajustar público",
+  add_negative_keywords: "Negativar termos",
+  adjust_keywords: "Ajustar keywords",
   scale: "Escalar",
   observe: "Observar",
   none: "—",

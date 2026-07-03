@@ -72,6 +72,10 @@ const ACTIVATE_SKILL_BY_SLUG: Record<string, string> = {
 const ANALYZE_SKILL_BY_SLUG: Record<string, string> = {
   brunobracaioli: "funnel-analytics-brunobracaioli-campaign",
 };
+// Análise READ-ONLY das campanhas de GOOGLE ADS (conta 4342319594, Search).
+const GOOGLE_ADS_ANALYZE_SKILL_BY_SLUG: Record<string, string> = {
+  brunobracaioli: "google-ads-analytics-brunobracaioli",
+};
 const LANDING_SKILL_BY_SLUG: Record<string, string> = {
   brunobracaioli: "create-landing-page-brunobracaioli",
 };
@@ -1075,6 +1079,63 @@ const tools: Record<string, ToolDef> = {
         queued_at: new Date().toISOString(),
         message:
           "Análise enfileirada. Os agents começam em até um minuto e levam alguns minutos; depois é só pedir o resultado (get_latest_analysis).",
+      };
+    },
+  },
+
+  request_google_ads_analysis: {
+    spec: {
+      name: "request_google_ads_analysis",
+      description:
+        "Enfileira uma ANÁLISE DE PERFORMANCE sob demanda das campanhas de GOOGLE ADS (Pesquisa/Search) de um cliente (os agents rodam na VM). É READ-ONLY na conta Google — não cria, não ativa, não gasta nada; só lê métricas (CPC, CTR, termos de busca, candidatos a keyword negativa) e grava diagnóstico + recomendações no banco (aba Análises, canal Google). Não precisa de confirmação em dois passos. A análise leva alguns minutos; acompanhe com get_recent_jobs. A mesma análise também roda sozinha todo dia às 8h30.",
+      input_schema: {
+        type: "object",
+        properties: {
+          client_slug: { type: "string", description: "slug do cliente, ex.: brunobracaioli" },
+        },
+        required: ["client_slug"],
+      },
+    },
+    handler: async (input, ctx) => {
+      const slug = str(input, "client_slug");
+      if (!slug) return { error: "client_slug é obrigatório" };
+      const client = await resolveClientId(slug);
+      if (!client) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorOwnsClient(ctx.operatorId, client.id))) return { error: `cliente '${slug}' não encontrado` };
+      if (!(await operatorRunnerReady(ctx.operatorId))) return { error: RUNNER_NOT_READY };
+      const skill = GOOGLE_ADS_ANALYZE_SKILL_BY_SLUG[slug];
+      if (!skill) return { error: `cliente '${slug}' não está habilitado para análise de Google Ads` };
+
+      const { allowed } = await enforceLimit(rateLimiters.analysisRequest(), slug, "google-ads-analysis-request");
+      if (!allowed) return { error: "muitos pedidos de análise para este cliente agora; tente de novo daqui a pouco" };
+
+      const { data, error } = await db()
+        .from("agent_jobs")
+        .insert({
+          client_id: client.id,
+          operator_id: ctx.operatorId,
+          skill,
+          kind: "analyze_google",
+          args: {},
+          requested_by: "ultron",
+        })
+        .select("id")
+        .single();
+      if (error) {
+        if (isUniqueViolation(error)) {
+          return { enqueued: false, reason: "já existe uma análise de Google Ads em andamento para este cliente" };
+        }
+        throw error;
+      }
+      return {
+        enqueued: true,
+        job_id: data.id,
+        skill,
+        kind: "analyze_google",
+        client_slug: slug,
+        queued_at: new Date().toISOString(),
+        message:
+          "Análise de Google Ads enfileirada. Os agents começam em até um minuto e levam alguns minutos; o resultado aparece na aba Análises.",
       };
     },
   },

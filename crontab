@@ -10,6 +10,11 @@
 # see docs/adr/0025-meta-ads-funnel-analytics-b2tech.md (replaces analytic-traffic-..., ADR 0024).
 0 8 * * * /app/scripts/run-skill.sh funnel-analytics-brunobracaioli-campaign
 
+# Daily GOOGLE ADS analysis for cliente brunobracaioli at 08:30 BRT (read-only) — account
+# 4342319594 via MCP_GOOGLE_ADS_B2_TECH. Offset 30min from the Meta analysis so two claude -p
+# runs never overlap on this machine. Persists to analyses (channel=google_ads).
+30 8 * * * /app/scripts/run-skill.sh google-ads-analytics-brunobracaioli
+
 # Daily AI summary for cliente brunobracaioli at 23:30 BRT (consolida o dia p/ o Ultron).
 30 23 * * * /app/scripts/run-skill.sh daily-summary-brunobracaioli
 
