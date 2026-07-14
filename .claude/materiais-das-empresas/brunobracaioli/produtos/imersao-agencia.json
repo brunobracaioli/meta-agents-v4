@@ -11,8 +11,8 @@
   "defaultSubdomain": "imersao-agencia",
   "format": "Workshop ao vivo no Zoom, mão na massa, em 3 dias. Você aprende a CRIAR o projeto da AgêncIA do zero — eu entrego os materiais necessários e mostro o passo a passo detalhado nas lives exclusivas (não é um projeto pronto entregue de mão beijada). A gravação dos 3 dias está inclusa no valor.",
   "eventDate": "2026-07-11",
-  "eventDatesLabel": "11, 12 e 13 de julho",
-  "schedule": "Sáb 11/07 e dom 12/07: 13h às 19h · Seg 13/07: 20h às 22h",
+  "eventDatesLabel": "01, 02 e 03 de agosto",
+  "schedule": "Sáb 01/08 e dom 02/08: 13h às 19h · Seg 03/08: 18h às 22h",
   "duration": "3 dias ao vivo",
   "offer": {
     "priceCents": 14700,
@@ -41,7 +41,7 @@
   },
   "whatItIs": "Workshop ao vivo de 3 dias onde você APRENDE A CRIAR, do zero, uma estrutura de agentes de IA que operam uma agência de tráfego (Meta Ads e Google Ads) de forma autônoma. Não é um projeto pronto entregue de mão beijada: eu dou os materiais necessários e mostro o passo a passo detalhado pra você montar o seu — e sair com os primeiros times de agentes configurados e rodando para múltiplos clientes simultaneamente.",
   "hero": {
-    "badge": "11, 12 e 13/07 · 3 dias ao vivo · 1º lote",
+    "badge": "01, 02 e 03/08 · 3 dias ao vivo · 1º lote",
     "headline": "Pare de ser babá de campanha.",
     "headlineAccent": "Monte uma agência de IA que roda 24/7.",
     "subhead": "Workshop ao vivo de 3 dias, mão na massa: você aprende a criar, do zero, times de agentes de IA que criam, editam e analisam campanhas no Meta Ads e no Google Ads no automático — com os materiais e o passo a passo detalhado pra montar a sua e escalar pra múltiplos clientes.",
@@ -103,9 +103,9 @@
     "Não precisa ser dev — só usar o Claude Code no básico; o resto é conduzido ao vivo, passo a passo"
   ],
   "agenda": [
-    { "bloco": "Dia 1 · Sáb 11/07, 13h às 19h // Fundação", "desc": "Conectar Claude Code aos MCPs do Meta Ads e do Google Ads; primeiro prompt que lê métricas reais e descreve o cenário. Materiais e passo a passo entregues ao vivo." },
-    { "bloco": "Dia 2 · Dom 12/07, 13h às 19h // Criação & análise", "desc": "A campanha nasce de uma spec (público, criativo, budget, objetivo) revisada pelo agente antes de subir; os agentes criam, editam e analisam campanhas no Meta e no Google." },
-    { "bloco": "Dia 3 · Seg 13/07, 20h às 22h // Loop 24/7 & replicação", "desc": "Cron rodando, human-in-the-loop no celular e playbook de replicação por cliente." }
+    { "bloco": "Dia 1 · Sáb 01/08, 13h às 19h // Fundação", "desc": "Conectar Claude Code aos MCPs do Meta Ads e do Google Ads; primeiro prompt que lê métricas reais e descreve o cenário. Materiais e passo a passo entregues ao vivo." },
+    { "bloco": "Dia 2 · Dom 02/08, 13h às 19h // Criação & análise", "desc": "A campanha nasce de uma spec (público, criativo, budget, objetivo) revisada pelo agente antes de subir; os agentes criam, editam e analisam campanhas no Meta e no Google." },
+    { "bloco": "Dia 3 · Seg 03/08, 18h às 22h // Loop 24/7 & replicação", "desc": "Cron rodando, human-in-the-loop no celular e playbook de replicação por cliente." }
   ],
   "entregaveis": [
     "Passo a passo detalhado pra criar a AgêncIA do zero",
@@ -200,7 +200,7 @@
   ],
   "seo": {
     "title": "Imersão AgêncIA Tráfego Pago — sua agência de IA 24/7",
-    "description": "Workshop ao vivo de 3 dias: aprenda a criar times de agentes de IA que criam, editam e analisam Meta Ads e Google Ads no automático, 24/7. 11, 12 e 13 de julho. Gravação inclusa. 1º lote R$147."
+    "description": "Workshop ao vivo de 3 dias: aprenda a criar times de agentes de IA que criam, editam e analisam Meta Ads e Google Ads no automático, 24/7. 01, 02 e 03 de agosto. Gravação inclusa. 1º lote R$147."
   },
   "assets": {
     "logo": ".claude/materiais-das-empresas/brunobracaioli/logo/logo.png",
