@@ -20,7 +20,7 @@ export function Video() {
   const embed = `https://www.youtube-nocookie.com/embed/${id}?rel=0&modestbranding=1&autoplay=1`;
 
   return (
-    <section className="section section--dark section--center">
+    <section className="section section--dark section--center" id="video">
       <FadeIn className="container container--narrow">
         {data.eyebrow ? <span className="eyebrow">{data.eyebrow}</span> : null}
         <h2>{data.heading}</h2>
