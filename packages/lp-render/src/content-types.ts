@@ -7,6 +7,7 @@
 export type SectionType =
   | "hero"
   | "urgency"
+  | "video"
   | "problem"
   | "comparison"
   | "solution"
@@ -83,6 +84,10 @@ export interface Messages {
   };
   sections: {
     urgency?: { label: string; scarcity?: string };
+    /** VSL / sales video. `youtubeId` is the bare YouTube id (e.g. "m0YlrfscReE"); the block
+     * renders a click-to-play facade → youtube-nocookie player. `poster` overrides the
+     * auto-derived thumbnail. */
+    video?: { eyebrow?: string; heading: string; subhead?: string; youtubeId: string; poster?: string };
     problem?: { heading: string; body: string; bullets?: string[]; image?: string };
     comparison?: {
       heading: string;
@@ -170,6 +175,7 @@ export type Tone = "light" | "alt";
  * top-level hero/offer/faq/finalCta/footer, which the template exposes at the root). */
 export const MIDDLE_SECTION_TYPES = [
   "urgency",
+  "video",
   "problem",
   "comparison",
   "solution",

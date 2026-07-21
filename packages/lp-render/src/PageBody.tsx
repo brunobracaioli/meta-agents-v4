@@ -8,6 +8,7 @@ import { ReviewBridge } from "./sections/ReviewBridge";
 import { SiteHeader } from "./components/SiteHeader";
 import { Hero } from "./sections/Hero";
 import { Urgency } from "./sections/Urgency";
+import { Video } from "./sections/Video";
 import { Problem } from "./sections/Problem";
 import { Comparison } from "./sections/Comparison";
 import { Solution } from "./sections/Solution";
@@ -47,6 +48,7 @@ const FLOW_SECTIONS = new Set<SectionType>([
 const REGISTRY: Record<SectionType, (tone: Tone) => ReactNode> = {
   hero: () => <Hero key="hero" />,
   urgency: () => <Urgency key="urgency" />,
+  video: () => <Video key="video" />,
   problem: (t) => <Problem key="problem" tone={t} />,
   comparison: (t) => <Comparison key="comparison" tone={t} />,
   solution: (t) => <Solution key="solution" tone={t} />,
