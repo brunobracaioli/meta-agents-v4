@@ -45,6 +45,15 @@ export const SECTION_SCHEMAS: Record<SectionType, z.ZodTypeAny> = {
     })
     .strict(),
   urgency: z.object({ label: txt.optional(), scarcity: txt.optional() }).strict(),
+  video: z
+    .object({
+      eyebrow: txt.optional(),
+      heading: txt.optional(),
+      subhead: txt.optional(),
+      youtubeId: txt.optional(),
+      poster: txt.optional(),
+    })
+    .strict(),
   problem: z
     .object({ heading: txt.optional(), body: txt.optional(), bullets: arr(txt).optional(), image: txt.optional() })
     .strict(),
