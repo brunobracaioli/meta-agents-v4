@@ -13,8 +13,7 @@ import { useUltron } from "@/components/ultron/ultron-provider";
 import { NeuralCoreScene } from "@/components/live/neural-core-scene";
 import { useNeuralCoreState } from "@/components/live/use-neural-core-state";
 import { useFaceTracking, type FaceTrackStatus } from "./use-face-tracking";
-
-const MODEL_URL = "/models/ultron.glb";
+import { DEFAULT_RIG, type RigProfile } from "./rigs";
 
 // --- Lip-sync tuning (calibrated against the "head jaw" + lip bones of ultron.glb) ----
 // The mesh has NO viseme morph targets, only bones. A full-jaw amplitude swing reads as a
@@ -23,8 +22,7 @@ const MODEL_URL = "/models/ultron.glb";
 // CHILDREN of "head jaw" (so they follow a subtle chin), while the upper-lip bones sit
 // under the neck and stay nearly still (as in real speech) — and add an attack/release
 // envelope so the mouth articulates instead of flapping with the volume.
-const JAW_OPEN_AXIS = new THREE.Vector3(1, 0, 0); // local hinge axis of the jaw (validated)
-const JAW_OPEN_ANGLE = 0.13; // radians at full open — SUBTLE chin (primary knob; was 0.42)
+const JAW_OPEN_AXIS = new THREE.Vector3(1, 0, 0); // shared local x-axis (eyelids, brows, corners); the jaw hinge is per-rig
 const LIP_PART_AXIS = new THREE.Vector3(1, 0, 0); // local axis used to part the lip bones
 const LOWER_LIP_ANGLE = 0.1; // extra opening of the lower lips (children of the jaw)
 const UPPER_LIP_ANGLE = 0.06; // slight lift of the upper lips (opposite sign)
@@ -263,7 +261,8 @@ function pickGesture(): GesturePose {
 export function UltronStage({
   heightClassName = "h-[calc(100vh-9rem)] min-h-[480px]",
   showBackdrop = true,
-}: { heightClassName?: string; showBackdrop?: boolean } = {}) {
+  rig = DEFAULT_RIG,
+}: { heightClassName?: string; showBackdrop?: boolean; rig?: RigProfile } = {}) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const { liveSignalRef } = useUltron();
   const [status, setStatus] = useState<LoadStatus>("loading");
@@ -410,6 +409,7 @@ export function UltronStage({
     let disposed = false;
 
     const jawQuat = new THREE.Quaternion();
+    const jawAxis = new THREE.Vector3(...rig.jaw.axis); // per-rig jaw hinge for lip-sync
     const lipQuat = new THREE.Quaternion();
     const blinkQuat = new THREE.Quaternion();
     const headQuat = new THREE.Quaternion();
@@ -444,7 +444,7 @@ export function UltronStage({
 
     const loader = new GLTFLoader();
     loader.load(
-      MODEL_URL,
+      rig.url,
       (gltf) => {
         if (disposed) return;
         const model = gltf.scene;
@@ -534,10 +534,10 @@ export function UltronStage({
         const box = new THREE.Box3().setFromObject(model);
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
-        const headY = box.max.y - size.y * 0.1;
+        const headY = box.max.y - size.y * rig.framing.topBias;
         const target = new THREE.Vector3(center.x, headY, center.z);
-        const headSpan = size.y * 0.38;
-        const dist = (headSpan / Math.tan((camera.fov * Math.PI) / 180 / 2)) * 1.05;
+        const headSpan = size.y * rig.framing.spanFactor;
+        const dist = (headSpan / Math.tan((camera.fov * Math.PI) / 180 / 2)) * rig.framing.distFactor;
         controls.target.copy(target);
         camera.position.set(target.x, headY + size.y * 0.02, center.z + dist);
         camera.updateProjectionMatrix();
@@ -665,7 +665,7 @@ export function UltronStage({
       // Lip-sync: the chin moves only slightly while the lips part — the lower lips follow
       // the (subtle) jaw, the upper lips lift a touch the other way.
       if (jaw) {
-        jawQuat.setFromAxisAngle(JAW_OPEN_AXIS, JAW_OPEN_ANGLE * mouthOpen);
+        jawQuat.setFromAxisAngle(jawAxis, rig.jaw.openAngle * mouthOpen);
         jaw.bone.quaternion.copy(jaw.rest).multiply(jawQuat);
       }
       for (const lip of lowerLips) {
@@ -957,7 +957,7 @@ export function UltronStage({
       renderer.dispose();
       renderer.domElement.remove();
     };
-  }, [liveSignalRef, gazeRef]);
+  }, [liveSignalRef, gazeRef, rig]);
 
   return (
     <div className={`relative w-full overflow-hidden rounded-lg border border-cyan-300/15 bg-black ${heightClassName}`}>
@@ -977,7 +977,7 @@ export function UltronStage({
       {/* Cockpit chrome — HUD corners + grid, matching the JARVIS language of the live tab. */}
       <div className="pointer-events-none absolute inset-0 z-20">
         <div className="absolute left-4 top-4 font-mono text-[10px] uppercase tracking-[0.28em] text-cyan-200/60">
-          ULTRON · PRIME
+          {rig.label}
         </div>
         <div className="absolute right-4 top-4 font-mono text-[10px] uppercase tracking-[0.28em] text-cyan-200/40">
           {status === "ready" ? "ONLINE" : status === "error" ? "OFFLINE" : "BOOT…"}
@@ -1019,11 +1019,11 @@ export function UltronStage({
           {status === "loading" ? (
             <div className="flex flex-col items-center gap-3 font-mono text-xs uppercase tracking-[0.24em] text-cyan-200/70">
               <span className="h-8 w-8 animate-spin rounded-full border-2 border-cyan-300/30 border-t-cyan-200" />
-              Inicializando Ultron…
+              Inicializando {rig.displayName}…
             </div>
           ) : (
             <p className="max-w-xs px-6 text-center font-mono text-xs uppercase tracking-[0.18em] text-red-300/80">
-              Falha ao carregar o modelo 3D do Ultron.
+              Falha ao carregar o modelo 3D do {rig.displayName}.
             </p>
           )}
         </div>

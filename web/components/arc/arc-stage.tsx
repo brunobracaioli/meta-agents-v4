@@ -6,13 +6,43 @@
 // chrome (sticky header is z-10) but stays below the floating voice console (z-50), so the
 // microphone remains usable in this mode. The classic dashboard is left fully intact.
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { UltronStage } from "@/components/ultron-3d/ultron-stage";
+import { RIGS, type RigId } from "@/components/ultron-3d/rigs";
 import { RenderBusProvider } from "./render-bus";
 import { PanelLayer } from "./panel-layer";
 import { ArcBridge } from "./arc-bridge";
 import { ArcPopoutHost, openArcPopout } from "./arc-popout";
 
+// Persist the operator's avatar choice for the ARC stage (Ultron ⇄ Terminator T-800).
+const MODEL_STORAGE_KEY = "ultron_arc_model";
+
 export function ArcStage() {
+  // The 3D avatar shown by the ARC. The server always renders the default so hydration
+  // matches; the persisted choice is applied on mount. The toggle lives only here.
+  const [rigId, setRigId] = useState<RigId>("ultron");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(MODEL_STORAGE_KEY);
+      if (saved === "ultron" || saved === "terminator") setRigId(saved);
+    } catch {
+      // storage blocked → keep the default avatar
+    }
+  }, []);
+
+  const rig = RIGS[rigId];
+  const nextRig = rigId === "ultron" ? RIGS.terminator : RIGS.ultron;
+
+  const swapModel = () => {
+    setRigId(nextRig.id);
+    try {
+      localStorage.setItem(MODEL_STORAGE_KEY, nextRig.id);
+    } catch {
+      // ignore persistence failures — the swap still applies for this session
+    }
+  };
+
   return (
     <div
       data-mode="stand-by"
@@ -20,9 +50,11 @@ export function ArcStage() {
     >
       <div className="hud-scanlines pointer-events-none absolute inset-0 z-10 opacity-50" />
 
-      {/* Central avatar — the interface IS the Ultron speaking. */}
+      {/* Central avatar — the interface IS the Ultron speaking. The `key` remounts the stage
+          on a model swap so the old WebGL scene tears down cleanly and the new GLB loads
+          (the 18 MB T-800 is fetched only when selected). */}
       <div className="absolute inset-0 z-0 p-2 sm:p-4">
-        <UltronStage />
+        <UltronStage key={rig.id} rig={rig} />
       </div>
 
       {/* Holographic panel stack, summoned by voice. ArcBridge feeds UIIntents from the
@@ -34,12 +66,21 @@ export function ArcStage() {
         <PanelLayer />
       </RenderBusProvider>
 
-      {/* Top strip: identity + second screen + exit back to the classic dashboard. */}
+      {/* Top strip: identity + avatar swap + second screen + exit back to the classic dashboard. */}
       <header className="pointer-events-none absolute inset-x-0 top-0 z-30 flex items-center justify-between px-4 py-3 sm:px-6">
         <span className="hud-chip hud-clip-sm pointer-events-auto px-3 py-1.5 font-hud text-xs uppercase tracking-[0.28em] text-cyan-100/85">
           ARC · Ultron
         </span>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={swapModel}
+            aria-label={`Trocar o avatar para ${nextRig.displayName}`}
+            title={`Avatar atual: ${rig.displayName}. Clique para trocar para ${nextRig.displayName}.`}
+            className="hud-chip hud-clip-sm pointer-events-auto px-3 py-1.5 font-hud text-xs uppercase tracking-[0.2em] text-cyan-100/70 transition hover:text-cyan-50"
+          >
+            ⌁ {nextRig.displayName}
+          </button>
           <button
             type="button"
             onClick={() => openArcPopout()}
