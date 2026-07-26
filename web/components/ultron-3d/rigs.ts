@@ -42,7 +42,7 @@ export type RigProfile = {
    * drops the albedo map so they mirror the studio env like polished steel. Omit for models
    * that are already bright metal (Ultron). `skipMaterials` protects glowing parts by name.
    */
-  chrome?: { color: number; stripAlbedoMap?: boolean; skipMaterials?: string[] };
+  chrome?: { color: number; roughness?: number; stripAlbedoMap?: boolean; skipMaterials?: string[] };
 };
 
 export const RIGS: Record<RigId, RigProfile> = {
@@ -68,14 +68,17 @@ export const RIGS: Record<RigId, RigProfile> = {
     displayName: "T-800",
     url: "/models/terminator_t-800_sfm.glb",
     framing: { topBias: 0.11, spanFactor: 0.2, distFactor: 1.1 },
-    jaw: { axis: [1, 0, 0], openAngle: 0.24 },
+    // Negative: the T-800 jaw bone's local X is inverted vs Ultron's, so a positive angle
+    // clenched the mouth shut — negative drops the mandible (opens) on speech.
+    jaw: { axis: [1, 0, 0], openAngle: -0.22 },
     // Relative limits — the T-800 is a small full-body model, so proportional zoom lets you
     // get close to the head instead of hitting the floor almost immediately.
     zoom: { minFactor: 0.25, maxFactor: 2.6 },
-    // The T-800 body/head ship a very dark albedo (baseColor 0.1 gray) that turns the forced
-    // metal near-black. Repaint to light steel + drop the albedo so it reflects like chrome;
-    // the emissive red eyes ("eyeball") are protected.
-    chrome: { color: 0xd6dade, stripAlbedoMap: true, skipMaterials: ["eyeball"] },
+    // The T-800 body/head ship a very dark albedo (baseColor 0.1 gray) that turned the forced
+    // metal near-black. Repaint to mid steel + drop the albedo. roughness is a FLOOR here
+    // (the model ships roughness 0 = mirror, which blew out to a white "sun" under the studio
+    // env + bloom); 0.44 = brushed steel like Ultron. The emissive red eyes are protected.
+    chrome: { color: 0x8c9299, roughness: 0.44, stripAlbedoMap: true, skipMaterials: ["eyeball"] },
   },
 };
 

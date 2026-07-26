@@ -486,6 +486,9 @@ export function UltronStage({
                 const skip = rig.chrome.skipMaterials?.some((n) => matName.includes(n.toLowerCase())) ?? false;
                 if (!skip) {
                   std.color.setHex(rig.chrome.color);
+                  // Override roughness (a FLOOR, not the min-clamp above): a mirror (0) of the
+                  // bright studio env blooms into a white blob, so satin steel reads correctly.
+                  if (rig.chrome.roughness !== undefined) std.roughness = rig.chrome.roughness;
                   if (rig.chrome.stripAlbedoMap) std.map = null;
                   std.needsUpdate = true;
                 }
