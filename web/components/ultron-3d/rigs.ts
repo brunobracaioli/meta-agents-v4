@@ -29,6 +29,20 @@ export type RigProfile = {
    * `openAngle` is the radians of drop at full amplitude. Calibrated per rig.
    */
   jaw: { axis: [number, number, number]; openAngle: number };
+  /**
+   * Camera zoom limits (OrbitControls). Give absolute world distances (`min`/`max`) OR
+   * factors of the fitted framing distance (`minFactor`/`maxFactor`). Factors adapt to models
+   * of very different world scale — a small full-body figure (T-800) framed close to the
+   * absolute 0.8 floor gets the same proportional zoom-in room as the larger Ultron bust.
+   */
+  zoom: { min?: number; max?: number; minFactor?: number; maxFactor?: number };
+  /**
+   * Optional chrome override for textured models whose dark albedo (baseColor) would tint the
+   * forced-metal reflection near-black. Repaints non-emissive materials to a light metal and
+   * drops the albedo map so they mirror the studio env like polished steel. Omit for models
+   * that are already bright metal (Ultron). `skipMaterials` protects glowing parts by name.
+   */
+  chrome?: { color: number; stripAlbedoMap?: boolean; skipMaterials?: string[] };
 };
 
 export const RIGS: Record<RigId, RigProfile> = {
@@ -41,6 +55,8 @@ export const RIGS: Record<RigId, RigProfile> = {
     url: "/models/ultron.glb",
     framing: { topBias: 0.1, spanFactor: 0.38, distFactor: 1.05 },
     jaw: { axis: [1, 0, 0], openAngle: 0.13 },
+    // Absolute limits — preserves the exact current Ultron zoom behaviour.
+    zoom: { min: 0.8, max: 5 },
   },
   // Terminator T-800 [SFM]. Full-body biped (~112 nodes / 96 joints), so it's framed much
   // tighter than the Ultron bust (smaller spanFactor). Has "Bip_jaw" + "Bip_eyeball" bones
@@ -53,6 +69,13 @@ export const RIGS: Record<RigId, RigProfile> = {
     url: "/models/terminator_t-800_sfm.glb",
     framing: { topBias: 0.11, spanFactor: 0.2, distFactor: 1.1 },
     jaw: { axis: [1, 0, 0], openAngle: 0.24 },
+    // Relative limits — the T-800 is a small full-body model, so proportional zoom lets you
+    // get close to the head instead of hitting the floor almost immediately.
+    zoom: { minFactor: 0.25, maxFactor: 2.6 },
+    // The T-800 body/head ship a very dark albedo (baseColor 0.1 gray) that turns the forced
+    // metal near-black. Repaint to light steel + drop the albedo so it reflects like chrome;
+    // the emissive red eyes ("eyeball") are protected.
+    chrome: { color: 0xd6dade, stripAlbedoMap: true, skipMaterials: ["eyeball"] },
   },
 };
 

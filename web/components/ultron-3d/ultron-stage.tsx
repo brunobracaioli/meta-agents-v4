@@ -476,6 +476,20 @@ export function UltronStage({
                 std.emissiveIntensity = 1.4;
                 emissiveMaterials.push(std);
               }
+              // Chrome override (per-rig): a textured model with a dark albedo (the T-800's
+              // 0.1 gray body/head) would tint the forced metal near-black. Repaint the
+              // non-emissive materials to light steel and drop the albedo map so they mirror
+              // the studio env like Ultron's polished chrome. Glowing parts (the red eyes) are
+              // left alone — both by the !emits guard and by name via skipMaterials.
+              if (rig.chrome && !emits) {
+                const matName = (std.name ?? "").toLowerCase();
+                const skip = rig.chrome.skipMaterials?.some((n) => matName.includes(n.toLowerCase())) ?? false;
+                if (!skip) {
+                  std.color.setHex(rig.chrome.color);
+                  if (rig.chrome.stripAlbedoMap) std.map = null;
+                  std.needsUpdate = true;
+                }
+              }
             }
           }
           if ((obj as THREE.Bone).isBone) {
@@ -541,6 +555,11 @@ export function UltronStage({
         controls.target.copy(target);
         camera.position.set(target.x, headY + size.y * 0.02, center.z + dist);
         camera.updateProjectionMatrix();
+        // Per-rig zoom limits, resolved from the fitted distance so a small full-body model
+        // gets the same proportional zoom-in room as the larger bust (absolute floors would
+        // stop the T-800 almost at its framing distance).
+        controls.minDistance = rig.zoom.min ?? dist * (rig.zoom.minFactor ?? 0.3);
+        controls.maxDistance = rig.zoom.max ?? dist * (rig.zoom.maxFactor ?? 2.5);
         controls.update();
 
         setStatus("ready");
