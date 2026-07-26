@@ -489,6 +489,9 @@ export function UltronStage({
                   // Override roughness (a FLOOR, not the min-clamp above): a mirror (0) of the
                   // bright studio env blooms into a white blob, so satin steel reads correctly.
                   if (rig.chrome.roughness !== undefined) std.roughness = rig.chrome.roughness;
+                  // Dim the reflection so bright env highlights on a very convex model don't
+                  // cross the bloom threshold and blow out to white.
+                  if (rig.chrome.envMapIntensity !== undefined) std.envMapIntensity = rig.chrome.envMapIntensity;
                   if (rig.chrome.stripAlbedoMap) std.map = null;
                   std.needsUpdate = true;
                 }

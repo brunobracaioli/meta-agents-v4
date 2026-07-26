@@ -42,7 +42,15 @@ export type RigProfile = {
    * drops the albedo map so they mirror the studio env like polished steel. Omit for models
    * that are already bright metal (Ultron). `skipMaterials` protects glowing parts by name.
    */
-  chrome?: { color: number; roughness?: number; stripAlbedoMap?: boolean; skipMaterials?: string[] };
+  chrome?: {
+    color: number;
+    roughness?: number;
+    /** Reflection strength. Lower than Ultron's 1.3 for a very convex model that would
+     *  otherwise catch bright env highlights from every angle and bloom out to white. */
+    envMapIntensity?: number;
+    stripAlbedoMap?: boolean;
+    skipMaterials?: string[];
+  };
 };
 
 export const RIGS: Record<RigId, RigProfile> = {
@@ -78,7 +86,16 @@ export const RIGS: Record<RigId, RigProfile> = {
     // metal near-black. Repaint to mid steel + drop the albedo. roughness is a FLOOR here
     // (the model ships roughness 0 = mirror, which blew out to a white "sun" under the studio
     // env + bloom); 0.44 = brushed steel like Ultron. The emissive red eyes are protected.
-    chrome: { color: 0x8c9299, roughness: 0.44, stripAlbedoMap: true, skipMaterials: ["eyeball"] },
+    // envMapIntensity 0.72 (vs Ultron's 1.3): the convex skull caught the studio env from
+    // every angle and bloomed to a white "sun". Lower reflection + slightly rougher + a touch
+    // darker silver = brushed steel that reads as chrome without glaring.
+    chrome: {
+      color: 0x868c93,
+      roughness: 0.52,
+      envMapIntensity: 0.72,
+      stripAlbedoMap: true,
+      skipMaterials: ["eyeball"],
+    },
   },
 };
 
