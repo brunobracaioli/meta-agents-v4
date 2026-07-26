@@ -86,13 +86,14 @@ export const RIGS: Record<RigId, RigProfile> = {
     // metal near-black. Repaint to mid steel + drop the albedo. roughness is a FLOOR here
     // (the model ships roughness 0 = mirror, which blew out to a white "sun" under the studio
     // env + bloom); 0.44 = brushed steel like Ultron. The emissive red eyes are protected.
-    // envMapIntensity 0.72 (vs Ultron's 1.3): the convex skull caught the studio env from
-    // every angle and bloomed to a white "sun". Lower reflection + slightly rougher + a touch
-    // darker silver = brushed steel that reads as chrome without glaring.
+    // The glare is dominated by DIRECT-light specular on a too-smooth metal (the white key
+    // light) + bloom, NOT the env reflection (dropping env 1.3->0.72 barely moved it). So the
+    // real lever is roughness: 0.7 = matte brushed steel that spreads/kills the hotspots, with
+    // a darker gunmetal base and low env. Reads as worn endoskeleton steel, not a lightbulb.
     chrome: {
-      color: 0x868c93,
-      roughness: 0.52,
-      envMapIntensity: 0.72,
+      color: 0x50555c,
+      roughness: 0.7,
+      envMapIntensity: 0.35,
       stripAlbedoMap: true,
       skipMaterials: ["eyeball"],
     },
