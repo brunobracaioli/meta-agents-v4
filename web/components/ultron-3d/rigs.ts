@@ -54,9 +54,36 @@ export type RigProfile = {
   /**
    * Optional localized eye emission. The glb eye material emits a UNIFORM color (the whole
    * eyeball glows); darken the globe and gate emission through a mask texture (white where the
-   * pupil is, black elsewhere) so only the pupil lights up. The voice pulse still modulates it.
+   * pupil is, black elsewhere) so only the pupil lights up. By default the voice pulse still
+   * modulates it; set `glowIntensity` to pin the pupil to a CONSTANT glow (kept out of the
+   * voice-pulsed emissive set) — the always-on red eye of the T-800.
    */
-  eyes?: { material: string; globeColor: number; emissiveMaskUrl: string; emissiveColor: number };
+  eyes?: {
+    material: string;
+    globeColor: number;
+    emissiveMaskUrl: string;
+    emissiveColor: number;
+    glowIntensity?: number;
+  };
+  /**
+   * Optional explicit bone map for models whose skeleton naming doesn't match the default
+   * anatomical heuristics (e.g. the T-800's 3ds Max Biped: bip_head / bip_neck / bip_spine /
+   * bip_collar). Each value is a lowercase SUBSTRING matched against the bone name. When
+   * present it REPLACES the heuristic matcher for these slots (jaw + eyeball still match by
+   * substring on both rigs). Omit for models that follow the default naming (Ultron). Arms are
+   * intentionally not mapped here: at head-and-shoulders framing the forearms/hands sit below
+   * the frame, and the shoulder bones already carry the visible arm-region motion.
+   */
+  bones?: {
+    /** Head pivot — nod/turn/tilt is applied in world space, so any orientation works. */
+    head?: string;
+    /** Secondary neck motion (chain follow). */
+    neckLower?: string;
+    /** Upper torso sway/breath (carries the shoulders + neck + head). */
+    spineUpper?: string;
+    /** Shoulder/collar bones for the subtle idle shoulder drift. */
+    shoulders?: string[];
+  };
 };
 
 export const RIGS: Record<RigId, RigProfile> = {
@@ -115,11 +142,23 @@ export const RIGS: Record<RigId, RigProfile> = {
     // Black eye globe with only the pupil glowing red (the glb emits red across the whole
     // eyeball). t800_eye_emissive.png is a mask derived from the eye texture: white pupil on
     // black, so emission is confined to the pupil.
+    // glowIntensity pins the pupil to a CONSTANT red glow (out of the voice pulse) — the
+    // T-800's always-on red eye, instead of a glow that breathes with speech like Ultron.
     eyes: {
       material: "eyeball",
       globeColor: 0x080808,
       emissiveMaskUrl: "/models/t800_eye_emissive.png",
       emissiveColor: 0xff0000,
+      glowIntensity: 2.6,
+    },
+    // The T-800 is a 3ds Max Biped; its bones (bip_head/bip_neck/bip_spine_3/bip_collar_*)
+    // don't match Ultron's anatomical heuristics, so map them explicitly to get the same
+    // head/neck/torso/shoulder body language. jaw + eyeball still match by substring.
+    bones: {
+      head: "bip_head",
+      neckLower: "bip_neck",
+      spineUpper: "bip_spine_3",
+      shoulders: ["bip_collar"],
     },
   },
 };

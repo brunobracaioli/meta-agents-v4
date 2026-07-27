@@ -494,9 +494,12 @@ export function UltronStage({
                 std.roughness = 0.6;
                 std.emissive.setHex(rig.eyes.emissiveColor);
                 std.emissiveMap = eyeMask;
-                std.emissiveIntensity = 1.4; // the render-loop pulse takes over per-frame
+                // With glowIntensity set, the pupil glows CONSTANTLY (kept out of the
+                // voice-pulsed set below) — the T-800's always-on red eye. Without it, it
+                // breathes with speech like Ultron (the render-loop pulse drives it).
+                std.emissiveIntensity = rig.eyes.glowIntensity ?? 1.4;
                 std.needsUpdate = true;
-                emissiveMaterials.push(std);
+                if (rig.eyes.glowIntensity === undefined) emissiveMaterials.push(std);
                 continue;
               }
               // Polished stainless steel that reflects the studio environment (metalness
@@ -540,7 +543,20 @@ export function UltronStage({
           if ((obj as THREE.Bone).isBone) {
             const name = obj.name.toLowerCase();
             const pose = (): BonePose => ({ bone: obj, rest: obj.quaternion.clone() });
-            if (!jaw && name.includes("jaw")) {
+            if (rig.bones) {
+              // Explicit per-rig bone map (e.g. the T-800's biped skeleton, whose names don't
+              // match the anatomical heuristics below). jaw + eyeball still match by substring;
+              // head/neck/spine/shoulders are named in rig.bones. Everything else is left
+              // unposed (the T-800 has no soft-tissue lips/brows/eyelids/mouth corners). Arms
+              // aren't mapped: at this framing the forearms/hands sit below the frame.
+              const b = rig.bones;
+              if (!jaw && name.includes("jaw")) jaw = pose();
+              else if (name.includes("eyeball")) eyes.push(pose());
+              else if (!head && b.head && name.includes(b.head)) head = pose();
+              else if (!neckLower && b.neckLower && name.includes(b.neckLower)) neckLower = pose();
+              else if (!spineUpper && b.spineUpper && name.includes(b.spineUpper)) spineUpper = pose();
+              else if (b.shoulders && b.shoulders.some((s) => name.includes(s))) shoulders.push(pose());
+            } else if (!jaw && name.includes("jaw")) {
               jaw = pose();
             } else if (!head && name.includes("neck") && name.includes("upper")) {
               head = pose();
