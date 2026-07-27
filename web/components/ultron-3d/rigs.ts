@@ -144,12 +144,18 @@ export const RIGS: Record<RigId, RigProfile> = {
     // black, so emission is confined to the pupil.
     // glowIntensity pins the pupil to a CONSTANT red glow (out of the voice pulse) — the
     // T-800's always-on red eye, instead of a glow that breathes with speech like Ultron.
+    // It MUST clear the bloom threshold to actually glow: red has a low luminance weight
+    // (0.2126), and the UnrealBloomPass threshold is 0.82, so a red only starts to bloom above
+    // intensity ~3.9 (0.82/0.2126). 2.6 sat below it → a flat salmon dot with no halo. 7.0
+    // clears it with margin → a strong red bloom halo. The scene tone-maps with ACES (which
+    // shifts a bright pure red toward orange), so the vivid-red read comes from the large,
+    // lower-magnitude bloom HALO (ACES desaturates it far less than the hot core).
     eyes: {
       material: "eyeball",
       globeColor: 0x080808,
       emissiveMaskUrl: "/models/t800_eye_emissive.png",
       emissiveColor: 0xff0000,
-      glowIntensity: 2.6,
+      glowIntensity: 7.0,
     },
     // The T-800 is a 3ds Max Biped; its bones (bip_head/bip_neck/bip_spine_3/bip_collar_*)
     // don't match Ultron's anatomical heuristics, so map them explicitly to get the same
