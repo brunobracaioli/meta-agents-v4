@@ -86,15 +86,18 @@ export const RIGS: Record<RigId, RigProfile> = {
     // metal near-black. Repaint to mid steel + drop the albedo. roughness is a FLOOR here
     // (the model ships roughness 0 = mirror, which blew out to a white "sun" under the studio
     // env + bloom); 0.44 = brushed steel like Ultron. The emissive red eyes are protected.
-    // The glare is dominated by DIRECT-light specular on a too-smooth metal (the white key
-    // light) + bloom, NOT the env reflection (dropping env 1.3->0.72 barely moved it). So the
-    // real lever is roughness: 0.7 = matte brushed steel that spreads/kills the hotspots, with
-    // a darker gunmetal base and low env. Reads as worn endoskeleton steel, not a lightbulb.
+    // Match Ultron's exact treatment. The T-800's only defect vs Ultron is baseColorFactor
+    // [0.1,0.1,0.1] (the artist darkened the steel texture to 10% → near-black) + roughness 0
+    // (mirror). Ultron uses a WHITE base with its texture kept, metalness 1, roughness 0.38,
+    // env 1.3 — the texture supplies the detail + light/dark contrast that reads as polished
+    // steel. So here: KEEP the albedo map, set the base back to white (undo the 0.1), and use
+    // Ultron's roughness/env. Stripping the map was the mistake — it removed the variation and
+    // left a uniform surface (a "sun" when smooth, matte plastic when rough).
     chrome: {
-      color: 0x50555c,
-      roughness: 0.7,
-      envMapIntensity: 0.35,
-      stripAlbedoMap: true,
+      color: 0xffffff,
+      roughness: 0.38,
+      envMapIntensity: 1.3,
+      stripAlbedoMap: false,
       skipMaterials: ["eyeball"],
     },
   },
