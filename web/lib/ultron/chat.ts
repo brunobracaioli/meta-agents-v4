@@ -2,7 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "@/lib/env";
-import { ULTRON_SYSTEM_PROMPT } from "@/lib/ultron/prompt";
+import { personaPrompt, type PersonaId } from "@/lib/ultron/prompt";
 import { toolSpecs, runTool, CLIENT_TOOLS, loadDynamicSkillTools, type DynamicSkillTool } from "@/lib/ultron/tools";
 import {
   isLandingEditSignal,
@@ -60,6 +60,9 @@ type LoopContext = {
   userText: string;
   operatorId: string | null;
   dynamicTools: DynamicSkillTool[];
+  // Which avatar persona is speaking (ARC toggle). Selects the identity header of the
+  // system prompt. Defaults to "ultron" on every path that doesn't pass one.
+  persona: PersonaId;
   // When set, the loop streams Claude's text deltas live (sentence-by-sentence TTS
   // on the client) and the reply becomes the full streamed text. Absent = the
   // original one-shot behavior (used by the capture/resume path).
@@ -192,7 +195,7 @@ async function runLoop(
     const params: Anthropic.MessageCreateParamsNonStreaming = {
       model: MODEL,
       max_tokens: MAX_TOKENS,
-      system: [{ type: "text", text: ULTRON_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      system: [{ type: "text", text: personaPrompt(ctx.persona), cache_control: { type: "ephemeral" } }],
       tools,
       ...(forceTool ? { tool_choice: { type: "any" } } : {}),
       messages,
@@ -319,6 +322,7 @@ export async function runChat(
   sessionId: string,
   text: string,
   operatorId: string | null = null,
+  persona: PersonaId = "ultron",
 ): Promise<ChatResult> {
   // Independent I/O — fetch in parallel to shave a round-trip off time-to-first-token.
   const [memory, dynamicTools] = await Promise.all([
@@ -333,6 +337,7 @@ export async function runChat(
     userText: text,
     operatorId,
     dynamicTools,
+    persona,
     forceToolFirst: classifyUtterance(text) === "command",
   });
   if (result.kind === "reply") {
@@ -352,6 +357,7 @@ export async function runChatStream(
   text: string,
   operatorId: string | null,
   emit: (delta: string) => void,
+  persona: PersonaId = "ultron",
 ): Promise<ChatResult> {
   // Independent I/O — fetch in parallel to shave a round-trip off time-to-first-token.
   const [memory, dynamicTools] = await Promise.all([
@@ -366,6 +372,7 @@ export async function runChatStream(
     userText: text,
     operatorId,
     dynamicTools,
+    persona,
     emit,
     spoken: { text: "" },
     forceToolFirst: classifyUtterance(text) === "command",
@@ -387,6 +394,7 @@ export async function resumeChat(
   pendingId: string,
   image: CapturedImage,
   operatorId: string | null = null,
+  persona: PersonaId = "ultron",
 ): Promise<ChatResult> {
   const pending = await loadPending(sessionId, pendingId);
   if (!pending) {
@@ -425,6 +433,7 @@ export async function resumeChat(
       userText: pending.userText,
       operatorId,
       dynamicTools,
+      persona,
     },
   );
 

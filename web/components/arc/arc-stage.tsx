@@ -9,6 +9,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { UltronStage } from "@/components/ultron-3d/ultron-stage";
 import { RIGS, type RigId } from "@/components/ultron-3d/rigs";
+import { setActivePersona } from "@/lib/ultron/active-persona";
 import { RenderBusProvider } from "./render-bus";
 import { PanelLayer } from "./panel-layer";
 import { ArcBridge } from "./arc-bridge";
@@ -30,6 +31,14 @@ export function ArcStage() {
       // storage blocked → keep the default avatar
     }
   }, []);
+
+  // Signal the shared voice hook which persona is speaking. The T-800 gets its own name
+  // ("TE OITOCENTOS") + ElevenLabs voice; on unmount (leaving the ARC, where only Ultron
+  // exists) or a swap back, reset to Ultron so the voice matches the avatar you actually see.
+  useEffect(() => {
+    setActivePersona(rigId);
+    return () => setActivePersona("ultron");
+  }, [rigId]);
 
   const rig = RIGS[rigId];
   const nextRig = rigId === "ultron" ? RIGS.terminator : RIGS.ultron;

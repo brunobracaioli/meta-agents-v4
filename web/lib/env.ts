@@ -36,6 +36,10 @@ export const env = {
   openaiApiKey: () => required("OPENAI_API_KEY"),
   elevenLabsApiKey: () => required("ELEVENLABS_API_KEY"),
   elevenLabsVoiceId: () => required("ELEVENLABS_VOICE_ID"),
+  // T-800 persona voice (ARC avatar swap). Not a secret — a voice identifier, like the
+  // default above (the secret is ELEVENLABS_API_KEY). The built-in fallback is the voice
+  // Bruno created for the Terminator; set ELEVENLABS_VOICE_ID_T800 to override without a deploy.
+  elevenLabsVoiceIdT800: () => process.env.ELEVENLABS_VOICE_ID_T800 ?? "UPopjuECyDKTBAFJg0Fl",
   upstashRedisUrl: () => required("UPSTASH_REDIS_REST_URL"),
   upstashRedisToken: () => required("UPSTASH_REDIS_REST_TOKEN"),
   // Cloudflare Turnstile (bot/brute-force protection on login). Optional: when the

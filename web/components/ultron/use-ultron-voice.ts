@@ -28,6 +28,7 @@ import {
   type RealtimeTranscriber,
 } from "@/lib/ultron/realtime-stt-client";
 import { getSessionId } from "@/lib/ultron/session";
+import { getActivePersona } from "@/lib/ultron/active-persona";
 import { createWakeWord, isWakeWordSupported, type WakeController } from "@/lib/ultron/wake-word";
 import { createVadMic, isVadWorkletSupported, type VadEvent, type VadMicHandle } from "./vad-mic";
 import { useScreenShare } from "./use-screen-share";
@@ -542,7 +543,7 @@ export function useUltronVoice() {
         const res = await fetch("/api/ultron/tts", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, rig: getActivePersona() }),
         });
         if (!res.ok || !res.body) throw new Error("tts");
 
@@ -772,7 +773,7 @@ export function useUltronVoice() {
         const capRes = await fetch("/api/ultron/capture", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ sessionId: getSessionId(), pendingId, image: frame }),
+          body: JSON.stringify({ sessionId: getSessionId(), pendingId, image: frame, rig: getActivePersona() }),
         });
         if (!capRes.ok) throw new Error("capture");
         const data = (await capRes.json()) as UltronApiResponse;
@@ -823,7 +824,7 @@ export function useUltronVoice() {
         const chatRes = await fetch("/api/ultron/chat", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ sessionId: getSessionId(), text }),
+          body: JSON.stringify({ sessionId: getSessionId(), text, rig: getActivePersona() }),
           signal: abort.signal,
         });
         if (!chatRes.ok || !chatRes.body) throw new Error("chat");

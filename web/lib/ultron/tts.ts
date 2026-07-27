@@ -1,5 +1,6 @@
 import "server-only";
 import { env } from "@/lib/env";
+import type { PersonaId } from "./prompt";
 import { stripSpeechMarkup } from "./speech-markup";
 
 // Turbo v2.5: low latency (~250-300ms) while keeping expressiveness — the "fast but
@@ -12,8 +13,10 @@ const MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? "eleven_turbo_v2_5";
  * upstream Response so the caller can pipe the audio stream straight to the
  * browser (first-byte-fast → lower perceived latency).
  */
-export async function synthesizeStream(text: string): Promise<Response> {
-  const voiceId = env.elevenLabsVoiceId();
+export async function synthesizeStream(text: string, persona: PersonaId = "ultron"): Promise<Response> {
+  // The T-800 avatar (ARC) speaks in its own ElevenLabs voice; every other persona uses the
+  // default brand voice. Voice selection is server-side — the client only sends the persona.
+  const voiceId = persona === "terminator" ? env.elevenLabsVoiceIdT800() : env.elevenLabsVoiceId();
   // Deterministic guard: strip any markdown the model left in so it is spoken,
   // not read literally as "asterisco". Fall back to the raw text if stripping
   // emptied it (e.g. input was nothing but markup).

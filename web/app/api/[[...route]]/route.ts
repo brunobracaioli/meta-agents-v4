@@ -79,13 +79,19 @@ async function authGate(
   return null;
 }
 
+// Which ARC avatar persona is speaking. Optional so non-ARC callers keep the Ultron
+// default; drives the system-prompt identity (chat) and the ElevenLabs voice (tts).
+const rigField = z.enum(["ultron", "terminator"]).optional().default("ultron");
+
 const chatSchema = z.object({
   sessionId: z.string().min(8).max(64),
   text: z.string().min(1).max(2000),
+  rig: rigField,
 });
 
 const ttsSchema = z.object({
   text: z.string().min(1).max(2000),
+  rig: rigField,
 });
 
 const captureSchema = z.object({
@@ -95,6 +101,7 @@ const captureSchema = z.object({
     media_type: z.enum(["image/jpeg", "image/png", "image/webp"]),
     data: z.string().min(1),
   }),
+  rig: rigField,
 });
 
 const reviewFrameSchema = z.object({
@@ -241,7 +248,7 @@ app.post("/ultron/chat", async (c) => {
   // (first audio starts on the first sentence, not after the whole reply). The
   // terminal `done`/`need_capture` frame carries the structured signals the
   // non-streaming endpoint used to return in one JSON blob.
-  const { sessionId, text } = parsed.data;
+  const { sessionId, text, rig } = parsed.data;
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -256,7 +263,7 @@ app.post("/ultron/chat", async (c) => {
               console.info(JSON.stringify({ level: "info", event: "chat_first_token", ms: firstTokenMs }));
             }
             send({ type: "text", delta });
-          });
+          }, rig);
           const signals = {
             usedTools: result.usedTools,
             agentTriggers: result.agentTriggers,
@@ -313,7 +320,13 @@ app.post("/ultron/capture", async (c) => {
   try {
     const operatorId = operatorIdFromRequest(c);
     if (operatorRequiredButMissing(operatorId)) return c.json({ error: "session_expired" }, 401);
-    const result = await resumeChat(parsed.data.sessionId, parsed.data.pendingId, parsed.data.image, operatorId);
+    const result = await resumeChat(
+      parsed.data.sessionId,
+      parsed.data.pendingId,
+      parsed.data.image,
+      operatorId,
+      parsed.data.rig,
+    );
     if (result.kind === "need_capture") {
       return c.json({
         status: "need_capture",
@@ -370,7 +383,7 @@ app.post("/ultron/tts", async (c) => {
 
   try {
     const t0 = performance.now();
-    const upstream = await synthesizeStream(parsed.data.text);
+    const upstream = await synthesizeStream(parsed.data.text, parsed.data.rig);
     if (!upstream.ok || !upstream.body) {
       console.error(JSON.stringify({ level: "error", event: "tts_failed", status: upstream.status }));
       return c.json({ error: "tts_failed" }, 502);
