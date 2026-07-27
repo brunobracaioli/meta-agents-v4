@@ -4,52 +4,68 @@ import { useEffect, useRef } from "react";
 import type { NeuralCoreState } from "@/components/live/neural-core-state";
 
 /**
- * Red "digital rain" backdrop for the T-800 rig — the Skynet-terminal look behind the chrome
- * endoskeleton (the transparent avatar canvas composites over it). Streams of numbers/binary +
- * a few tech glyphs fall SLOWLY in an endless loop — each glyph snaps to a row grid and holds
- * long enough to read, with a bright head + orange glow trailing into a fading maroon tail.
+ * Red "digital rain" backdrop for the T-800 rig — Matrix-style streaming binary behind the chrome
+ * endoskeleton (the transparent avatar canvas composites over it). Each column is a string of 0/1
+ * that scrolls down SMOOTHLY (sub-pixel → fluid, not stepped), with a hot leading glyph and a
+ * fading red trail; the digits are stable enough to read and only flip value occasionally.
  * Drop-in replacement for NeuralCoreScene in UltronStage's backdrop slot.
  *
- * It reads the SAME NeuralCoreState the arc reactor uses (passed in — no second poll): while
- * agents are active (`mode === "activated"`) the flow speeds up + densifies (scaled by
- * activeProcessCount) and the glow oscillates. Everything ramps smoothly via a single
- * `activeness` scalar lerped toward the live state, so entering/leaving activity never snaps.
+ * Crispness: the canvas is fully CLEARED each frame and every glyph is redrawn from a per-column
+ * character buffer with an explicit brightness gradient — there is NO translucent "wash"
+ * accumulation (that smeared/ghosted the digits and made them unreadable). Only the leading glyph
+ * carries a small glow; the trail is drawn sharp.
  *
- * Mount/loop/cleanup mirror ultron-stage.tsx: one useEffect, all per-frame state in
- * closures/refs (never React state), ResizeObserver for HiDPI, cleanup cancels the frame and
- * detaches the canvas. Honors prefers-reduced-motion by slowing down (not freezing) and pauses
- * while the tab is hidden.
+ * Reads the SAME NeuralCoreState the arc reactor uses (passed in — no second poll): while agents
+ * are active (`mode === "activated"`) the streams fall faster, flip more, and the head glow
+ * oscillates, all ramped smoothly via one `activeness` scalar.
+ *
+ * Mount/loop/cleanup mirror ultron-stage.tsx: one useEffect, per-frame state in closures/refs
+ * (never React state), ResizeObserver for HiDPI, cleanup cancels the frame + detaches the canvas.
+ * Honors prefers-reduced-motion by slowing (not freezing) and pauses while the tab is hidden.
  *
  * Visual constants are grouped at the top for quick live tuning.
  */
 
-const FONT_SIZE = 18; // a touch larger than before so the digits are easier to read
-// Glyph pool, weighted toward 0/1 for the binary-stream read, with digits and a few tech marks
-// to echo the reference (squares/brackets/dashes scattered through the code).
-const GLYPHS = "01010101010123456789+<>[]▪╌";
-const HEAD_RGB = "255, 62, 52"; // vivid red head, a touch luminous so the leading digit reads
-const GLOW_COLOR = "#ff6b1a"; // --color-orange — warm halo on the leading glyph
-const NAVY = "5, 8, 20"; // --color-navy #050814 — the field the trails fade into
+const FONT_SIZE = 16; // px cell — dense binary field like the reference
+const HEAD_RGB = "255, 124, 112"; // hot, near-white leading glyph
+const BODY_RGB = "255, 46, 46"; // vivid red trail
+const GLOW_COLOR = "#ff5a2a"; // warm halo on the leading glyph only
 
-// Trail length: lower wash alpha = longer-lived (more readable) trails. Kept low so a column of
-// digits stays legible; a hair shorter when agents are active for a punchier, denser field.
-const WASH_IDLE = 0.05;
-const WASH_ACTIVE = 0.06;
-// Fall speed in ROWS PER SECOND (not per frame): slow enough to read each digit. Idle baseline +
-// the bump added at full activeness (scaled by how many agents run, up to COUNT_CAP).
-const FALL_IDLE_RPS = 3.6;
-const FALL_ACTIVE_RPS_SPAN = 3.0; // base speed-up when agents run
-const FALL_COUNT_RPS_SPAN = 4.0; // extra speed-up scaled by agent count
+// Fall speed in CELLS PER SECOND (advanced as smooth sub-pixel motion → fluid). Range by depth:
+// far columns fall slow + dim, near columns fall fast + bright. Natural Matrix pace, readable
+// because the trail glyphs are stable (they slide as a unit and only flip occasionally).
+const SPEED_MIN = 2.6;
+const SPEED_DEPTH_SPAN = 3.4; // near columns add up to this many cells/sec
+const SPEED_ACTIVE_MULT = 0.9; // extra speed factor at full activeness (also scaled by agent count)
 const COUNT_CAP = 4;
-// Per-frame odds a finished column restarts; scaled by activeness → denser streams when active.
-const RESET_PROB = 0.02;
-const RESET_ACTIVE_MULT = 1.8;
-// Glow pulse (only amplitude-active while agents run).
-const PULSE_HZ = 0.8;
-const BASE_BLUR = 7;
-// Smoothing of the activeness ramp (per frame @60fps) and how far reduced-motion slows things.
-const ACTIVENESS_LERP = 0.045;
-const REDUCED_MOTION_SCALE = 0.45;
+
+// Trail length in glyphs (varies by depth: near = longer streams).
+const TRAIL_MIN = 12;
+const TRAIL_DEPTH_SPAN = 22;
+
+// Per-column odds per frame of flipping one random trail glyph in place ("eventually change values").
+const FLIP_IDLE = 0.01;
+const FLIP_ACTIVE = 0.035;
+
+const HEAD_BLUR = 6; // glow radius on the leading glyph (× depth)
+const PULSE_HZ = 0.8; // head-glow oscillation while agents are active
+
+const ACTIVENESS_LERP = 0.05;
+const REDUCED_MOTION_SCALE = 0.4;
+
+type Column = {
+  x: number; // px, left edge of the column
+  posPx: number; // head Y in px (continuous → smooth scroll)
+  cell: number; // last integer cell the head occupied (detects boundary crossings to emit heads)
+  speed: number; // cells/sec
+  depth: number; // 0..1 (far/dim/slow → near/bright/fast)
+  trailLen: number;
+  seq: string[]; // seq[0] = head glyph, seq[k] = k cells above the head
+};
+
+function bit(): string {
+  return Math.random() < 0.5 ? "0" : "1";
+}
 
 export function TerminatorRain({
   state,
@@ -85,15 +101,31 @@ export function TerminatorRain({
 
     let cssW = 1;
     let cssH = 1;
-    let columns = 0;
-    // Per-column continuous head row (in FONT_SIZE units), the glyph the head currently shows, the
-    // last integer row drawn (so a fresh glyph is picked only when the head STEPS to a new cell —
-    // keeps each digit crisp + readable), and a depth tier (background dim/slow → foreground bright).
-    let drops: number[] = [];
-    let heads: string[] = [];
-    let lastRow: number[] = [];
-    let depth: number[] = [];
-    let primed = false;
+    let cols: Column[] = [];
+
+    // seeded=true → start somewhere on screen with a full trail (instant populated field).
+    // seeded=false (respawn) → start above the top with a random gap so streams re-enter
+    // staggered and the field stays sparse (black between streams) like the reference.
+    const makeColumn = (x: number, seeded: boolean): Column => {
+      const depth = 0.32 + Math.random() * 0.68;
+      const trailLen = Math.round(TRAIL_MIN + depth * TRAIL_DEPTH_SPAN);
+      const rowsOnScreen = cssH / FONT_SIZE;
+      const posPx = seeded
+        ? Math.random() * cssH
+        : -(Math.random() * rowsOnScreen + 2) * FONT_SIZE;
+      const seq: string[] = [];
+      const fill = seeded ? Math.min(trailLen, Math.max(0, Math.ceil(posPx / FONT_SIZE) + 1)) : 0;
+      for (let k = 0; k < fill; k++) seq.push(bit());
+      return {
+        x,
+        posPx,
+        cell: Math.floor(posPx / FONT_SIZE),
+        speed: SPEED_MIN + depth * SPEED_DEPTH_SPAN,
+        depth,
+        trailLen,
+        seq,
+      };
+    };
 
     const resize = () => {
       const rect = host.getBoundingClientRect();
@@ -105,13 +137,9 @@ export function TerminatorRain({
       ctx.font = `${FONT_SIZE}px "Share Tech Mono", ui-monospace, monospace`;
       ctx.textBaseline = "top";
       const next = Math.ceil(cssW / FONT_SIZE);
-      // Preserve existing columns on resize; seed any new ones staggered above the top.
-      drops = Array.from({ length: next }, (_, i) => drops[i] ?? Math.random() * -(cssH / FONT_SIZE));
-      heads = Array.from({ length: next }, (_, i) => heads[i] ?? GLYPHS[(Math.random() * GLYPHS.length) | 0]!);
-      lastRow = Array.from({ length: next }, (_, i) => lastRow[i] ?? -9999);
-      depth = Array.from({ length: next }, (_, i) => depth[i] ?? 0.35 + Math.random() * 0.65);
-      columns = next;
-      primed = false; // repaint the dark field before trails resume
+      const prev = cols;
+      cols = Array.from({ length: next }, (_, i) => prev[i] ?? makeColumn(i * FONT_SIZE, true));
+      for (let i = 0; i < cols.length; i++) cols[i]!.x = i * FONT_SIZE; // keep x exact after resize
     };
     const observer = new ResizeObserver(resize);
     observer.observe(host);
@@ -131,53 +159,64 @@ export function TerminatorRain({
       }
       const dt = Math.min((now - last) / 16.667, 3); // frames elapsed @60fps, capped
       last = now;
-      elapsedSec += dt / 60; // dt is frames @60fps → dt/60 ≈ seconds, frame-rate independent
+      const dSec = dt / 60; // seconds this frame, frame-rate independent
+      elapsedSec += dSec;
 
       const core = stateRef.current;
       const active = core.mode === "activated";
       activeness += ((active ? 1 : 0) - activeness) * ACTIVENESS_LERP * dt;
       const countBoost = Math.min(core.activeProcessCount, COUNT_CAP) / COUNT_CAP;
+      const speedMult = motion * (1 + activeness * SPEED_ACTIVE_MULT * (0.6 + countBoost));
+      const flipProb = FLIP_IDLE + activeness * (FLIP_ACTIVE - FLIP_IDLE);
+      // Head glow only oscillates while agents are active; amplitude eases in with activeness.
+      const pulse = Math.sin(elapsedSec * 2 * Math.PI * PULSE_HZ * motion); // -1..1
+      const headFactor = 0.82 + activeness * (0.18 + 0.22 * pulse);
+      const blurFactor = 1 + activeness * 0.5 * (0.5 + 0.5 * pulse);
 
-      // rows/sec → rows advanced THIS frame (dt is frames @60fps, so dt/60 = seconds).
-      const rowsPerSec = FALL_IDLE_RPS + activeness * (FALL_ACTIVE_RPS_SPAN + countBoost * FALL_COUNT_RPS_SPAN);
-      const rowsThisFrame = (rowsPerSec * motion * dt) / 60;
-      const wash = WASH_IDLE + activeness * (WASH_ACTIVE - WASH_IDLE);
-      const resetProb = RESET_PROB * (1 + activeness * (RESET_ACTIVE_MULT - 1));
-      // Glow oscillates only when active; amplitude scales with activeness so it eases in/out.
-      const pulse = 0.5 + activeness * 0.5 * Math.sin(elapsedSec * 2 * Math.PI * PULSE_HZ * motion);
-
-      // Dark field + fading trails: prime once with a solid navy, then wash each frame.
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = `rgba(${NAVY}, ${primed ? wash : 1})`;
-      ctx.fillRect(0, 0, cssW, cssH);
-      primed = true;
-
+      // Crisp: fully clear (transparent → UltronStage's black shows through), then redraw sharp.
+      ctx.clearRect(0, 0, cssW, cssH);
       ctx.shadowColor = GLOW_COLOR;
-      const blur = BASE_BLUR * (0.6 + 0.8 * pulse);
-      for (let i = 0; i < columns; i++) {
-        const d = depth[i]!;
-        // Advance on the row grid; nearer (brighter) columns fall a touch faster (parallax).
-        drops[i]! += rowsThisFrame * (0.7 + 0.6 * d);
-        const row = Math.floor(drops[i]!);
-        // New glyph ONLY when the head steps to a new cell — the head then holds one crisp,
-        // readable digit for the whole time it sits in that row (no per-frame smear).
-        if (row !== lastRow[i]) {
-          lastRow[i] = row;
-          heads[i] = GLYPHS[(Math.random() * GLYPHS.length) | 0]!;
+
+      for (let i = 0; i < cols.length; i++) {
+        const col = cols[i]!;
+        col.posPx += col.speed * FONT_SIZE * speedMult * dSec;
+
+        // Emit a fresh head glyph for every whole cell the head crossed this frame (smooth motion
+        // between cells; a new random bit only when it steps to a new row → readable, not flicker).
+        const cell = Math.floor(col.posPx / FONT_SIZE);
+        while (col.cell < cell) {
+          col.seq.unshift(bit());
+          if (col.seq.length > col.trailLen) col.seq.pop();
+          col.cell++;
         }
-        const y = row * FONT_SIZE;
-        if (y >= -FONT_SIZE && y <= cssH) {
-          // Redraw the head at its fixed integer position each frame so it stays bright + sharp;
-          // the cells it left behind aren't redrawn, so they fade via the wash into the trail.
-          const alpha = Math.min(1, (0.5 + 0.5 * d) * (0.72 + 0.55 * pulse));
-          ctx.shadowBlur = blur * d;
-          ctx.fillStyle = `rgba(${HEAD_RGB}, ${alpha})`;
-          ctx.fillText(heads[i]!, i * FONT_SIZE, y);
+        // Occasionally flip one glyph already in the trail (values eventually change in place).
+        if (col.seq.length > 1 && Math.random() < flipProb) {
+          const idx = 1 + ((Math.random() * (col.seq.length - 1)) | 0);
+          col.seq[idx] = bit();
         }
-        if (y > cssH && Math.random() < resetProb) {
-          drops[i] = -Math.random() * 8;
-          lastRow[i] = Math.floor(drops[i]!) - 1; // force a fresh glyph when it re-enters
+
+        const len = col.seq.length;
+        const x = col.x;
+
+        // Leading glyph — hot + small glow.
+        if (len > 0 && col.posPx >= -FONT_SIZE && col.posPx <= cssH) {
+          ctx.shadowBlur = HEAD_BLUR * col.depth * blurFactor;
+          ctx.fillStyle = `rgba(${HEAD_RGB}, ${Math.min(1, col.depth * headFactor)})`;
+          ctx.fillText(col.seq[0]!, x, col.posPx);
         }
+        // Trail — sharp (glow off), fading up from the head.
+        ctx.shadowBlur = 0;
+        for (let k = 1; k < len; k++) {
+          const y = col.posPx - k * FONT_SIZE;
+          if (y < -FONT_SIZE || y > cssH) continue;
+          const a = col.depth * Math.pow(1 - k / col.trailLen, 1.4);
+          if (a < 0.02) continue;
+          ctx.fillStyle = `rgba(${BODY_RGB}, ${a})`;
+          ctx.fillText(col.seq[k]!, x, y);
+        }
+
+        // Respawn once the whole stream has passed the bottom → new depth/speed/length + a gap.
+        if (col.posPx - len * FONT_SIZE > cssH) cols[i] = makeColumn(x, false);
       }
 
       raf = window.requestAnimationFrame(render);
