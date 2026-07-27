@@ -824,6 +824,105 @@ export type Database = {
           },
         ]
       }
+      flow_assets: {
+        Row: {
+          created_at: string
+          flow_id: string
+          id: string
+          mime: string
+          operator_id: string
+          path: string
+          size_bytes: number
+        }
+        Insert: {
+          created_at?: string
+          flow_id: string
+          id?: string
+          mime: string
+          operator_id: string
+          path: string
+          size_bytes: number
+        }
+        Update: {
+          created_at?: string
+          flow_id?: string
+          id?: string
+          mime?: string
+          operator_id?: string
+          path?: string
+          size_bytes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flow_assets_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flow_assets_operator_id_fkey"
+            columns: ["operator_id"]
+            isOneToOne: false
+            referencedRelation: "operators"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flows: {
+        Row: {
+          client_id: string
+          created_at: string
+          description: string | null
+          graph: Json
+          id: string
+          name: string
+          operator_id: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          description?: string | null
+          graph?: Json
+          id?: string
+          name: string
+          operator_id: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          description?: string | null
+          graph?: Json
+          id?: string
+          name?: string
+          operator_id?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flows_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flows_operator_id_fkey"
+            columns: ["operator_id"]
+            isOneToOne: false
+            referencedRelation: "operators"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       funnel_events: {
         Row: {
           analysis_id: string
@@ -1910,6 +2009,7 @@ export const Constants = {
   },
 } as const
 
+
 // ---------------------------------------------------------------------------
 // Convenience Row aliases (hand-maintained — NOT emitted by the generator above).
 // Keep in sync when tables are added. Used by the read services and Ultron tools.
@@ -1936,3 +2036,5 @@ export type LandingPage = Row<"landing_pages">
 export type LandingPageSection = Row<"landing_page_sections">
 export type ClientSkill = Row<"client_skills">
 export type SkillSchedule = Row<"skill_schedules">
+export type Flow = Row<"flows">
+export type FlowAsset = Row<"flow_assets">
