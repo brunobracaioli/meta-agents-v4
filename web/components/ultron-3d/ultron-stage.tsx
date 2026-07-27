@@ -281,7 +281,9 @@ export function UltronStage({
     if (!host) return;
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
+    // ≥1.5 supersamples even 1x screens (renders more pixels than the display → crisper edges,
+    // less aliasing on the fine endoskeleton detail); capped at 2 to bound GPU cost.
+    const pixelRatio = Math.min(Math.max(window.devicePixelRatio || 1, 1.5), 2);
 
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x000000, 0.12);
@@ -302,6 +304,8 @@ export function UltronStage({
     renderer.domElement.style.width = "100%";
     renderer.domElement.style.cursor = "grab";
     host.appendChild(renderer.domElement);
+    // Max anisotropic filtering keeps textures sharp at grazing angles (near-free HD win).
+    const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
 
     // PBR materials need light. A cool key + cyan rim sells the JARVIS cockpit look;
     // the model's own emissive (eyes / chest) carries the glow through bloom.
@@ -452,6 +456,7 @@ export function UltronStage({
       eyeMask.flipY = false;
       eyeMask.wrapS = THREE.RepeatWrapping;
       eyeMask.wrapT = THREE.RepeatWrapping;
+      eyeMask.anisotropy = maxAnisotropy;
     }
 
     const loader = new GLTFLoader();
@@ -472,6 +477,13 @@ export function UltronStage({
             for (const mat of mats) {
               const std = mat as THREE.MeshStandardMaterial;
               if (!std || !std.isMeshStandardMaterial) continue;
+              // Crisp textures at grazing angles (near-free HD win) — apply to every map.
+              for (const tex of [std.map, std.normalMap, std.roughnessMap, std.metalnessMap, std.emissiveMap, std.aoMap]) {
+                if (tex && tex.anisotropy !== maxAnisotropy) {
+                  tex.anisotropy = maxAnisotropy;
+                  tex.needsUpdate = true;
+                }
+              }
               // Eyes: dark globe + glowing pupil. The glb emits a uniform color across the
               // whole eyeball, so darken the globe and gate emission by a mask (white pupil on
               // black) — only the pupil glows, and it pulses with the voice via emissiveMaterials.
