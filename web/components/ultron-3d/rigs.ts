@@ -84,6 +84,13 @@ export type RigProfile = {
     /** Shoulder/collar bones for the subtle idle shoulder drift. */
     shoulders?: string[];
   };
+  /**
+   * Optional backdrop rendered behind the avatar (the transparent avatar canvas composites
+   * over it). Omit → the default cyan "neural-core" arc reactor (Ultron). "matrix-rain" → the
+   * T-800's red digital-rain field (TerminatorRain), which intensifies + pulses when agents
+   * are active. Both are driven by the same NeuralCoreState the arc reactor already uses.
+   */
+  backdrop?: "neural-core" | "matrix-rain";
 };
 
 export const RIGS: Record<RigId, RigProfile> = {
@@ -166,6 +173,9 @@ export const RIGS: Record<RigId, RigProfile> = {
       spineUpper: "bip_spine_3",
       shoulders: ["bip_collar"],
     },
+    // Red "digital rain" behind the endoskeleton instead of the cyan arc reactor — the T-800's
+    // Skynet-terminal look. Falls faster + brighter while agents run (see TerminatorRain).
+    backdrop: "matrix-rain",
   },
 };
 

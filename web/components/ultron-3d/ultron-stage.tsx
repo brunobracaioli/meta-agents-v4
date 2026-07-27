@@ -13,6 +13,7 @@ import { useUltron } from "@/components/ultron/ultron-provider";
 import { NeuralCoreScene } from "@/components/live/neural-core-scene";
 import { useNeuralCoreState } from "@/components/live/use-neural-core-state";
 import { useFaceTracking, type FaceTrackStatus } from "./use-face-tracking";
+import { TerminatorRain } from "./terminator-rain";
 import { DEFAULT_RIG, type RigProfile } from "./rigs";
 
 // --- Lip-sync tuning (calibrated against the "head jaw" + lip bones of ultron.glb) ----
@@ -1047,7 +1048,11 @@ export function UltronStage({
           Opt-out on the live cockpit, where the arc reactor is already its own sibling screen. */}
       {showBackdrop ? (
         <div className="pointer-events-none absolute inset-0 z-0">
-          <NeuralCoreScene state={coreState} heightClassName="h-full" />
+          {rig.backdrop === "matrix-rain" ? (
+            <TerminatorRain state={coreState} heightClassName="h-full" />
+          ) : (
+            <NeuralCoreScene state={coreState} heightClassName="h-full" />
+          )}
         </div>
       ) : null}
 
