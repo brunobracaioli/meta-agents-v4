@@ -8,21 +8,31 @@
 // Geometry (x/y/w/h) is LOCAL and lives in framer MOTION VALUES, deliberately kept out of the
 // Render Bus: drag/resize are high-frequency and the bus must not thrash the imperative
 // lip-sync loop (ADR 0031); motion values also drive the DOM imperatively, so a React
-// re-render (focus reorder, data re-show) never clobbers a user's drag/resize. Geometry is
-// seeded once from `arc-geometry.defaultRect` (cascade by stack index) and clamped to the
-// stage on every commit so a panel can never be lost off-screen. Honours prefers-reduced-motion.
+// re-render (focus reorder, data re-show) never clobbers a user's drag/resize. A new panel
+// seeds at its perimeter SLOT (via `arc-geometry.slotRect`) — corners + mid-sides, with the
+// centre left clear for the avatar's face — materializing slightly inward and gliding out to
+// the corner. Geometry is clamped to the stage on every commit so a panel can never be lost
+// off-screen. Honours prefers-reduced-motion (no glide).
 import {
+  animate,
   motion,
   useDragControls,
   useMotionValue,
   useReducedMotion,
   type PanInfo,
 } from "framer-motion";
-import { useMemo, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 import { type Anchor } from "@/lib/ultron/render-intents";
 import {
   clampRect,
-  defaultRect,
+  slotEntrance,
+  slotRect,
   type ContainerSize,
   type PanelRect,
 } from "@/lib/ultron/arc-geometry";
@@ -45,7 +55,7 @@ export function HoloPanel({
   anchor: _anchor = "center",
   size = "default",
   focused = false,
-  index,
+  slot,
   zIndex,
   constraintsRef,
   onFocus,
@@ -53,11 +63,11 @@ export function HoloPanel({
   children,
 }: {
   title: string;
-  // Reserved for viewport anchoring; the seed position currently cascades by stack index.
+  // Reserved for viewport anchoring; the seed position is driven by the panel's slot.
   anchor?: Anchor;
   size?: PanelSize;
   focused?: boolean;
-  index: number;
+  slot: number;
   zIndex: number;
   constraintsRef: React.RefObject<HTMLElement | null>;
   onFocus: () => void;
@@ -68,10 +78,11 @@ export function HoloPanel({
   const dragControls = useDragControls();
   const panelRef = useRef<HTMLDivElement | null>(null);
 
-  // Seed the rect once (cascade by stack index), measuring the stage if it's mounted yet.
+  // Seed the rect once at the slot entrance (pulled slightly toward centre), measuring the
+  // stage if it's mounted yet. A mount effect then glides x/y out to the slot corner.
   const seed = useMemo<PanelRect>(
-    () => defaultRect(index, size, getContainerSize(constraintsRef)),
-    // Intentionally seed-once: later index/size changes must not relocate a moved panel.
+    () => slotEntrance(slot, size, getContainerSize(constraintsRef)),
+    // Intentionally seed-once: later slot/size changes must not relocate a moved panel.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -83,6 +94,31 @@ export function HoloPanel({
   const heightMV = useMotionValue<number | "auto">(seed.h === null ? "auto" : seed.h);
   const heightRef = useRef<number | null>(seed.h);
   const resizeSession = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null);
+
+  // On mount, measure the rendered height and glide x/y from the entrance to the slot corner
+  // (bottom/middle bands anchor to the real height). Reduced motion → snap, no glide.
+  useLayoutEffect(() => {
+    const target = slotRect(
+      slot,
+      size,
+      getContainerSize(constraintsRef),
+      panelRef.current?.offsetHeight,
+    );
+    if (reduce) {
+      x.set(target.x);
+      y.set(target.y);
+      return;
+    }
+    const spring = { type: "spring", stiffness: 260, damping: 30 } as const;
+    const cx = animate(x, target.x, spring);
+    const cy = animate(y, target.y, spring);
+    return () => {
+      cx.stop();
+      cy.stop();
+    };
+    // Mount-only: positions the panel at its slot once; drag/resize own x/y afterward.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const applyRect = (next: PanelRect) => {
     const r = clampRect(next, getContainerSize(constraintsRef));
@@ -127,7 +163,8 @@ export function HoloPanel({
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   };
 
-  const resetRect = () => applyRect(defaultRect(index, size, getContainerSize(constraintsRef)));
+  const resetRect = () =>
+    applyRect(slotRect(slot, size, getContainerSize(constraintsRef), panelRef.current?.offsetHeight));
 
   return (
     <motion.div
