@@ -93,8 +93,14 @@ export const RIGS: Record<RigId, RigProfile> = {
     // steel. So here: KEEP the albedo map, set the base back to white (undo the 0.1), and use
     // Ultron's roughness/env. Stripping the map was the mistake — it removed the variation and
     // left a uniform surface (a "sun" when smooth, matte plastic when rough).
+    // Texture is now kept (Ultron's treatment), but the T-800 still reads brighter than
+    // Ultron because its steel texture is lighter AND its smooth convex skull mirrors the
+    // bright studio env uniformly (Ultron's angular panels self-shadow) — so it feeds the
+    // shared bloom more. There is no extra glow layer; the fix is to lower the base-color
+    // MULTIPLIER (0.5 gray, not white). For a metal this dims both the env reflection and the
+    // direct-light specular proportionally while keeping the texture's light/dark contrast.
     chrome: {
-      color: 0xffffff,
+      color: 0x808080,
       roughness: 0.38,
       envMapIntensity: 1.3,
       stripAlbedoMap: false,
