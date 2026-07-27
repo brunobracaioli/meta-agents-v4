@@ -442,6 +442,14 @@ export function UltronStage({
     let headGazeYaw = 0;
     let headGazePitch = 0;
 
+    // Localized eye emission mask (white pupil on black). flipY=false to match the glTF UV
+    // convention so it aligns with the eye texture it was derived from.
+    const eyeMask = rig.eyes ? new THREE.TextureLoader().load(rig.eyes.emissiveMaskUrl) : null;
+    if (eyeMask) {
+      eyeMask.colorSpace = THREE.SRGBColorSpace;
+      eyeMask.flipY = false;
+    }
+
     const loader = new GLTFLoader();
     loader.load(
       rig.url,
@@ -460,6 +468,21 @@ export function UltronStage({
             for (const mat of mats) {
               const std = mat as THREE.MeshStandardMaterial;
               if (!std || !std.isMeshStandardMaterial) continue;
+              // Eyes: dark globe + glowing pupil. The glb emits a uniform color across the
+              // whole eyeball, so darken the globe and gate emission by a mask (white pupil on
+              // black) — only the pupil glows, and it pulses with the voice via emissiveMaterials.
+              if (rig.eyes && eyeMask && (std.name ?? "").toLowerCase().includes(rig.eyes.material)) {
+                std.map = null;
+                std.color.setHex(rig.eyes.globeColor);
+                std.metalness = 0;
+                std.roughness = 0.6;
+                std.emissive.setHex(rig.eyes.emissiveColor);
+                std.emissiveMap = eyeMask;
+                std.emissiveIntensity = 1.4; // the render-loop pulse takes over per-frame
+                std.needsUpdate = true;
+                emissiveMaterials.push(std);
+                continue;
+              }
               // Polished stainless steel that reflects the studio environment (metalness
               // stays 1 — the GLB is already all-metal; we only un-matte it and let it
               // catch the IBL so it stops reading as a dark blob).
@@ -976,6 +999,7 @@ export function UltronStage({
         }
       });
       envTexture.dispose();
+      eyeMask?.dispose();
       scene.environment = null;
       bloomPass.dispose();
       composer.dispose();

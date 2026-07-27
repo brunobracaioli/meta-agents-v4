@@ -51,6 +51,12 @@ export type RigProfile = {
     stripAlbedoMap?: boolean;
     skipMaterials?: string[];
   };
+  /**
+   * Optional localized eye emission. The glb eye material emits a UNIFORM color (the whole
+   * eyeball glows); darken the globe and gate emission through a mask texture (white where the
+   * pupil is, black elsewhere) so only the pupil lights up. The voice pulse still modulates it.
+   */
+  eyes?: { material: string; globeColor: number; emissiveMaskUrl: string; emissiveColor: number };
 };
 
 export const RIGS: Record<RigId, RigProfile> = {
@@ -105,6 +111,15 @@ export const RIGS: Record<RigId, RigProfile> = {
       envMapIntensity: 1.3,
       stripAlbedoMap: false,
       skipMaterials: ["eyeball"],
+    },
+    // Black eye globe with only the pupil glowing red (the glb emits red across the whole
+    // eyeball). t800_eye_emissive.png is a mask derived from the eye texture: white pupil on
+    // black, so emission is confined to the pupil.
+    eyes: {
+      material: "eyeball",
+      globeColor: 0x080808,
+      emissiveMaskUrl: "/models/t800_eye_emissive.png",
+      emissiveColor: 0xff0000,
     },
   },
 };
