@@ -9,6 +9,13 @@ import type { NextConfig } from "next";
 const dir = path.dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: path.resolve(dir, "../.env.local") });
 
+// Local-isolated dev override: web/.env.local (gitignored, never deployed) wins over the
+// repo-root secrets so the app points at the LOCAL Supabase stack and disables prod-only
+// integrations (e.g. Turnstile, by setting its keys empty). Without `override` the root
+// load above — and any shell-exported prod vars — would shadow these, silently pointing
+// dev at prod. See docs/how-to/local-development.md.
+loadEnv({ path: path.resolve(dir, ".env.local"), override: true });
+
 // The agents' env uses CLAUDE_API_KEY; the Anthropic SDK expects ANTHROPIC_API_KEY.
 if (!process.env.ANTHROPIC_API_KEY && process.env.CLAUDE_API_KEY) {
   process.env.ANTHROPIC_API_KEY = process.env.CLAUDE_API_KEY;
