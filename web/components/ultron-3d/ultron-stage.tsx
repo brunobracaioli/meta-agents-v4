@@ -442,12 +442,16 @@ export function UltronStage({
     let headGazeYaw = 0;
     let headGazePitch = 0;
 
-    // Localized eye emission mask (white pupil on black). flipY=false to match the glTF UV
-    // convention so it aligns with the eye texture it was derived from.
+    // Localized eye emission mask (white pupil on black). It must match the eye texture's
+    // sampler: flipY=false (glTF convention) AND RepeatWrapping — the eye UVs run outside
+    // [0,1] (V≈2..3) and rely on REPEAT; the TextureLoader default (ClampToEdge) would sample
+    // the mask's black border there and the pupil would never show.
     const eyeMask = rig.eyes ? new THREE.TextureLoader().load(rig.eyes.emissiveMaskUrl) : null;
     if (eyeMask) {
       eyeMask.colorSpace = THREE.SRGBColorSpace;
       eyeMask.flipY = false;
+      eyeMask.wrapS = THREE.RepeatWrapping;
+      eyeMask.wrapT = THREE.RepeatWrapping;
     }
 
     const loader = new GLTFLoader();
