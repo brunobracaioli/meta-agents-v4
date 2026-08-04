@@ -332,8 +332,10 @@ RMS com os mesmos thresholds — funcional, mas congela em aba oculta.
 - **`speak(text)`**: narrações autônomas + Live Review — um clipe único via
   `playClip`. Ao fim de qualquer turno, `restoreAfterSpeech()` zera o visualizador e
   **restaura o modo** (rearma wake word, volta ao `listening`, ou `idle`).
-- **Interrupção/barge-in** (`stopSpeaking`): cancela o turno inteiro —
-  `streamCancelledRef` + aborta o fetch do chat + pausa o clipe atual; a fila para.
+- **Interrupção manual** (`stopSpeaking`, botão ■): `cancelStreamingTurn()` —
+  `streamCancelledRef` + aborta o fetch do chat + pausa o clipe atual; a fila para —
+  e **restaura o modo** na hora (bump de geração torna o finally do turno cancelado
+  um no-op). **Interrupção por voz (barge-in)**: ver §16.
   Falha de TTS é não-fatal — a resposta continua visível como texto.
 
 ### 9.3 Análise de saída (anima o visualizador)
@@ -434,3 +436,72 @@ desmontado ao fim da fala (nós desconectados, context fechado, estado zerado).
 9. Todas as rotas rejeitam payloads inválidos (400), grandes (413) e excesso de
    chamadas (429) sem vazar internals.
 10. Recarregar a página mantém a mesma sessão/memória (localStorage) por até 2h.
+
+## 16. Barge-in por voz e Modo Reunião (ADR 0035)
+
+### 16.1 Barge-in por voz (interromper o Ultron falando por cima)
+
+Em mãos-livres (modo worklet), o VAD **continua armado durante `speaking`** com um
+perfil elevado (`BARGE_VAD_CONFIG`: `speechRms 0.05` = 2×, `onsetDebounceMs 300`).
+Um `speech-start` com `bargeArmedRef` ativo cancela o turno em streaming
+(`cancelStreamingTurn`) e abre uma gravação nova imediatamente — a fala que
+interrompeu É o próximo turno.
+
+Defesa anti-eco em **3 camadas** (o próprio TTS não pode disparar/virar turno):
+
+1. **AEC do browser** — `getUserMedia` agora pede `echoCancellation +
+   noiseSuppression + autoGainControl` explícitos (o Chrome subtrai o playback da
+   própria página do sinal do mic).
+2. **Perfil barge do VAD** — 2× RMS + 300ms sustentados: vazamento residual de
+   caixa/reverb não abre onset.
+3. **Filtro de texto** (`lib/ultron/self-echo.ts`, puro + testado) — o client guarda
+   as frases exatas faladas (buffer 12s); transcript de turno barge/mãos-livres que
+   é fragmento do que o Ultron acabou de dizer (containment de tokens ≥ 0.8) é
+   descartado (`self_echo_dropped`) sem chamar o chat.
+
+**Guarda de geração de turno** (`turnGenRef`): todo turno novo (gravação ou
+`speak`) incrementa; `restoreAfterSpeech(gen)` só restaura o modo se a geração
+ainda for a atual — o teardown assíncrono do turno atropelado nunca pisa no
+`recording` novo nem rearma o VAD no meio da fala do operador.
+
+Logs (sem PII): `{"event":"ultron_barge","action":"barge_in_triggered"}` e
+`{"event":"ultron_barge","action":"self_echo_dropped","chars":N}`.
+
+### 16.2 Modo Reunião (ouvir áudio de aba/sistema, ex.: Google Meet)
+
+Toggle "Modo reunião" no widget (gesto do usuário): re-pede o share com
+`getDisplayMedia({video, audio: true})` e mistura mic + áudio da guia num
+`AudioContext` persistente (`MediaStreamAudioDestinationNode`). O
+`captureStreamRef` passa a apontar pro mix e TODO o pipeline (VAD worklet,
+`MediaRecorder`, STT realtime) é reconstruído contra ele
+(`rebuildVadPipeline`); ao sair, volta pro mic puro. `MEET_VAD_CONFIG` reduz
+`maxClipMs` para 20s (fala de call é contínua).
+
+- **Responder só quando chamado (default ON)**: transcript sem o nome
+  ("ultron", "t 800", "oitocentos", "terminator" — sequência de tokens
+  normalizada, `mentionsWakeName`) é ignorado (`meet_turn_ignored`) — o Ultron
+  não responde cada frase da call e o rate limit do chat (20/min) fica
+  protegido. Sub-toggle liga "responder a tudo".
+- **Captura recomendada = a GUIA do Meet** com "Compartilhar áudio da guia": o
+  áudio da guia só carrega os participantes remotos (o Meet não ecoa o mic
+  local de volta, e o TTS do Ultron toca na aba do dashboard). Se o operador
+  capturar a tela/sistema inteiro, o TTS do Ultron ESTÁ na captura (AEC não se
+  aplica a display capture) — o filtro de texto (§16.1 camada 3) é o backstop.
+- Mutuamente exclusivo com wake word; força mãos-livres. Track de áudio
+  encerrado pelo browser ("Parar compartilhamento") sai do modo sozinho.
+- Para o Ultron ser OUVIDO na call: fora do escopo do app — caixa de som +
+  mic físico do operador, ou cabo de áudio virtual (ex.: VB-Cable) como mic
+  do Meet.
+
+### 16.3 Critérios de aceite adicionais
+
+11. Falar por cima do Ultron (~300ms, volume normal) em mãos-livres interrompe a
+    fala e vira o novo turno; o TTS dele sozinho (caixa alta, operador em
+    silêncio) não dispara barge nem gera turno (ou é dropado como
+    `self_echo_dropped`).
+12. ■ durante a fala volta para "Ouvindo" (mãos-livres) / "Aguardando" (wake) —
+    nunca deixa o VAD desarmado.
+13. Em Modo Reunião com "só quando chamado", fala remota sem o nome não gera
+    POST no chat (`meet_turn_ignored` no console); com o nome, o turno roda
+    normal. Share sem a caixa "Compartilhar áudio da guia" marcada → erro
+    amigável, sem entrar no modo.
