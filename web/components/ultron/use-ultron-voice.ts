@@ -27,6 +27,7 @@ import {
   sttStreamingEnabled,
   type RealtimeTranscriber,
 } from "@/lib/ultron/realtime-stt-client";
+import { isSelfEcho, mentionsWakeName, pushSpoken, type SpokenEntry } from "@/lib/ultron/self-echo";
 import { getSessionId } from "@/lib/ultron/session";
 import { getActivePersona } from "@/lib/ultron/active-persona";
 import { createWakeWord, isWakeWordSupported, type WakeController } from "@/lib/ultron/wake-word";
@@ -49,6 +50,8 @@ export type UltronState = {
   handsFree: boolean;
   wakeActive: boolean;
   wakeSupported: boolean;
+  meetMode: boolean;
+  meetNamedOnly: boolean;
   outputLevel: number;
   outputBands: number[];
   transcript: string | null;
@@ -57,6 +60,11 @@ export type UltronState = {
 };
 
 const WAKE_WORD = "ultron";
+// Meet mode "respond only when addressed" names. Normalized token sequences — covers
+// both personas ("t 800" matches an STT of "T-800"; see self-echo.mentionsWakeName).
+const MEET_WAKE_NAMES = [WAKE_WORD, "t 800", "oitocentos", "terminator"];
+const MEET_AUDIO_MISSING_MSG =
+  "Selecione a guia do Meet no seletor e marque 'Compartilhar áudio da guia'.";
 
 // Energy-based VAD tuning. The detection runs in an AudioWorklet (vad-mic.ts +
 // public/ultron/vad-processor.js) so it survives tab backgrounding; these are the
@@ -73,6 +81,7 @@ const SILENCE_MS = 1000;
 const SPEECH_RMS = 0.025; // onset threshold
 const SILENCE_RMS = 0.015; // below this counts as silence
 const MAX_CLIP_MS = 45_000; // hard cap per utterance; spoken campaign instructions easily exceed 12s
+const ONSET_DEBOUNCE_MS = 50; // sustained speech required before onset (kills transients)
 // Opus bitrate for the recorded clip. Default MediaRecorder opus runs ~117kbps (a ~7s
 // command → ~103KB), and uploading that whole blob AFTER speech-end was ~1s+ of the STT
 // round-trip (the server's stt_timing never sees it). 32kbps opus is transparent for
@@ -88,7 +97,27 @@ const VAD_CONFIG = {
   silenceRms: SILENCE_RMS,
   silenceMs: SILENCE_MS,
   maxClipMs: MAX_CLIP_MS,
+  // Explicit so configure(VAD_CONFIG) fully restores the profile after a barge arm
+  // (the worklet MERGES partial configs — omitting this would leave the barge value).
+  onsetDebounceMs: ONSET_DEBOUNCE_MS,
 };
+
+// Barge-in profile: while Ultron speaks, the worklet stays armed with a raised onset
+// (2x RMS, 300ms sustained) so the operator can interrupt by talking over him without
+// speaker bleed / room reverb opening bogus turns. This is layer 2 of the echo defense;
+// layer 1 is the browser AEC (echoCancellation in ensureMic) and layer 3 is the
+// text-level self-echo filter (lib/ultron/self-echo.ts) applied after STT.
+const BARGE_VAD_CONFIG = {
+  speechRms: SPEECH_RMS * 2,
+  silenceRms: SILENCE_RMS,
+  silenceMs: SILENCE_MS,
+  maxClipMs: MAX_CLIP_MS,
+  onsetDebounceMs: 300,
+};
+
+// Meet mode listens to a call: speech is near-continuous, so cap utterances tighter
+// than the 45s solo-operator ceiling to keep STT clips (and turns) bounded.
+const MEET_VAD_CONFIG = { ...VAD_CONFIG, maxClipMs: 20_000 };
 
 const CLIENT_FALLBACK = "Desculpa, tive um problema agora. Tenta de novo.";
 const NO_SCREEN_MSG =
@@ -173,6 +202,8 @@ export function useUltronVoice() {
     handsFree: false,
     wakeActive: false,
     wakeSupported: false,
+    meetMode: false,
+    meetNamedOnly: true,
     outputLevel: 0,
     outputBands: silentOutputBands(),
     transcript: null,
@@ -196,6 +227,24 @@ export function useUltronVoice() {
   // SSE reader, the sentence queue worker, and the per-clip MSE pump all check it.
   const streamCancelledRef = useRef<boolean>(false);
   const chatAbortRef = useRef<AbortController | null>(null);
+  // Monotonic turn generation. Every new turn (recording or one-shot speak) bumps it; a
+  // turn's finally only restores the listening mode if it still OWNS the machine. This is
+  // what makes barge-in safe: the interrupted turn's teardown must not stomp the fresh
+  // recording's status or re-arm the VAD mid-utterance.
+  const turnGenRef = useRef<number>(0);
+  // True while the VAD is armed with BARGE_VAD_CONFIG during TTS playback (hands-free only).
+  const bargeArmedRef = useRef<boolean>(false);
+  // Marks the in-flight turn as born from a barge-in, so sendPipeline applies the
+  // self-echo backstop before shipping the transcript to the chat.
+  const bargeTurnRef = useRef<boolean>(false);
+  // Rolling buffer of the exact sentences Ultron spoke (echo source for self-echo.ts).
+  const spokenRef = useRef<SpokenEntry[]>([]);
+  // Meet mode (tab/system audio): the VAD/recorder/STT read from captureStreamRef —
+  // the raw mic by default, or the mic+tab mix while a meeting is being listened to.
+  const captureStreamRef = useRef<MediaStream | null>(null);
+  const meetModeRef = useRef<boolean>(false);
+  const meetNamedOnlyRef = useRef<boolean>(true);
+  const meetCtxRef = useRef<AudioContext | null>(null); // persistent mix graph (mic + tab)
   // Realtime STT (ADR 0032): when enabled, captures mic PCM in parallel with the recorder
   // so the transcript is ~ready at speech-end. Null = use the one-shot path (always the fallback).
   const transcriberRef = useRef<RealtimeTranscriber | null>(null);
@@ -246,7 +295,7 @@ export function useUltronVoice() {
 
   const patch = useCallback((p: Partial<UltronState>) => setState((s) => ({ ...s, ...p })), []);
 
-  const { sharing, start: startShare, stop: stopShare, captureFrame } = useScreenShare();
+  const { sharing, start: startShare, stop: stopShare, captureFrame, getAudioTrack } = useScreenShare();
 
   const publishAgentTriggers = useCallback((values: unknown[] | undefined) => {
     if (!values || values.length === 0) return;
@@ -349,14 +398,21 @@ export function useUltronVoice() {
   }, []);
 
   // Sets up the mic stream and, once, the VAD path (worklet preferred; rAF
-  // fallback). Idempotent: safe to call from every entry point.
+  // fallback). Idempotent: safe to call from every entry point. Everything downstream
+  // (VAD, MediaRecorder, realtime STT) reads from captureStreamRef — the raw mic by
+  // default, or the mic+tab mix while Meet mode is on.
   const ensureMic = useCallback(async (): Promise<MediaStream> => {
     if (!streamRef.current) {
-      streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Explicit AEC/NS/AGC: echoCancellation makes the browser subtract this page's own
+      // TTS playback from the mic signal — layer 1 of the barge-in echo defense.
+      streamRef.current = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
     }
+    if (!captureStreamRef.current) captureStreamRef.current = streamRef.current;
     if (!vadReadyRef.current) {
       vadReadyRef.current = (async () => {
-        const stream = streamRef.current!;
+        const stream = captureStreamRef.current!;
         if (isVadWorkletSupported()) {
           try {
             vadMicRef.current = await createVadMic({
@@ -381,8 +437,30 @@ export function useUltronVoice() {
       })();
     }
     await vadReadyRef.current;
-    return streamRef.current!;
+    return captureStreamRef.current!;
   }, []);
+
+  // Swaps the capture source (raw mic <-> mic+tab mix) by tearing the VAD path down
+  // and rebuilding it against the new stream. Refs are nulled BEFORE the awaits so a
+  // concurrent ensureMic() can't await a stale setup promise.
+  const rebuildVadPipeline = useCallback(
+    async (stream: MediaStream) => {
+      const oldVad = vadMicRef.current;
+      vadMicRef.current = null;
+      vadReadyRef.current = null;
+      listeningRef.current = false;
+      bargeArmedRef.current = false;
+      captureStreamRef.current = stream;
+      await oldVad?.close();
+      if (audioCtxRef.current) {
+        void audioCtxRef.current.close().catch(() => {});
+        audioCtxRef.current = null;
+        analyserRef.current = null;
+      }
+      await ensureMic();
+    },
+    [ensureMic],
+  );
 
   const rms = useCallback((): number => {
     const analyser = analyserRef.current;
@@ -674,9 +752,58 @@ export function useUltronVoice() {
     [startOutputAnalysis, stopOutputAnalysis],
   );
 
+  // Tears down the in-flight streaming turn (queue worker + SSE reader + per-clip pump
+  // + player) WITHOUT restoring the listening mode — the caller decides what comes next
+  // (stopSpeaking restores; a barge-in starts a fresh recording instead).
+  const cancelStreamingTurn = useCallback(() => {
+    streamCancelledRef.current = true;
+    chatAbortRef.current?.abort();
+    transcriberRef.current?.abort();
+    transcriberRef.current = null;
+    if (playerRef.current) {
+      playerRef.current.pause();
+      playerRef.current.currentTime = 0;
+      playerRef.current = null;
+    }
+    speechDoneRef.current?.();
+  }, []);
+
+  // Keeps the VAD listening WHILE Ultron speaks (hands-free + worklet mode only), with
+  // the raised barge profile so his own voice from the speakers doesn't trip the onset.
+  const armBargeVad = useCallback(() => {
+    if (!handsFreeRef.current || vadModeRef.current !== "worklet") return;
+    const vad = vadMicRef.current;
+    if (!vad) return;
+    vad.configure(BARGE_VAD_CONFIG);
+    vad.arm();
+    bargeArmedRef.current = true;
+    // Prewarm realtime STT so a barge turn's transcript has no head-clip (mirrors the
+    // startListening prewarm; nothing streams to OpenAI until beginCapture()).
+    const captureStream = captureStreamRef.current ?? streamRef.current;
+    if (sttStreamingEnabled() && !transcriberRef.current && captureStream) {
+      const t = createRealtimeTranscriber();
+      transcriberRef.current = t;
+      t.connect(captureStream).catch(() => {
+        if (transcriberRef.current === t) transcriberRef.current = null;
+        t.abort();
+      });
+    }
+  }, []);
+
+  const disarmBargeVad = useCallback(() => {
+    if (!bargeArmedRef.current) return;
+    bargeArmedRef.current = false;
+    vadMicRef.current?.configure(VAD_CONFIG);
+    vadMicRef.current?.disarm();
+  }, []);
+
   // Final teardown after a turn finishes speaking: zero the visualizer and restore
   // the prior listening mode (re-arm wake word, resume hands-free, or go idle).
-  const restoreAfterSpeech = useCallback(() => {
+  // `gen` is the turn generation captured when the turn started: a stale turn (one that
+  // was barged over by a newer recording) must NOT touch the machine on its way out.
+  const restoreAfterSpeech = useCallback((gen?: number) => {
+    if (gen !== undefined && gen !== turnGenRef.current) return;
+    disarmBargeVad();
     speechDoneRef.current = null;
     stopOutputAnalysis();
     playerRef.current = null;
@@ -685,20 +812,23 @@ export function useUltronVoice() {
     else patch({ status: "idle" });
     // reArm/startListening defined below; ref-based recursion is intentional.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patch, stopOutputAnalysis]);
+  }, [disarmBargeVad, patch, stopOutputAnalysis]);
 
   // Speaks one full text as a single clip (autonomous narrations, Live Review).
   const speak = useCallback(
     async (text: string) => {
+      const gen = ++turnGenRef.current;
       streamCancelledRef.current = false;
       patch({ status: "speaking", outputLevel: 0, outputBands: silentOutputBands() });
+      spokenRef.current = pushSpoken(spokenRef.current, text, performance.now());
+      armBargeVad();
       try {
         await playClip(text, () => streamCancelledRef.current);
       } finally {
-        restoreAfterSpeech();
+        restoreAfterSpeech(gen);
       }
     },
-    [patch, playClip, restoreAfterSpeech],
+    [armBargeVad, patch, playClip, restoreAfterSpeech],
   );
 
   // Autonomous-mode narration drain. Runs on a slow interval; speaks at most one pending
@@ -812,7 +942,10 @@ export function useUltronVoice() {
             marks.firstAudio = performance.now();
             patch({ status: "speaking", outputLevel: 0, outputBands: silentOutputBands() });
             logTurnTimings(marks);
+            // From the first audio on, keep listening for a voice interrupt.
+            armBargeVad();
           }
+          spokenRef.current = pushSpoken(spokenRef.current, sentence, performance.now());
           await playClip(sentence, isCancelled);
         }
       })();
@@ -883,11 +1016,13 @@ export function useUltronVoice() {
         await consumer.catch(() => {});
       }
     },
-    [patch, playClip, publishAll, runCaptureHops],
+    [armBargeVad, patch, playClip, publishAll, runCaptureHops],
   );
 
   const sendPipeline = useCallback(
-    async (blob: Blob, speechEndAt: number) => {
+    async (blob: Blob, speechEndAt: number, gen: number) => {
+      const wasBarge = bargeTurnRef.current;
+      bargeTurnRef.current = false;
       if (blob.size < 1200) {
         // Too short to be speech — go back to idle/listening.
         transcriberRef.current?.abort();
@@ -930,6 +1065,35 @@ export function useUltronVoice() {
           else patch({ status: "idle" });
           return;
         }
+        // Echo backstop (layer 3): a barge turn — or any hands-free turn right after
+        // Ultron spoke — whose transcript is just a fragment of his own recent speech is
+        // speaker bleed, not the operator. Drop it silently instead of chatting with it.
+        if (
+          (wasBarge || handsFreeRef.current) &&
+          isSelfEcho(text, spokenRef.current, performance.now())
+        ) {
+          console.info(
+            JSON.stringify({ event: "ultron_barge", action: "self_echo_dropped", chars: text.length }),
+          );
+          if (handsFreeRef.current) startListening();
+          else patch({ status: "idle" });
+          return;
+        }
+        // Meet mode "respond only when addressed": every utterance in the call is heard,
+        // but only ones naming the assistant become chat turns — Ultron doesn't reply to
+        // every sentence of a group call, and the chat rate limit (20/min) stays safe.
+        if (
+          meetModeRef.current &&
+          meetNamedOnlyRef.current &&
+          !mentionsWakeName(text, MEET_WAKE_NAMES)
+        ) {
+          console.info(
+            JSON.stringify({ event: "ultron_meet", action: "meet_turn_ignored", chars: text.length }),
+          );
+          if (handsFreeRef.current) startListening();
+          else patch({ status: "idle" });
+          return;
+        }
         marks.sttDone = performance.now();
         patch({ status: "thinking", transcript: text });
         spoke = true;
@@ -942,8 +1106,9 @@ export function useUltronVoice() {
         // streamReply set status=speaking and played the clips; restore the mode once
         // the whole turn finished (including after a mid-speech error). The early
         // non-speaking exits above set listening/idle before `spoke` was flipped, so
-        // they correctly skip this.
-        if (spoke) restoreAfterSpeech();
+        // they correctly skip this. Gen-guarded: a turn that was barged over is stale
+        // and must not stomp the new recording.
+        if (spoke) restoreAfterSpeech(gen);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -956,6 +1121,9 @@ export function useUltronVoice() {
   // begins recording only after the worklet's onset event.
   const beginRecording = useCallback(
     async (withVad: boolean, armWorklet = false) => {
+      // Claim the machine BEFORE any await: a barged-over turn's finally must see a
+      // newer generation and skip its restore (see restoreAfterSpeech).
+      const gen = ++turnGenRef.current;
       pendingStopRef.current = false; // a stale flag must not kill this fresh recording
       const stream = await ensureMic();
       chunksRef.current = [];
@@ -994,7 +1162,7 @@ export function useUltronVoice() {
         // Mark end-of-speech here (recorder stopped) for latency telemetry.
         const speechEndAt = performance.now();
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        void sendPipeline(blob, speechEndAt);
+        void sendPipeline(blob, speechEndAt, gen);
       };
       recorder.start();
       patch({ status: "recording", error: null });
@@ -1009,7 +1177,11 @@ export function useUltronVoice() {
 
       if (vadModeRef.current === "worklet") {
         if (!withVad) vadMicRef.current?.disarm();
-        else if (armWorklet) vadMicRef.current?.arm();
+        else if (armWorklet) {
+          // Wake path arms here; make sure a lingering barge profile never leaks in.
+          vadMicRef.current?.configure(VAD_CONFIG);
+          vadMicRef.current?.arm();
+        }
         // hands-free with !armWorklet: worklet already armed + in SPEAKING; it
         // will emit speech-end on its own.
       } else if (withVad) {
@@ -1038,6 +1210,9 @@ export function useUltronVoice() {
       }
       if (vadModeRef.current === "worklet") {
         listeningRef.current = true;
+        // Always restore the listening profile — the previous turn may have left the
+        // barge thresholds configured.
+        vadMicRef.current?.configure(meetModeRef.current ? MEET_VAD_CONFIG : VAD_CONFIG);
         vadMicRef.current?.arm();
         return;
       }
@@ -1058,6 +1233,18 @@ export function useUltronVoice() {
   const handleVadEvent = useCallback(
     (event: VadEvent) => {
       if (event.type === "speech-start") {
+        // Voice barge-in: sustained operator speech over the barge profile while
+        // Ultron speaks. Kill the streaming turn and record the interruption as a
+        // fresh turn — beginRecording bumps the generation synchronously, so the
+        // cancelled turn's async teardown can no longer touch the machine.
+        if (bargeArmedRef.current) {
+          bargeArmedRef.current = false;
+          bargeTurnRef.current = true;
+          console.info(JSON.stringify({ event: "ultron_barge", action: "barge_in_triggered" }));
+          cancelStreamingTurn();
+          void beginRecording(true);
+          return;
+        }
         // Only the hands-free onset starts a recording; in wake/PTT modes the
         // recorder is already running, so we ignore (and let speech-end stop it).
         if (handsFreeRef.current && listeningRef.current) {
@@ -1068,7 +1255,7 @@ export function useUltronVoice() {
         finalizeRecording();
       }
     },
-    [beginRecording, finalizeRecording],
+    [beginRecording, cancelStreamingTurn, finalizeRecording],
   );
 
   useEffect(() => {
@@ -1105,7 +1292,9 @@ export function useUltronVoice() {
     if (handsFreeRef.current) {
       handsFreeRef.current = false;
       listeningRef.current = false;
+      bargeArmedRef.current = false;
       stopVadLoop();
+      vadMicRef.current?.configure(VAD_CONFIG);
       vadMicRef.current?.disarm();
       // Drop any prewarmed (idle) realtime STT connection so the WS doesn't leak.
       transcriberRef.current?.abort();
@@ -1147,7 +1336,9 @@ export function useUltronVoice() {
     // mutually exclusive with hands-free
     handsFreeRef.current = false;
     listeningRef.current = false;
+    bargeArmedRef.current = false;
     stopVadLoop();
+    vadMicRef.current?.configure(VAD_CONFIG);
     vadMicRef.current?.disarm();
     // Leaving hands-free: drop any prewarmed realtime STT connection (wake mode doesn't prewarm).
     transcriberRef.current?.abort();
@@ -1157,20 +1348,84 @@ export function useUltronVoice() {
     reArm();
   }, [handleWake, patch, reArm, stopVadLoop]);
 
-  const stopSpeaking = useCallback(() => {
-    // Tear down the whole streaming turn (queue worker + SSE reader + per-clip pump),
-    // not just the current clip — otherwise the next queued sentence would play on.
-    streamCancelledRef.current = true;
-    chatAbortRef.current?.abort();
+  // Leaves Meet mode: closes the mix graph and rebuilds the VAD path against the raw
+  // mic. The screen share itself stays alive (capture_screen keeps working); only the
+  // audio routing reverts.
+  const exitMeetMode = useCallback(async () => {
+    if (!meetModeRef.current) return;
+    meetModeRef.current = false;
+    patch({ meetMode: false });
+    void meetCtxRef.current?.close().catch(() => {});
+    meetCtxRef.current = null;
     transcriberRef.current?.abort();
     transcriberRef.current = null;
-    if (playerRef.current) {
-      playerRef.current.pause();
-      playerRef.current.currentTime = 0;
-      playerRef.current = null;
+    if (streamRef.current) await rebuildVadPipeline(streamRef.current);
+    if (handsFreeRef.current) startListening();
+    else patch({ status: "idle" });
+  }, [patch, rebuildVadPipeline, startListening]);
+
+  // Enters Meet mode (user gesture — getDisplayMedia needs transient activation):
+  // captures tab/system audio, mixes it with the mic into one stream and points the
+  // whole VAD→record→STT pipeline at the mix. Recommend capturing the Meet TAB — tab
+  // audio carries only the remote participants (Meet never echoes the local mic back,
+  // and Ultron's TTS plays in the dashboard tab), so his own voice stays out of the mix.
+  const enterMeetMode = useCallback(async () => {
+    if (meetModeRef.current) return;
+    // An existing video-only share can't gain audio — restart the picker with audio.
+    if (!getAudioTrack()) {
+      if (sharing) stopShare();
+      const ok = await startShare({ audio: true });
+      if (!ok) return; // operator cancelled the picker
     }
-    speechDoneRef.current?.();
-  }, []);
+    const track = getAudioTrack();
+    if (!track) {
+      patch({ error: MEET_AUDIO_MISSING_MSG });
+      return;
+    }
+    await ensureMic(); // guarantees streamRef before building the mix
+    const ctx = new AudioContext();
+    const dest = ctx.createMediaStreamDestination();
+    ctx.createMediaStreamSource(streamRef.current!).connect(dest);
+    ctx.createMediaStreamSource(new MediaStream([track])).connect(dest);
+    if (ctx.state === "suspended") await ctx.resume().catch(() => {});
+    meetCtxRef.current = ctx;
+    // Meet mode is hands-free by definition; wake mode is mutually exclusive.
+    if (wakeModeRef.current) {
+      wakeModeRef.current = false;
+      armedRef.current = false;
+      wakeRef.current?.stop();
+      patch({ wakeActive: false });
+    }
+    transcriberRef.current?.abort();
+    transcriberRef.current = null;
+    // Browser-side "stop sharing" (or closing the Meet tab) ends the track — leave
+    // Meet mode instead of silently listening to a dead source.
+    track.addEventListener("ended", () => void exitMeetMode(), { once: true });
+    await rebuildVadPipeline(dest.stream);
+    meetModeRef.current = true;
+    patch({ meetMode: true, error: null });
+    startListening();
+  }, [ensureMic, exitMeetMode, getAudioTrack, patch, rebuildVadPipeline, sharing, startListening, startShare, stopShare]);
+
+  const toggleMeetMode = useCallback(() => {
+    if (meetModeRef.current) void exitMeetMode();
+    else void enterMeetMode();
+  }, [enterMeetMode, exitMeetMode]);
+
+  const toggleMeetNamedOnly = useCallback(() => {
+    const next = !meetNamedOnlyRef.current;
+    meetNamedOnlyRef.current = next;
+    patch({ meetNamedOnly: next });
+  }, [patch]);
+
+  // Manual interrupt (the ■ button). Cancels the turn AND restores the listening mode
+  // right away — historically this left the VAD disarmed until the next turn. Bumping
+  // the generation first makes the cancelled turn's async finally a no-op.
+  const stopSpeaking = useCallback(() => {
+    turnGenRef.current += 1;
+    cancelStreamingTurn();
+    restoreAfterSpeech();
+  }, [cancelStreamingTurn, restoreAfterSpeech]);
 
   const toggleShare = useCallback(() => {
     if (sharing) stopShare();
@@ -1288,6 +1543,7 @@ export function useUltronVoice() {
       speechDoneRef.current?.();
       stopOutputAnalysis(false);
       void audioCtxRef.current?.close();
+      void meetCtxRef.current?.close();
     };
   }, [stopOutputAnalysis, stopVadLoop]);
 
@@ -1302,6 +1558,9 @@ export function useUltronVoice() {
     stopSpeaking,
     sharing,
     toggleShare,
+    // Meet mode: listen to a captured tab/system audio (e.g. a Google Meet call).
+    toggleMeetMode,
+    toggleMeetNamedOnly,
     // Primitives the Live Review overlay (SPEC-014) reuses to drive its own loop without
     // a second screen-share prompt or a duplicate TTS path.
     startShare,

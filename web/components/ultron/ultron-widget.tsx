@@ -52,6 +52,8 @@ export function UltronWidget() {
     stopSpeaking,
     sharing,
     toggleShare,
+    toggleMeetMode,
+    toggleMeetNamedOnly,
     startShare,
     captureFrame,
     speak,
@@ -339,6 +341,35 @@ export function UltronWidget() {
       </button>
 
       <button
+        onClick={toggleMeetMode}
+        disabled={state.wakeActive}
+        aria-pressed={state.meetMode}
+        className={`mt-2 min-h-9 w-full rounded-md border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-35 ${
+          state.meetMode
+            ? "border-emerald-200/45 bg-emerald-400/20 text-emerald-100"
+            : "border-white/15 bg-white/[0.02] text-white/70 hover:border-emerald-200/35 hover:text-white"
+        }`}
+        title="Ultron ouve o áudio de uma aba (ex.: Google Meet) e participa da conversa. No seletor, escolha a GUIA do Meet e marque 'Compartilhar áudio da guia'."
+      >
+        {state.meetMode ? "Modo reunião: ON" : "Modo reunião (ouvir aba/Meet)"}
+      </button>
+
+      {state.meetMode && (
+        <button
+          onClick={toggleMeetNamedOnly}
+          aria-pressed={state.meetNamedOnly}
+          className={`mt-2 min-h-9 w-full rounded-md border px-3 py-2 text-xs font-semibold transition ${
+            state.meetNamedOnly
+              ? "border-emerald-200/35 bg-emerald-400/10 text-emerald-100/90"
+              : "border-amber-200/40 bg-amber-400/15 text-amber-100"
+          }`}
+          title="Com 'só quando chamado', o Ultron ouve tudo mas só responde frases que falam o nome dele (Ultron / T-800). Desligado, ele responde a cada fala da call."
+        >
+          {state.meetNamedOnly ? "Responder só quando chamado: ON" : "Respondendo a tudo (cuidado)"}
+        </button>
+      )}
+
+      <button
         onClick={toggleAutoReview}
         aria-pressed={autoReview}
         className={`mt-2 min-h-9 w-full rounded-md border px-3 py-2 text-xs font-semibold transition ${
@@ -353,7 +384,17 @@ export function UltronWidget() {
 
       <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
         <span>PTT</span>
-        <span>{sharing ? "Tela ON" : state.wakeActive ? 'Diga "Ultron"' : state.handsFree ? "Mic ativo" : "Manual"}</span>
+        <span>
+          {state.meetMode
+            ? "Reunião ON"
+            : sharing
+              ? "Tela ON"
+              : state.wakeActive
+                ? 'Diga "Ultron"'
+                : state.handsFree
+                  ? "Mic ativo"
+                  : "Manual"}
+        </span>
       </div>
 
       {!maximized && (
