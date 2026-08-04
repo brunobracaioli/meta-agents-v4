@@ -27,7 +27,7 @@ import {
   sttStreamingEnabled,
   type RealtimeTranscriber,
 } from "@/lib/ultron/realtime-stt-client";
-import { isSelfEcho, pushSpoken, type SpokenEntry } from "@/lib/ultron/self-echo";
+import { isSelfEcho, mentionsWakeName, pushSpoken, type SpokenEntry } from "@/lib/ultron/self-echo";
 import { getSessionId } from "@/lib/ultron/session";
 import { getActivePersona } from "@/lib/ultron/active-persona";
 import { createWakeWord, isWakeWordSupported, type WakeController } from "@/lib/ultron/wake-word";
@@ -50,6 +50,8 @@ export type UltronState = {
   handsFree: boolean;
   wakeActive: boolean;
   wakeSupported: boolean;
+  meetMode: boolean;
+  meetNamedOnly: boolean;
   outputLevel: number;
   outputBands: number[];
   transcript: string | null;
@@ -58,6 +60,11 @@ export type UltronState = {
 };
 
 const WAKE_WORD = "ultron";
+// Meet mode "respond only when addressed" names. Normalized token sequences — covers
+// both personas ("t 800" matches an STT of "T-800"; see self-echo.mentionsWakeName).
+const MEET_WAKE_NAMES = [WAKE_WORD, "t 800", "oitocentos", "terminator"];
+const MEET_AUDIO_MISSING_MSG =
+  "Selecione a guia do Meet no seletor e marque 'Compartilhar áudio da guia'.";
 
 // Energy-based VAD tuning. The detection runs in an AudioWorklet (vad-mic.ts +
 // public/ultron/vad-processor.js) so it survives tab backgrounding; these are the
@@ -107,6 +114,10 @@ const BARGE_VAD_CONFIG = {
   maxClipMs: MAX_CLIP_MS,
   onsetDebounceMs: 300,
 };
+
+// Meet mode listens to a call: speech is near-continuous, so cap utterances tighter
+// than the 45s solo-operator ceiling to keep STT clips (and turns) bounded.
+const MEET_VAD_CONFIG = { ...VAD_CONFIG, maxClipMs: 20_000 };
 
 const CLIENT_FALLBACK = "Desculpa, tive um problema agora. Tenta de novo.";
 const NO_SCREEN_MSG =
@@ -191,6 +202,8 @@ export function useUltronVoice() {
     handsFree: false,
     wakeActive: false,
     wakeSupported: false,
+    meetMode: false,
+    meetNamedOnly: true,
     outputLevel: 0,
     outputBands: silentOutputBands(),
     transcript: null,
@@ -226,6 +239,12 @@ export function useUltronVoice() {
   const bargeTurnRef = useRef<boolean>(false);
   // Rolling buffer of the exact sentences Ultron spoke (echo source for self-echo.ts).
   const spokenRef = useRef<SpokenEntry[]>([]);
+  // Meet mode (tab/system audio): the VAD/recorder/STT read from captureStreamRef —
+  // the raw mic by default, or the mic+tab mix while a meeting is being listened to.
+  const captureStreamRef = useRef<MediaStream | null>(null);
+  const meetModeRef = useRef<boolean>(false);
+  const meetNamedOnlyRef = useRef<boolean>(true);
+  const meetCtxRef = useRef<AudioContext | null>(null); // persistent mix graph (mic + tab)
   // Realtime STT (ADR 0032): when enabled, captures mic PCM in parallel with the recorder
   // so the transcript is ~ready at speech-end. Null = use the one-shot path (always the fallback).
   const transcriberRef = useRef<RealtimeTranscriber | null>(null);
@@ -276,7 +295,7 @@ export function useUltronVoice() {
 
   const patch = useCallback((p: Partial<UltronState>) => setState((s) => ({ ...s, ...p })), []);
 
-  const { sharing, start: startShare, stop: stopShare, captureFrame } = useScreenShare();
+  const { sharing, start: startShare, stop: stopShare, captureFrame, getAudioTrack } = useScreenShare();
 
   const publishAgentTriggers = useCallback((values: unknown[] | undefined) => {
     if (!values || values.length === 0) return;
@@ -379,7 +398,9 @@ export function useUltronVoice() {
   }, []);
 
   // Sets up the mic stream and, once, the VAD path (worklet preferred; rAF
-  // fallback). Idempotent: safe to call from every entry point.
+  // fallback). Idempotent: safe to call from every entry point. Everything downstream
+  // (VAD, MediaRecorder, realtime STT) reads from captureStreamRef — the raw mic by
+  // default, or the mic+tab mix while Meet mode is on.
   const ensureMic = useCallback(async (): Promise<MediaStream> => {
     if (!streamRef.current) {
       // Explicit AEC/NS/AGC: echoCancellation makes the browser subtract this page's own
@@ -388,9 +409,10 @@ export function useUltronVoice() {
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
     }
+    if (!captureStreamRef.current) captureStreamRef.current = streamRef.current;
     if (!vadReadyRef.current) {
       vadReadyRef.current = (async () => {
-        const stream = streamRef.current!;
+        const stream = captureStreamRef.current!;
         if (isVadWorkletSupported()) {
           try {
             vadMicRef.current = await createVadMic({
@@ -415,8 +437,30 @@ export function useUltronVoice() {
       })();
     }
     await vadReadyRef.current;
-    return streamRef.current!;
+    return captureStreamRef.current!;
   }, []);
+
+  // Swaps the capture source (raw mic <-> mic+tab mix) by tearing the VAD path down
+  // and rebuilding it against the new stream. Refs are nulled BEFORE the awaits so a
+  // concurrent ensureMic() can't await a stale setup promise.
+  const rebuildVadPipeline = useCallback(
+    async (stream: MediaStream) => {
+      const oldVad = vadMicRef.current;
+      vadMicRef.current = null;
+      vadReadyRef.current = null;
+      listeningRef.current = false;
+      bargeArmedRef.current = false;
+      captureStreamRef.current = stream;
+      await oldVad?.close();
+      if (audioCtxRef.current) {
+        void audioCtxRef.current.close().catch(() => {});
+        audioCtxRef.current = null;
+        analyserRef.current = null;
+      }
+      await ensureMic();
+    },
+    [ensureMic],
+  );
 
   const rms = useCallback((): number => {
     const analyser = analyserRef.current;
@@ -735,10 +779,11 @@ export function useUltronVoice() {
     bargeArmedRef.current = true;
     // Prewarm realtime STT so a barge turn's transcript has no head-clip (mirrors the
     // startListening prewarm; nothing streams to OpenAI until beginCapture()).
-    if (sttStreamingEnabled() && !transcriberRef.current && streamRef.current) {
+    const captureStream = captureStreamRef.current ?? streamRef.current;
+    if (sttStreamingEnabled() && !transcriberRef.current && captureStream) {
       const t = createRealtimeTranscriber();
       transcriberRef.current = t;
-      t.connect(streamRef.current).catch(() => {
+      t.connect(captureStream).catch(() => {
         if (transcriberRef.current === t) transcriberRef.current = null;
         t.abort();
       });
@@ -1034,6 +1079,21 @@ export function useUltronVoice() {
           else patch({ status: "idle" });
           return;
         }
+        // Meet mode "respond only when addressed": every utterance in the call is heard,
+        // but only ones naming the assistant become chat turns — Ultron doesn't reply to
+        // every sentence of a group call, and the chat rate limit (20/min) stays safe.
+        if (
+          meetModeRef.current &&
+          meetNamedOnlyRef.current &&
+          !mentionsWakeName(text, MEET_WAKE_NAMES)
+        ) {
+          console.info(
+            JSON.stringify({ event: "ultron_meet", action: "meet_turn_ignored", chars: text.length }),
+          );
+          if (handsFreeRef.current) startListening();
+          else patch({ status: "idle" });
+          return;
+        }
         marks.sttDone = performance.now();
         patch({ status: "thinking", transcript: text });
         spoke = true;
@@ -1150,9 +1210,9 @@ export function useUltronVoice() {
       }
       if (vadModeRef.current === "worklet") {
         listeningRef.current = true;
-        // Always restore the normal profile — the previous turn may have left the
+        // Always restore the listening profile — the previous turn may have left the
         // barge thresholds configured.
-        vadMicRef.current?.configure(VAD_CONFIG);
+        vadMicRef.current?.configure(meetModeRef.current ? MEET_VAD_CONFIG : VAD_CONFIG);
         vadMicRef.current?.arm();
         return;
       }
@@ -1288,6 +1348,76 @@ export function useUltronVoice() {
     reArm();
   }, [handleWake, patch, reArm, stopVadLoop]);
 
+  // Leaves Meet mode: closes the mix graph and rebuilds the VAD path against the raw
+  // mic. The screen share itself stays alive (capture_screen keeps working); only the
+  // audio routing reverts.
+  const exitMeetMode = useCallback(async () => {
+    if (!meetModeRef.current) return;
+    meetModeRef.current = false;
+    patch({ meetMode: false });
+    void meetCtxRef.current?.close().catch(() => {});
+    meetCtxRef.current = null;
+    transcriberRef.current?.abort();
+    transcriberRef.current = null;
+    if (streamRef.current) await rebuildVadPipeline(streamRef.current);
+    if (handsFreeRef.current) startListening();
+    else patch({ status: "idle" });
+  }, [patch, rebuildVadPipeline, startListening]);
+
+  // Enters Meet mode (user gesture — getDisplayMedia needs transient activation):
+  // captures tab/system audio, mixes it with the mic into one stream and points the
+  // whole VAD→record→STT pipeline at the mix. Recommend capturing the Meet TAB — tab
+  // audio carries only the remote participants (Meet never echoes the local mic back,
+  // and Ultron's TTS plays in the dashboard tab), so his own voice stays out of the mix.
+  const enterMeetMode = useCallback(async () => {
+    if (meetModeRef.current) return;
+    // An existing video-only share can't gain audio — restart the picker with audio.
+    if (!getAudioTrack()) {
+      if (sharing) stopShare();
+      const ok = await startShare({ audio: true });
+      if (!ok) return; // operator cancelled the picker
+    }
+    const track = getAudioTrack();
+    if (!track) {
+      patch({ error: MEET_AUDIO_MISSING_MSG });
+      return;
+    }
+    await ensureMic(); // guarantees streamRef before building the mix
+    const ctx = new AudioContext();
+    const dest = ctx.createMediaStreamDestination();
+    ctx.createMediaStreamSource(streamRef.current!).connect(dest);
+    ctx.createMediaStreamSource(new MediaStream([track])).connect(dest);
+    if (ctx.state === "suspended") await ctx.resume().catch(() => {});
+    meetCtxRef.current = ctx;
+    // Meet mode is hands-free by definition; wake mode is mutually exclusive.
+    if (wakeModeRef.current) {
+      wakeModeRef.current = false;
+      armedRef.current = false;
+      wakeRef.current?.stop();
+      patch({ wakeActive: false });
+    }
+    transcriberRef.current?.abort();
+    transcriberRef.current = null;
+    // Browser-side "stop sharing" (or closing the Meet tab) ends the track — leave
+    // Meet mode instead of silently listening to a dead source.
+    track.addEventListener("ended", () => void exitMeetMode(), { once: true });
+    await rebuildVadPipeline(dest.stream);
+    meetModeRef.current = true;
+    patch({ meetMode: true, error: null });
+    startListening();
+  }, [ensureMic, exitMeetMode, getAudioTrack, patch, rebuildVadPipeline, sharing, startListening, startShare, stopShare]);
+
+  const toggleMeetMode = useCallback(() => {
+    if (meetModeRef.current) void exitMeetMode();
+    else void enterMeetMode();
+  }, [enterMeetMode, exitMeetMode]);
+
+  const toggleMeetNamedOnly = useCallback(() => {
+    const next = !meetNamedOnlyRef.current;
+    meetNamedOnlyRef.current = next;
+    patch({ meetNamedOnly: next });
+  }, [patch]);
+
   // Manual interrupt (the ■ button). Cancels the turn AND restores the listening mode
   // right away — historically this left the VAD disarmed until the next turn. Bumping
   // the generation first makes the cancelled turn's async finally a no-op.
@@ -1413,6 +1543,7 @@ export function useUltronVoice() {
       speechDoneRef.current?.();
       stopOutputAnalysis(false);
       void audioCtxRef.current?.close();
+      void meetCtxRef.current?.close();
     };
   }, [stopOutputAnalysis, stopVadLoop]);
 
@@ -1427,6 +1558,9 @@ export function useUltronVoice() {
     stopSpeaking,
     sharing,
     toggleShare,
+    // Meet mode: listen to a captured tab/system audio (e.g. a Google Meet call).
+    toggleMeetMode,
+    toggleMeetNamedOnly,
     // Primitives the Live Review overlay (SPEC-014) reuses to drive its own loop without
     // a second screen-share prompt or a duplicate TTS path.
     startShare,

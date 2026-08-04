@@ -28,26 +28,40 @@ export function useScreenShare() {
 
   // Must be called from a user gesture (click): getDisplayMedia requires transient
   // activation. Returns false if the operator cancels the picker.
-  const start = useCallback(async (): Promise<boolean> => {
-    if (!navigator.mediaDevices?.getDisplayMedia) return false;
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      streamRef.current = stream;
-      const video = document.createElement("video");
-      video.muted = true;
-      video.playsInline = true;
-      video.srcObject = stream;
-      await video.play().catch(() => {});
-      videoRef.current = video;
-      // Operator stopping the share via the browser's own UI ends the track.
-      stream.getVideoTracks().forEach((t) => t.addEventListener("ended", stop, { once: true }));
-      setSharing(true);
-      return true;
-    } catch {
-      stop();
-      return false;
-    }
-  }, [stop]);
+  // `audio: true` (Meet mode) asks for tab/system audio too — the operator must tick
+  // "Compartilhar áudio da guia" in the picker; use getAudioTrack() to check.
+  const start = useCallback(
+    async (opts?: { audio?: boolean }): Promise<boolean> => {
+      if (!navigator.mediaDevices?.getDisplayMedia) return false;
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: opts?.audio === true,
+        });
+        streamRef.current = stream;
+        const video = document.createElement("video");
+        video.muted = true;
+        video.playsInline = true;
+        video.srcObject = stream;
+        await video.play().catch(() => {});
+        videoRef.current = video;
+        // Operator stopping the share via the browser's own UI ends the track.
+        stream.getVideoTracks().forEach((t) => t.addEventListener("ended", stop, { once: true }));
+        setSharing(true);
+        return true;
+      } catch {
+        stop();
+        return false;
+      }
+    },
+    [stop],
+  );
+
+  // The captured tab/system audio track, when the share was started with audio and the
+  // operator ticked the share-audio checkbox. Null otherwise.
+  const getAudioTrack = useCallback((): MediaStreamTrack | null => {
+    return streamRef.current?.getAudioTracks()[0] ?? null;
+  }, []);
 
   // Grabs the current frame as a downscaled JPEG (base64, no data: prefix).
   // Returns null if nothing is being shared or the frame isn't ready yet.
@@ -71,5 +85,5 @@ export function useScreenShare() {
 
   useEffect(() => () => stop(), [stop]);
 
-  return { sharing, start, stop, captureFrame };
+  return { sharing, start, stop, captureFrame, getAudioTrack };
 }
