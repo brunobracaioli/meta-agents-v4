@@ -98,6 +98,55 @@ describe("vad state machine", () => {
     expect(events).toEqual([{ type: "speech-start" }, { type: "speech-end", reason: "maxclip" }]);
   });
 
+  // Barge-in profile (use-ultron-voice BARGE_VAD_CONFIG): raised onset RMS + longer
+  // debounce, applied at runtime via configure() while the worklet stays armed during
+  // TTS playback.
+  const BARGE = { speechRms: 0.05, onsetDebounceMs: 300 };
+
+  it("barge profile ignores normal-speech-level input (speaker bleed)", () => {
+    const m = factory(CONFIG);
+    m.arm();
+    m.configure(BARGE);
+    // 0.03 clears the normal 0.025 threshold but not the barge 0.05.
+    const events = run(m, [[0.03, 20, 100]]);
+    expect(events).toEqual([]);
+  });
+
+  it("barge profile needs sustained loud speech: 250ms no, 300ms yes", () => {
+    const m = factory(CONFIG);
+    m.arm();
+    m.configure(BARGE);
+    // 250ms above threshold then silence — under the 300ms debounce.
+    expect(run(m, [[0.06, 50, 5], [0.005, 50, 10]])).toEqual([]);
+    // 300ms sustained fires the onset.
+    expect(run(m, [[0.06, 50, 6]])).toEqual([{ type: "speech-start" }]);
+  });
+
+  it("configure() while armed swaps thresholds without re-arming", () => {
+    const m = factory(CONFIG);
+    m.arm();
+    m.configure(BARGE);
+    expect(m.getState().armed).toBe(true);
+    // Restore defaults: normal-level speech detects again with the short debounce.
+    m.configure({ speechRms: 0.025, onsetDebounceMs: 50 });
+    const events = run(m, [[0.03, 20, 3]]);
+    expect(events).toEqual([{ type: "speech-start" }]);
+  });
+
+  it("after a barge speech-end, re-arm + restore detects normal-level speech", () => {
+    const m = factory(CONFIG);
+    m.arm();
+    m.configure(BARGE);
+    run(m, [
+      [0.06, 50, 6], // barge onset
+      [0.005, 100, 9], // 900ms silence -> speech-end, self-disarm
+    ]);
+    expect(m.getState().armed).toBe(false);
+    m.configure({ speechRms: 0.025, onsetDebounceMs: 50 });
+    m.arm();
+    expect(run(m, [[0.03, 20, 3]])).toEqual([{ type: "speech-start" }]);
+  });
+
   it("requires re-arm for the next utterance", () => {
     const m = factory(CONFIG);
     m.arm();

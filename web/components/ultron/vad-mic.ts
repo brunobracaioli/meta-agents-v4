@@ -14,11 +14,15 @@ export type VadConfig = {
   silenceRms: number;
   silenceMs: number;
   maxClipMs: number;
+  onsetDebounceMs?: number;
 };
 
 export type VadMicHandle = {
   arm: () => void;
   disarm: () => void;
+  // Swaps thresholds at runtime (worklet merges partial config) — used to raise the
+  // onset profile while TTS plays so barge-in doesn't trigger on speaker bleed.
+  configure: (config: Partial<VadConfig>) => void;
   resume: () => Promise<void>;
   close: () => Promise<void>;
 };
@@ -81,6 +85,7 @@ export async function createVadMic(opts: {
   return {
     arm: () => node.port.postMessage({ type: "arm" }),
     disarm: () => node.port.postMessage({ type: "disarm" }),
+    configure: (config) => node.port.postMessage({ type: "configure", config }),
     resume: async () => {
       if (ctx.state === "suspended") await ctx.resume();
     },
